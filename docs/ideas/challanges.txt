@@ -1,0 +1,90 @@
+1. Countdown Timer
+
+How it works
+
+First, user selects how long countdown timer should be.
+
+When the user clicks End Session:
+
+A dialog appears.
+Display a countdown (e.g. 15s, 30s, 60s, 2 min).
+Disable every button until the countdown finishes.
+After it reaches zero:
+End Session
+Cancel (this doesnt end session, continues it)
+
+Show a message like:
+
+"Take a moment. Do you really need to end this session?"
+
+ADD ON:
+if user picks this, option for user to do breathing along with. for breathing:
+
+Animated breathing circle.
+
+Guide:
+
+Inhale 4 seconds
+Hold 2 seconds
+Exhale 6 seconds
+
+Repeat till user selected timer is up.
+
+2. Type a Paragraph 
+
+How it works
+
+Display a long paragraph (about ending this session eg start "I understand that ending this session means me giving up on my goals..." make emotional and psychological).
+
+The user must type it exactly.
+
+Requirements:
+
+Character-perfect
+No paste
+
+3. Solve a Puzzle 
+
+How it works
+
+Randomly generate one challenge.
+
+Pattern memory (that game where one of 9 grid block lights up randomly and user has to replicate it. after each round, one more added up till about total 10-15 lights. if user successfully replicats all of then, pass, else fail.)
+
+4. Mental Challenge (Math / Logic) 
+
+How it works
+
+Generate one random challenge.
+
+Examples:
+
+37 × 8
+125 − 47
+Number sequence
+
+As such, multiple questions randomly shuffle. If user fail even one, then fail.
+
+5. Reflection Prompt 
+
+How it works
+
+Ask:
+
+Why do you want to end this session?
+
+Textbox required.
+
+Minimum:
+
+80–150 characters
+
+Then show:
+
+Cancel
+
+or
+
+End session
+
+Save all these prompts somewhere in extension (user can delete them if want to).

@@ -1,0 +1,182 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/theme.json",
+  "version": 3,
+  "settings": {
+    "color": {
+      "palette": [
+        {
+          "slug": "primary",
+          "color": "#f0d7ff",
+          "name": "Primary"
+        },
+        {
+          "slug": "secondary",
+          "color": "#ffa946",
+          "name": "Secondary"
+        },
+        {
+          "slug": "accent",
+          "color": "#034f46",
+          "name": "Accent"
+        },
+        {
+          "slug": "neutral-1",
+          "color": "#1a1a1a",
+          "name": "Neutral 1"
+        },
+        {
+          "slug": "neutral-2",
+          "color": "#000000",
+          "name": "Neutral 2"
+        },
+        {
+          "slug": "neutral-3",
+          "color": "#8a8a80",
+          "name": "Neutral 3"
+        },
+        {
+          "slug": "neutral-4",
+          "color": "#ffffff",
+          "name": "Neutral 4"
+        },
+        {
+          "slug": "neutral-5",
+          "color": "#333333",
+          "name": "Neutral 5"
+        },
+        {
+          "slug": "bg-ffffeb",
+          "color": "#ffffeb",
+          "name": "Background #ffffeb"
+        },
+        {
+          "slug": "bg-034f46",
+          "color": "#034f46",
+          "name": "Background #034f46"
+        },
+        {
+          "slug": "bg-1a1a1a",
+          "color": "#1a1a1a",
+          "name": "Background #1a1a1a"
+        }
+      ],
+      "gradients": []
+    },
+    "typography": {
+      "fontFamilies": [
+        {
+          "fontFamily": "Figtree",
+          "slug": "figtree",
+          "name": "Figtree"
+        },
+        {
+          "fontFamily": "Eb garamond",
+          "slug": "eb-garamond",
+          "name": "Eb garamond"
+        }
+      ],
+      "fontSizes": [
+        {
+          "size": "120px",
+          "slug": "size-120",
+          "name": "120px"
+        },
+        {
+          "size": "64px",
+          "slug": "size-64",
+          "name": "64px"
+        },
+        {
+          "size": "48px",
+          "slug": "size-48",
+          "name": "48px"
+        },
+        {
+          "size": "32px",
+          "slug": "size-32",
+          "name": "32px"
+        },
+        {
+          "size": "28px",
+          "slug": "size-28",
+          "name": "28px"
+        },
+        {
+          "size": "24px",
+          "slug": "size-24",
+          "name": "24px"
+        },
+        {
+          "size": "22px",
+          "slug": "size-22",
+          "name": "22px"
+        },
+        {
+          "size": "20.16px",
+          "slug": "size-20.16",
+          "name": "20.16px"
+        }
+      ]
+    },
+    "spacing": {
+      "spacingSizes": [
+        {
+          "size": "2px",
+          "slug": "spacing-2",
+          "name": "2px"
+        },
+        {
+          "size": "32px",
+          "slug": "spacing-32",
+          "name": "32px"
+        },
+        {
+          "size": "48px",
+          "slug": "spacing-48",
+          "name": "48px"
+        },
+        {
+          "size": "59px",
+          "slug": "spacing-59",
+          "name": "59px"
+        },
+        {
+          "size": "64px",
+          "slug": "spacing-64",
+          "name": "64px"
+        },
+        {
+          "size": "70px",
+          "slug": "spacing-70",
+          "name": "70px"
+        },
+        {
+          "size": "80px",
+          "slug": "spacing-80",
+          "name": "80px"
+        },
+        {
+          "size": "93px",
+          "slug": "spacing-93",
+          "name": "93px"
+        }
+      ]
+    },
+    "layout": {
+      "contentSize": "992px",
+      "wideSize": "1400px"
+    }
+  },
+  "styles": {
+    "color": {
+      "background": "#ffffeb",
+      "text": "#000000"
+    },
+    "typography": {
+      "fontSize": "16px",
+      "lineHeight": "normal",
+      "fontFamily": "Figtree"
+    },
+    "spacing": {}
+  }
+}

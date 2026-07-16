@@ -1,0 +1,41 @@
+target/
+dist/
+out/
+build/
+
+# Node dependencies
+node_modules/
+.npm
+.node-gyp
+
+# Build outputs (Vite, Tauri)
+apps/extension/dist/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+
+# IDE & Editor
+.vscode/
+.idea/
+.cursorindexingignore
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment & Local
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+*.logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System & Cache
+.cache/
+.specstory/
+.tempgraphifyignore
+graphify-out/

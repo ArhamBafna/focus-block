@@ -1,0 +1,29 @@
+{
+  "name": "focus-blocker-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --config vite.config.ts --watch & vite build --config vite.config.bg.ts --watch",
+    "build": "npm run build:popup && npm run build:bg && node scripts/assemble.js",
+    "build:popup": "tsc --noEmit && vite build --config vite.config.ts",
+    "build:bg": "vite build --config vite.config.bg.ts",
+    "assemble": "node scripts/assemble.js"
+  },
+  "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@tailwindcss/vite": "^4.3.2",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-router-dom": "^7.18.1",
+    "tailwindcss": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.291",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "typescript": "~5.8.3",
+    "vite": "^7.0.4"
+  }
+}

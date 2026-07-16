@@ -1,0 +1,482 @@
+{
+  "pageIntent": {
+    "type": "landing",
+    "confidence": 0.57,
+    "path": "/",
+    "title": "Wispr Flow | Effortless Voice Dictation",
+    "description": "Flow makes writing quick and clear with seamless voice dictation. It is the fastest, smartest way to type with your voice.",
+    "signals": [
+      {
+        "kind": "dom",
+        "type": "docs",
+        "weight": 0.44999999999999996,
+        "detail": "sidebar=false article=2000"
+      },
+      {
+        "kind": "dom",
+        "type": "blog-post",
+        "weight": 0.35,
+        "detail": "byline|min-read"
+      },
+      {
+        "kind": "url",
+        "type": "landing",
+        "weight": 0.45,
+        "detail": "root-path"
+      },
+      {
+        "kind": "shape",
+        "type": "landing",
+        "weight": 0.3,
+        "detail": "features+hero+footer"
+      }
+    ],
+    "alternates": [
+      {
+        "type": "docs",
+        "score": 0.45
+      },
+      {
+        "type": "blog-post",
+        "score": 0.35
+      }
+    ],
+    "needsSmart": true
+  },
+  "sectionRoles": {
+    "sections": [
+      {
+        "index": 0,
+        "tag": "div",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 112,
+          "y": 16,
+          "w": 1056,
+          "h": 72.796875
+        },
+        "buttonCount": 9,
+        "cardCount": 0,
+        "slots": {
+          "ctaCount": 9,
+          "lede": "Product\nIndividuals\nBusiness\nResources\nCompany\nDownload for Windows"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 1,
+        "tag": "nav",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 255.78125,
+          "y": 18,
+          "w": 614.859375,
+          "h": 68.796875
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {
+          "lede": "Product\nIndividuals\nBusiness\nResources\nCompany"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 2,
+        "tag": "nav",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {
+          "lede": "GET STARTEDFeaturesDo more with your voicePricingFlow Pro free for 14 days — No card requiredAndroid WaitlistGet early access to Flow for AndroidPrivacy & SecurityYour data, your controlWeb DemoTry Flow on browserWhy Flow over built-in voice-to-textFlow turns messy speech into polished textMicrophone guideFind the best mic for how you work"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 3,
+        "tag": "nav",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {
+          "lede": "FLOW FORLeadersUnblock teams, build faster with voiceDevelopersSpeak more context, get better resultsCreatorsCapture content ideas anytime, anywhereCustomer SupportResolve tickets 4x fasterStudentswrite faster, study smarterLawyersDictate case notes and memos on the goAccessibilityBreak free from the keyboardSalesClose more deals with your voice"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 4,
+        "tag": "nav",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {},
+        "needsSmart": false
+      },
+      {
+        "index": 5,
+        "tag": "nav",
+        "role": "nav",
+        "subrole": null,
+        "confidence": 0.9,
+        "heading": null,
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 0,
+          "h": 0
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {
+          "lede": "About flowAboutOur mission, team, and storyCareersJoin the team behind FlowTrust CenterYour data, protected and privateBecome an AffiliateShare Flow and earn rewardsMedia KitLogos, assets, and brand guidelines"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 6,
+        "tag": "main",
+        "role": "testimonial",
+        "subrole": null,
+        "confidence": 0.8,
+        "heading": "Don’t type, just speak",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1280,
+          "h": 10127.859375
+        },
+        "buttonCount": 65,
+        "cardCount": 167,
+        "slots": {
+          "heading": "Don’t type, just speak",
+          "subheadings": [
+            "Write faster in all your apps, on any device",
+            "Used by professionals everywhere to speed up their thoughts\n",
+            "4x faster\n than typing",
+            "45 wpm"
+          ],
+          "ctaCount": 65
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 7,
+        "tag": "section",
+        "role": "hero",
+        "subrole": null,
+        "confidence": 0.85,
+        "heading": "Don’t type, just speak",
+        "bounds": {
+          "x": 0,
+          "y": 0,
+          "w": 1280,
+          "h": 592.1875
+        },
+        "buttonCount": 3,
+        "cardCount": 0,
+        "slots": {
+          "heading": "Don’t type, just speak",
+          "ctaCount": 3
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 8,
+        "tag": "section",
+        "role": "hero",
+        "subrole": null,
+        "confidence": 0.4,
+        "heading": "Write faster in all your apps, on any device",
+        "bounds": {
+          "x": 0,
+          "y": 765.296875,
+          "w": 1280,
+          "h": 924
+        },
+        "buttonCount": 1,
+        "cardCount": 44,
+        "slots": {
+          "heading": "Write faster in all your apps, on any device",
+          "ctaCount": 1,
+          "lede": "Mac\nWindows\niPhone\nAndroid\nWrite faster in all your apps, on any device"
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 9,
+        "tag": "section",
+        "role": "logo-wall",
+        "subrole": null,
+        "confidence": 0.85,
+        "heading": "Used by professionals everywhere to speed up their thoughts\n",
+        "bounds": {
+          "x": 0,
+          "y": 1689.296875,
+          "w": 1280,
+          "h": 376.59375
+        },
+        "buttonCount": 0,
+        "cardCount": 64,
+        "slots": {
+          "heading": "Used by professionals everywhere to speed up their thoughts\n"
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 10,
+        "tag": "section",
+        "role": "content",
+        "subrole": null,
+        "confidence": 0.3,
+        "heading": "4x faster\n than typing",
+        "bounds": {
+          "x": 0,
+          "y": 2065.890625,
+          "w": 1280,
+          "h": 1180.734375
+        },
+        "buttonCount": 4,
+        "cardCount": 0,
+        "slots": {
+          "heading": "4x faster\n than typing",
+          "subheadings": [
+            "45 wpm",
+            "220 wpm"
+          ],
+          "ctaCount": 4
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 11,
+        "tag": "section",
+        "role": "testimonials",
+        "subrole": null,
+        "confidence": 0.4,
+        "heading": "Made for the way you work",
+        "bounds": {
+          "x": 0,
+          "y": 3262.625,
+          "w": 1280,
+          "h": 800
+        },
+        "buttonCount": 39,
+        "cardCount": 20,
+        "slots": {
+          "heading": "Made for the way you work",
+          "subheadings": [
+            "One tool. Your workflow.",
+            "Flow for Accessibility",
+            "Flow for Creators",
+            "Flow for Customer Support"
+          ],
+          "ctaCount": 39
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 12,
+        "tag": "section",
+        "role": "hero",
+        "subrole": null,
+        "confidence": 0.4,
+        "heading": "AI\n Auto Edits",
+        "bounds": {
+          "x": 0,
+          "y": 4062.625,
+          "w": 1280,
+          "h": 821.40625
+        },
+        "buttonCount": 4,
+        "cardCount": 0,
+        "slots": {
+          "heading": "AI\n Auto Edits",
+          "ctaCount": 4
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 13,
+        "tag": "section",
+        "role": "faq",
+        "subrole": null,
+        "confidence": 0.85,
+        "heading": "Personal dictionary",
+        "bounds": {
+          "x": 0,
+          "y": 4884.03125,
+          "w": 1280,
+          "h": 1756.609375
+        },
+        "buttonCount": 2,
+        "cardCount": 3,
+        "slots": {
+          "heading": "Personal dictionary",
+          "subheadings": [
+            "Snippet library",
+            "100+ languages"
+          ],
+          "ctaCount": 2
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 14,
+        "tag": "section",
+        "role": "content",
+        "subrole": null,
+        "confidence": 0.3,
+        "heading": "On-the-go or at your desk",
+        "bounds": {
+          "x": 0,
+          "y": 6640.640625,
+          "w": 1280,
+          "h": 701.453125
+        },
+        "buttonCount": 4,
+        "cardCount": 0,
+        "slots": {
+          "heading": "On-the-go or at your desk",
+          "subheadings": [
+            "Flow, wherever you work"
+          ],
+          "ctaCount": 4,
+          "lede": "Mac\nWindows\niPhone\nAndroid\nFlow, wherever you work"
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 15,
+        "tag": "section",
+        "role": "testimonial",
+        "subrole": null,
+        "confidence": 0.8,
+        "heading": "Love letters\nto Flow",
+        "bounds": {
+          "x": 0,
+          "y": 7342.09375,
+          "w": 1280,
+          "h": 1463.375
+        },
+        "buttonCount": 0,
+        "cardCount": 36,
+        "slots": {
+          "heading": "Love letters\nto Flow",
+          "subheadings": [
+            "Flow love"
+          ]
+        },
+        "needsSmart": false
+      },
+      {
+        "index": 16,
+        "tag": "section",
+        "role": "pricing",
+        "subrole": null,
+        "confidence": 0.4,
+        "heading": "Start flowing",
+        "bounds": {
+          "x": 0,
+          "y": 8725.46875,
+          "w": 1280,
+          "h": 960
+        },
+        "buttonCount": 4,
+        "cardCount": 0,
+        "slots": {
+          "heading": "Start flowing",
+          "ctaCount": 4
+        },
+        "needsSmart": true
+      },
+      {
+        "index": 17,
+        "tag": "footer",
+        "role": "footer",
+        "subrole": null,
+        "confidence": 0.95,
+        "heading": "Company",
+        "bounds": {
+          "x": 0,
+          "y": 10127.859375,
+          "w": 1280,
+          "h": 885.6875
+        },
+        "buttonCount": 0,
+        "cardCount": 0,
+        "slots": {
+          "heading": "Company",
+          "subheadings": [
+            "Product",
+            "Resources"
+          ],
+          "lede": "Company\nAbout\nCareers\nTrust Center\nBecome an Affiliate\nMedia Kit\nProduct\nWhat’s New\nUse Cases\nFlow for Students\nFlow for Non-Profits\nFlow for Android\nResources\nWorkflows\nResearch\nVibe Coding\nTalk to Support\nTalk to Sales\nHelp Center\n© Wispr Flow 2026\nTerms\nPrivacy\nData Controls"
+        },
+        "needsSmart": false
+      }
+    ],
+    "counts": {
+      "nav": 6,
+      "testimonial": 2,
+      "hero": 3,
+      "logo-wall": 1,
+      "content": 2,
+      "testimonials": 1,
+      "faq": 1,
+      "pricing": 1,
+      "footer": 1
+    },
+    "readingOrder": [
+      "nav",
+      "nav",
+      "nav",
+      "nav",
+      "testimonial",
+      "hero",
+      "nav",
+      "nav",
+      "hero",
+      "logo-wall",
+      "content",
+      "testimonials",
+      "hero",
+      "faq",
+      "content",
+      "testimonial",
+      "pricing",
+      "footer"
+    ]
+  }
+}

@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Site Blocked — Focus Blocker</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Figtree:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --color-lumen: #ffffeb;
+      --color-vast: #1a1a1a;
+      --color-fathom: #034f46;
+      --color-dawn: #f0d7ff;
+      --color-neutral-400: #888880;
+      --color-neutral-500: #666;
+      --font-sans: "Figtree", Arial, system-ui, sans-serif;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--color-lumen);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container {
+      text-align: center;
+      max-width: 480px;
+      padding: 48px 32px;
+    }
+
+    .shield {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--color-fathom);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 28px;
+    }
+
+    .shield svg {
+      width: 32px;
+      height: 32px;
+      fill: var(--color-lumen);
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: var(--color-vast);
+      margin: 0 0 12px;
+      letter-spacing: -0.6px;
+    }
+
+    .domain {
+      display: inline-block;
+      padding: 4px 14px;
+      background: rgba(3, 79, 70, 0.08);
+      color: var(--color-fathom);
+      border-radius: 100px;
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      font-family: monospace;
+    }
+
+    p {
+      font-size: 15px;
+      color: var(--color-neutral-500);
+      line-height: 1.6;
+      margin: 0 0 36px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--color-neutral-400);
+      font-weight: 500;
+    }
+
+    .brand-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-fathom);
+      opacity: 0.5;
+    }
+
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 11px 28px;
+      font-size: 14px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      background: var(--color-vast);
+      color: var(--color-lumen);
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      text-decoration: none;
+      margin-bottom: 36px;
+    }
+
+    .back-btn:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Shield icon (inline SVG to avoid external deps) -->
+    <div class="shield">
+      <svg viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+        <path d="M208,40H48A16,16,0,0,0,32,56v58.7c0,89.4,75.8,119.1,91,124.1a16,16,0,0,0,10,0c15.2-5,91-34.7,91-124.1V56A16,16,0,0,0,208,40Z"/>
+      </svg>
+    </div>
+
+    <h1>Site Blocked</h1>
+    <div class="domain" id="blocked-domain">This site</div>
+    <p>
+      You're in focus mode. This site is blocked to help you stay on track.
+      <br />
+      Keep going — you're doing great!
+    </p>
+
+    <button type="button" class="back-btn" id="go-back">← Go Back</button>
+
+    <div class="brand">
+      <div class="brand-dot"></div>
+      Focus Blocker is keeping you focused
+      <div class="brand-dot"></div>
+    </div>
+  </div>
+
+  <script src="blocked.js"></script>
+</body>
+</html>

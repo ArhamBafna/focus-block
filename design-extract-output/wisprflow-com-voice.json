@@ -1,0 +1,118 @@
+{
+  "tone": "friendly",
+  "pronoun": "you-only",
+  "headingStyle": "Sentence case",
+  "headingLengthClass": "tight",
+  "ctaVerbs": [
+    {
+      "value": "download",
+      "count": 11
+    },
+    {
+      "value": "try",
+      "count": 5
+    },
+    {
+      "value": "ask",
+      "count": 4
+    },
+    {
+      "value": "explore",
+      "count": 2
+    },
+    {
+      "value": "faster",
+      "count": 2
+    },
+    {
+      "value": "watch",
+      "count": 1
+    },
+    {
+      "value": "from",
+      "count": 1
+    },
+    {
+      "value": "x",
+      "count": 1
+    }
+  ],
+  "buttonPatterns": [
+    {
+      "value": "download for windows",
+      "count": 9
+    },
+    {
+      "value": "try flow",
+      "count": 3
+    },
+    {
+      "value": "try flow\ndownload for windows",
+      "count": 2
+    },
+    {
+      "value": "explore all features",
+      "count": 2
+    },
+    {
+      "value": "product\nindividuals\nbusiness\nresources\ncompany\ndownload for windows",
+      "count": 1
+    },
+    {
+      "value": "watch in action",
+      "count": 1
+    },
+    {
+      "value": "from typing to talking\n\"voice is the future of human-computer interaction.\"\nreid hoffman\n\ncofounder of linkedin, partner at greylock",
+      "count": 1
+    },
+    {
+      "value": "90% faster everywhere\n\"flow fits into every corner of how i work.\"\nsteven bartlett\nhost of diary of a ceo",
+      "count": 1
+    },
+    {
+      "value": "20% faster gtm execution\n\"flow gave our team a shared speed advantage.\"\nteams at clay\n200+ employees · b2b software",
+      "count": 1
+    },
+    {
+      "value": "4x faster responses\n\"flow lets me reply in seconds, not minutes.\"\ngaurav vohra\nstartup advisor & growth leader",
+      "count": 1
+    },
+    {
+      "value": "download for windows\ntry flow",
+      "count": 1
+    },
+    {
+      "value": "ask chatgpt\nask claude\nask perplexity",
+      "count": 1
+    },
+    {
+      "value": "ask chatgpt",
+      "count": 1
+    },
+    {
+      "value": "ask claude",
+      "count": 1
+    },
+    {
+      "value": "ask perplexity",
+      "count": 1
+    }
+  ],
+  "sampleHeadings": [
+    "Don’t type, just speak",
+    "Write faster in all your apps, on any device",
+    "Used by professionals everywhere to speed up their thoughts\n",
+    "4x faster\n than typing",
+    "45 wpm",
+    "Don’t type, just speak",
+    "Write faster in all your apps, on any device",
+    "Used by professionals everywhere to speed up their thoughts\n",
+    "4x faster\n than typing",
+    "45 wpm"
+  ],
+  "stats": {
+    "buttons": 27,
+    "headings": 28
+  }
+}

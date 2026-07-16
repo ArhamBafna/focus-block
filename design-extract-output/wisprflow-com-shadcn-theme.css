@@ -1,0 +1,19 @@
+/* shadcn/ui Theme — extracted from https://wisprflow.com/ */
+/* Paste into your globals.css */
+
+@layer base {
+  :root {
+    --background: 60 100% 96%;
+    --foreground: 0 0% 0%;
+    --primary: 278 100% 92%;
+    --primary-foreground: 0 0% 0%;
+    --secondary: 32 100% 64%;
+    --secondary-foreground: 0 0% 0%;
+    --accent: 173 93% 16%;
+    --accent-foreground: 0 0% 100%;
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 10%;
+    --border: 0 0% 20%;
+    --radius: 10px;
+  }
+}

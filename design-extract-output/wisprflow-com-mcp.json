@@ -1,0 +1,943 @@
+{
+  "colors": {
+    "all": [
+      {
+        "hex": "#1a1a1a",
+        "rgb": {
+          "r": 26,
+          "g": 26,
+          "b": 26,
+          "a": 1
+        },
+        "hsl": {
+          "h": 0,
+          "s": 0,
+          "l": 10
+        },
+        "count": 8793,
+        "contexts": [
+          "text",
+          "border",
+          "background"
+        ]
+      },
+      {
+        "hex": "#ffffeb",
+        "rgb": {
+          "r": 255,
+          "g": 255,
+          "b": 235,
+          "a": 1
+        },
+        "hsl": {
+          "h": 60,
+          "s": 100,
+          "l": 96
+        },
+        "count": 1039,
+        "contexts": [
+          "background",
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#000000",
+        "rgb": {
+          "r": 0,
+          "g": 0,
+          "b": 0,
+          "a": 1
+        },
+        "hsl": {
+          "h": 0,
+          "s": 0,
+          "l": 0
+        },
+        "count": 144,
+        "contexts": [
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#f0d7ff",
+        "rgb": {
+          "r": 240,
+          "g": 215,
+          "b": 255,
+          "a": 1
+        },
+        "hsl": {
+          "h": 278,
+          "s": 100,
+          "l": 92
+        },
+        "count": 36,
+        "contexts": [
+          "background",
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#8a8a80",
+        "rgb": {
+          "r": 138,
+          "g": 138,
+          "b": 128,
+          "a": 1
+        },
+        "hsl": {
+          "h": 60,
+          "s": 4,
+          "l": 52
+        },
+        "count": 8,
+        "contexts": [
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#ffffff",
+        "rgb": {
+          "r": 255,
+          "g": 255,
+          "b": 255,
+          "a": 1
+        },
+        "hsl": {
+          "h": 0,
+          "s": 0,
+          "l": 100
+        },
+        "count": 8,
+        "contexts": [
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#e4e4d0",
+        "rgb": {
+          "r": 228,
+          "g": 228,
+          "b": 208,
+          "a": 1
+        },
+        "hsl": {
+          "h": 60,
+          "s": 27,
+          "l": 85
+        },
+        "count": 7,
+        "contexts": [
+          "border",
+          "background"
+        ]
+      },
+      {
+        "hex": "#333333",
+        "rgb": {
+          "r": 51,
+          "g": 51,
+          "b": 51,
+          "a": 1
+        },
+        "hsl": {
+          "h": 0,
+          "s": 0,
+          "l": 20
+        },
+        "count": 4,
+        "contexts": [
+          "text",
+          "border"
+        ]
+      },
+      {
+        "hex": "#034f46",
+        "rgb": {
+          "r": 3,
+          "g": 79,
+          "b": 70,
+          "a": 1
+        },
+        "hsl": {
+          "h": 173,
+          "s": 93,
+          "l": 16
+        },
+        "count": 3,
+        "contexts": [
+          "background"
+        ]
+      },
+      {
+        "hex": "#ffa946",
+        "rgb": {
+          "r": 255,
+          "g": 169,
+          "b": 70,
+          "a": 1
+        },
+        "hsl": {
+          "h": 32,
+          "s": 100,
+          "l": 64
+        },
+        "count": 2,
+        "contexts": [
+          "background"
+        ]
+      }
+    ]
+  },
+  "regions": [
+    {
+      "role": "nav",
+      "tag": "div",
+      "bounds": {
+        "x": 112,
+        "y": 16,
+        "w": 1056,
+        "h": 72.796875
+      },
+      "heading": null,
+      "buttonCount": 9,
+      "cardCount": 0,
+      "className": "nav_component w-nav"
+    },
+    {
+      "role": "nav",
+      "tag": "nav",
+      "bounds": {
+        "x": 255.78125,
+        "y": 18,
+        "w": 614.859375,
+        "h": 68.796875
+      },
+      "heading": null,
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "nav_menu v2 w-nav-menu"
+    },
+    {
+      "role": "nav",
+      "tag": "nav",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      },
+      "heading": null,
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "dropdown-list-v2 w-dropdown-list"
+    },
+    {
+      "role": "nav",
+      "tag": "nav",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      },
+      "heading": null,
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "dropdown-list-v2 w-dropdown-list"
+    },
+    {
+      "role": "nav",
+      "tag": "nav",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      },
+      "heading": null,
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "dropdown-list-v2 w-dropdown-list"
+    },
+    {
+      "role": "nav",
+      "tag": "nav",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 0,
+        "h": 0
+      },
+      "heading": null,
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "dropdown-list-v2 w-dropdown-list"
+    },
+    {
+      "role": "content",
+      "tag": "main",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 10127.859375
+      },
+      "heading": "Don’t type, just speak",
+      "buttonCount": 65,
+      "cardCount": 167,
+      "className": "main-wrapper"
+    },
+    {
+      "role": "hero",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 0,
+        "w": 1280,
+        "h": 592.1875
+      },
+      "heading": "Don’t type, just speak",
+      "buttonCount": 3,
+      "cardCount": 0,
+      "className": "section_hero"
+    },
+    {
+      "role": "hero",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 765.296875,
+        "w": 1280,
+        "h": 924
+      },
+      "heading": "Write faster in all your apps, on any device",
+      "buttonCount": 1,
+      "cardCount": 44,
+      "className": "section_app-integrations"
+    },
+    {
+      "role": "content",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 1689.296875,
+        "w": 1280,
+        "h": 376.59375
+      },
+      "heading": "Used by professionals everywhere to speed up their thoughts\n",
+      "buttonCount": 0,
+      "cardCount": 64,
+      "className": "section_home-clients"
+    },
+    {
+      "role": "content",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 2065.890625,
+        "w": 1280,
+        "h": 1180.734375
+      },
+      "heading": "4x faster\n than typing",
+      "buttonCount": 4,
+      "cardCount": 0,
+      "className": "section_faster"
+    },
+    {
+      "role": "testimonials",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 3262.625,
+        "w": 1280,
+        "h": 800
+      },
+      "heading": "Made for the way you work",
+      "buttonCount": 39,
+      "cardCount": 20,
+      "className": "section_use-cases min-height-desktop-50rem"
+    },
+    {
+      "role": "hero",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 4062.625,
+        "w": 1280,
+        "h": 821.40625
+      },
+      "heading": "AI\n Auto Edits",
+      "buttonCount": 4,
+      "cardCount": 0,
+      "className": "section_features"
+    },
+    {
+      "role": "features",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 4884.03125,
+        "w": 1280,
+        "h": 1756.609375
+      },
+      "heading": "Personal dictionary",
+      "buttonCount": 2,
+      "cardCount": 3,
+      "className": "section_features"
+    },
+    {
+      "role": "content",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 6640.640625,
+        "w": 1280,
+        "h": 701.453125
+      },
+      "heading": "On-the-go or at your desk",
+      "buttonCount": 4,
+      "cardCount": 0,
+      "className": "section_features"
+    },
+    {
+      "role": "testimonials",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 7342.09375,
+        "w": 1280,
+        "h": 1463.375
+      },
+      "heading": "Love letters\nto Flow",
+      "buttonCount": 0,
+      "cardCount": 36,
+      "className": "section_testimonials"
+    },
+    {
+      "role": "pricing",
+      "tag": "section",
+      "bounds": {
+        "x": 0,
+        "y": 8725.46875,
+        "w": 1280,
+        "h": 960
+      },
+      "heading": "Start flowing",
+      "buttonCount": 4,
+      "cardCount": 0,
+      "className": "section_startflowing w-variant-e6b68f58-d27c-d53d-2623-e79f70a1fa20"
+    },
+    {
+      "role": "footer",
+      "tag": "footer",
+      "bounds": {
+        "x": 0,
+        "y": 10127.859375,
+        "w": 1280,
+        "h": 885.6875
+      },
+      "heading": "Company",
+      "buttonCount": 0,
+      "cardCount": 0,
+      "className": "section_footer"
+    }
+  ],
+  "componentClusters": [
+    {
+      "kind": "button",
+      "structuralHash": "div>a>nav>div>div>a",
+      "instanceCount": 1,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(255, 255, 235)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "0px 8px 0px 19.2px",
+            "borderRadius": "9.6px",
+            "border": "2px solid rgb(228, 228, 208)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "a>img>div>div>div",
+      "instanceCount": 7,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(240, 215, 255)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "14px 14px 14px 14px",
+            "borderRadius": "12px",
+            "border": "2px solid rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "600"
+          },
+          "instanceCount": 7
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "img",
+      "instanceCount": 7,
+      "variants": [
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "600"
+          },
+          "instanceCount": 7
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "div>a",
+      "instanceCount": 3,
+      "variants": [
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 2
+        },
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "div>div",
+      "instanceCount": 1,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(255, 255, 235)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "16px 24px 16px 24px",
+            "borderRadius": "12px",
+            "border": "2px solid rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "600"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "div>div>a",
+      "instanceCount": 2,
+      "variants": [
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 2
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "a>img>div",
+      "instanceCount": 6,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(255, 255, 235)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "16px 24px 16px 24px",
+            "borderRadius": "12px",
+            "border": "2px solid rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "600"
+          },
+          "instanceCount": 6
+        }
+      ]
+    },
+    {
+      "kind": "card",
+      "structuralHash": "div>div>div",
+      "instanceCount": 2,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(26, 26, 26)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "70px 55px 0px 55px",
+            "borderRadius": "40px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 2
+        }
+      ]
+    },
+    {
+      "kind": "card",
+      "structuralHash": "div>div",
+      "instanceCount": 2,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(26, 26, 26)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "48px 48px 48px 48px",
+            "borderRadius": "40px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        },
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "a>div>div>div",
+      "instanceCount": 1,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(255, 255, 235)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "16px 24px 16px 24px",
+            "borderRadius": "12px",
+            "border": "2px solid rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "600"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "link",
+      "structuralHash": "a>div>div",
+      "instanceCount": 4,
+      "variants": [
+        {
+          "css": {
+            "background": "rgb(3, 79, 70)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "32px 32px 32px 32px",
+            "borderRadius": "32px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 4
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "div>a>a",
+      "instanceCount": 1,
+      "variants": [
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(255, 255, 235)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(255, 255, 235)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        }
+      ]
+    },
+    {
+      "kind": "button",
+      "structuralHash": "div>a>a>a",
+      "instanceCount": 1,
+      "variants": [
+        {
+          "css": {
+            "background": "rgba(0, 0, 0, 0)",
+            "color": "rgb(26, 26, 26)",
+            "padding": "0px 0px 0px 0px",
+            "borderRadius": "0px",
+            "border": "0px none rgb(26, 26, 26)",
+            "fontSize": "16px",
+            "fontWeight": "400"
+          },
+          "instanceCount": 1
+        }
+      ]
+    }
+  ],
+  "accessibility": {
+    "remediation": []
+  },
+  "cssHealth": {
+    "sheets": [
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 675,
+        "usedBytes": 93,
+        "unusedBytes": 582,
+        "unusedPercent": 86
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 432,
+        "usedBytes": 0,
+        "unusedBytes": 432,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/css/flowsite-dev.webflow.shared.77edf433a.min.css",
+        "totalBytes": 523233,
+        "usedBytes": 35478,
+        "unusedBytes": 487755,
+        "unusedPercent": 93
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 94,
+        "usedBytes": 0,
+        "unusedBytes": 94,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 66,
+        "usedBytes": 0,
+        "unusedBytes": 66,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 51,
+        "usedBytes": 0,
+        "unusedBytes": 51,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 54,
+        "usedBytes": 50,
+        "unusedBytes": 4,
+        "unusedPercent": 7
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 1889,
+        "usedBytes": 358,
+        "unusedBytes": 1531,
+        "unusedPercent": 81
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 101,
+        "usedBytes": 98,
+        "unusedBytes": 3,
+        "unusedPercent": 3
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 122,
+        "usedBytes": 118,
+        "unusedBytes": 4,
+        "unusedPercent": 3
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 74,
+        "usedBytes": 70,
+        "unusedBytes": 4,
+        "unusedPercent": 5
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 865,
+        "usedBytes": 208,
+        "unusedBytes": 657,
+        "unusedPercent": 76
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 678,
+        "usedBytes": 0,
+        "unusedBytes": 678,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 118,
+        "usedBytes": 114,
+        "unusedBytes": 4,
+        "unusedPercent": 3
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 216,
+        "usedBytes": 0,
+        "unusedBytes": 216,
+        "unusedPercent": 100
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 161,
+        "usedBytes": 157,
+        "unusedBytes": 4,
+        "unusedPercent": 2
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 576,
+        "usedBytes": 234,
+        "unusedBytes": 342,
+        "unusedPercent": 59
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 225,
+        "usedBytes": 121,
+        "unusedBytes": 104,
+        "unusedPercent": 46
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 4042,
+        "usedBytes": 895,
+        "unusedBytes": 3147,
+        "unusedPercent": 78
+      },
+      {
+        "url": "https://wisprflow.ai/",
+        "totalBytes": 188,
+        "usedBytes": 168,
+        "unusedBytes": 20,
+        "unusedPercent": 11
+      },
+      {
+        "url": "https://app.vidzflow.com/assets/videojs-intro-video/videojs-intro-video.css",
+        "totalBytes": 3415,
+        "usedBytes": 46,
+        "unusedBytes": 3369,
+        "unusedPercent": 99
+      },
+      {
+        "url": "https://vjs.zencdn.net/8.5.2/video-js.min.css",
+        "totalBytes": 45735,
+        "usedBytes": 3049,
+        "unusedBytes": 42686,
+        "unusedPercent": 93
+      },
+      {
+        "url": "https://app.vidzflow.com/v/RM2IfilyE1?dq=576&ap=true&muted=true&loop=true&ctp=false&bv=false&piv=true&playsinline=true&bc=%234E5FFD&controls=false",
+        "totalBytes": 34847,
+        "usedBytes": 2068,
+        "unusedBytes": 32779,
+        "unusedPercent": 94
+      },
+      {
+        "url": "https://cdn.jsdelivr.net/npm/modern-normalize@1.1.0/modern-normalize.min.css",
+        "totalBytes": 1750,
+        "usedBytes": 469,
+        "unusedBytes": 1281,
+        "unusedPercent": 73
+      }
+    ],
+    "totalBytes": 619607,
+    "usedBytes": 43794,
+    "unusedBytes": 575813,
+    "unusedPercent": 93,
+    "importantCount": 214,
+    "duplicates": 15886,
+    "vendorPrefixes": {
+      "webkit": 64,
+      "moz": 14,
+      "ms": 2,
+      "o": 1
+    },
+    "keyframes": [
+      {
+        "name": "logoTicker1",
+        "steps": 2
+      },
+      {
+        "name": "skipButtonFadeInCenter",
+        "steps": 2
+      },
+      {
+        "name": "skipButtonFadeIn",
+        "steps": 2
+      }
+    ],
+    "specificity": {
+      "max": [
+        1,
+        10,
+        48
+      ],
+      "average": [
+        0.06,
+        1.33,
+        0.17
+      ],
+      "count": 6987
+    },
+    "issues": [
+      "214 !important rules",
+      "15886 duplicate declarations",
+      "93% unused CSS"
+    ]
+  }
+}

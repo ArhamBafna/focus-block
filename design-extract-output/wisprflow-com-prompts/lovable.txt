@@ -1,0 +1,20 @@
+Clone the design language of this landing page and build a fresh equivalent.
+Visual feel: flat. Tone: friendly · Headings: Sentence case · CTA verbs: [object Object], [object Object], [object Object], [object Object], [object Object], [object Object]
+Primary palette: #1a1a1a, #ffffeb, #000000, #f0d7ff, #8a8a80.
+Typography: [object Object], [object Object].
+Corner radius vocabulary: 4, 10, 14, 40, 64, 80.
+Shadow vocabulary: (none).
+Page structure:
+- testimonial — heading: "Don’t type, just speak"
+- hero — heading: "Don’t type, just speak"
+- hero — heading: "Write faster in all your apps, on any device"
+- logo-wall — heading: "Used by professionals everywhere to speed up their thoughts
+"
+- testimonials — heading: "Made for the way you work"
+- hero — heading: "AI
+ Auto Edits"
+- faq — heading: "Personal dictionary"
+- testimonial — heading: "Love letters
+to Flow"
+- pricing — heading: "Start flowing"
+- footer — heading: "Company"

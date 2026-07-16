@@ -1,0 +1,24 @@
+[package]
+name = "focus-service"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "focus-service"
+path = "src/main.rs"
+
+[dependencies]
+focus-core = { workspace = true }
+focus-store = { workspace = true }
+focus-ipc = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-service = "0.8"

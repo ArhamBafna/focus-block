@@ -1,0 +1,33 @@
+Build a landing page with this exact visual language.
+COLORS:
+  #1a1a1a
+  #ffffeb
+  #000000
+  #f0d7ff
+  #8a8a80
+  #ffffff
+  #e4e4d0
+  #333333
+  #034f46
+  #ffa946
+FONTS: [object Object], [object Object]
+SPACING: 2, 32, 48, 59, 64, 70, 80, 93
+RADIUS: 4, 10, 14, 40, 64, 80
+SHADOWS: (none)
+MATERIAL LANGUAGE: flat
+VOICE: Tone: friendly · Headings: Sentence case · CTA verbs: [object Object], [object Object], [object Object], [object Object], [object Object], [object Object]
+SECTIONS (in order):
+- testimonial — heading: "Don’t type, just speak"
+- hero — heading: "Don’t type, just speak"
+- hero — heading: "Write faster in all your apps, on any device"
+- logo-wall — heading: "Used by professionals everywhere to speed up their thoughts
+"
+- testimonials — heading: "Made for the way you work"
+- hero — heading: "AI
+ Auto Edits"
+- faq — heading: "Personal dictionary"
+- testimonial — heading: "Love letters
+to Flow"
+- pricing — heading: "Start flowing"
+- footer — heading: "Company"
+Use Tailwind. Match these tokens exactly. Keep the material language consistent.

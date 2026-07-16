@@ -1,0 +1,49 @@
+{
+  "openGraph": {
+    "title": "Wispr Flow | Effortless Voice Dictation",
+    "description": "Flow makes writing quick and clear with seamless voice dictation. It is the fastest, smartest way to type with your voice.",
+    "image": "https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/683c611aba65ade013982bcd_wispr-og-min.jpg",
+    "type": "website"
+  },
+  "twitter": {
+    "title": "Wispr Flow | Effortless Voice Dictation",
+    "description": "Flow makes writing quick and clear with seamless voice dictation. It is the fastest, smartest way to type with your voice.",
+    "image": "https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/683c611aba65ade013982bcd_wispr-og-min.jpg",
+    "card": "summary_large_image"
+  },
+  "description": "Flow makes writing quick and clear with seamless voice dictation. It is the fastest, smartest way to type with your voice.",
+  "canonical": null,
+  "themeColor": null,
+  "viewport": "width=device-width, initial-scale=1",
+  "favicons": [
+    {
+      "rel": "shortcut icon",
+      "href": "https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/684b3be32acf9b372f54d041_ws-favi.png",
+      "sizes": "",
+      "type": "image/x-icon"
+    },
+    {
+      "rel": "apple-touch-icon",
+      "href": "https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/68d27d1a8a10f417b5644527_flow-wc-v2.png",
+      "sizes": "",
+      "type": ""
+    }
+  ],
+  "manifest": null,
+  "structuredData": [
+    {
+      "type": "Organization",
+      "name": "Flow",
+      "sample": "{\"@context\":\"https://schema.org\",\"@type\":\"Organization\",\"url\":\"https://wisprflow.ai\",\"sameAs\":[\"https://x.com/wisprflow\",\"https://www.linkedin.com/company/wisprflow/\",\"https://www.instagram.com/wisprflow.ai/\",\"https://www.youtube.com/@wisprflowai/\",\"https://www.tiktok.com/@wisprflow.ai\"],\"logo\":\"https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/683215c6f233131a07d8bafc_navbar_logo.svg\",\""
+    }
+  ],
+  "score": {
+    "hasOg": true,
+    "hasTwitter": true,
+    "hasDescription": true,
+    "hasCanonical": false,
+    "hasStructuredData": true,
+    "hasFavicon": true,
+    "hasThemeColor": false
+  }
+}
