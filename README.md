@@ -145,17 +145,6 @@ This is a **Rust + Node.js monorepo**. Changes to code should be scoped:
   npm run build
   ```
 
-## Architecture Notes
-
-- **Desktop** is a Tauri app with React frontend and Rust backend for system-level blocking
-- **Extension** provides blocking within the Chrome browser via content scripts and service workers
-- **Core libraries** (`focus-core`, `focus-store`, `focus-ipc`) are shared across both desktop and service
-- **System Service** (`focus-service`) runs in the background to enforce blocks at the OS level
-
 ## License
 
 MIT License - See [LICENSE](LICENSE) file for details
-
----
-
-**Design Philosophy**: FocusBlock prioritizes user trust and clarity. Controls are decisive, feedback is direct, and visual design is calm—no distractions from the focus mission itself.
