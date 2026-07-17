@@ -39,6 +39,7 @@ function normalizeSchedule(record: unknown): ScheduleRecord {
 export interface StorageData {
   blocklist: { id: number; domain: string }[];
   whitelist: { id: number; domain: string }[];
+  temporary_allowlist: { id: string; domain: string; expires_at: number }[];
   presets: {
     id: string;
     name: string;
@@ -88,6 +89,7 @@ export interface StorageData {
 const DEFAULTS: StorageData = {
   blocklist: [],
   whitelist: [],
+  temporary_allowlist: [],
   presets: [],
   schedules: [],
   active_session: null,

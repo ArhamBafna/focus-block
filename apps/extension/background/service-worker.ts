@@ -38,6 +38,7 @@ interface Schedule {
 interface StorageData {
   blocklist: { id: number; domain: string }[];
   whitelist: { id: number; domain: string }[];
+  temporary_allowlist: { id: string; domain: string; expires_at: number }[];
   schedules: Schedule[];
   active_session: Session | null;
   history: Session[];
@@ -49,6 +50,7 @@ interface StorageData {
 
 const ALARM_SESSION_EXPIRY = "focus_session_expiry";
 const ALARM_SCHEDULE_BOUNDARY = "focus_schedule_boundary";
+const ALARM_TEMP_ALLOW_EXPIRY = "focus_temp_allow_expiry";
 // Rule IDs start at 1. We use IDs 1..N for blocked domains.
 // We reserve no IDs for anything else.
 const BASE_RULE_ID = 1;
@@ -72,50 +74,62 @@ function storageSet<K extends keyof StorageData>(key: K, value: StorageData[K]):
 
 // ── Rule management ──────────────────────────────────────────────────────────
 
-/**
- * Given a list of domains to block, generate declarativeNetRequest rules.
- * Each domain gets two rules: bare domain + www. subdomain.
- * Rules redirect matching requests to the extension's blocked page.
- */
-function buildRules(domains: string[], extensionId: string): chrome.declarativeNetRequest.Rule[] {
+function addDomainRules(
+  rules: chrome.declarativeNetRequest.Rule[],
+  domain: string,
+  priority: number,
+  action: chrome.declarativeNetRequest.RuleAction,
+  nextId: number
+): number {
+  if (!domain) return nextId;
+
+  const resourceTypes = [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME];
+  if (domain.startsWith("*")) {
+    const matchText = domain.slice(1);
+    if (!matchText) return nextId;
+    rules.push({
+      id: nextId++,
+      priority,
+      action,
+      condition: { urlFilter: `*${matchText}*`, resourceTypes },
+    });
+    return nextId;
+  }
+
+  // Keep exact-domain behavior unchanged: main domain plus explicit www.
+  for (const urlFilter of [`||${domain}^`, `||www.${domain}^`]) {
+    rules.push({
+      id: nextId++,
+      priority,
+      action,
+      condition: { urlFilter, resourceTypes },
+    });
+  }
+  return nextId;
+}
+
+/** Build blocklist rules. Allowlist entries use higher priority than blocks. */
+function buildRules(
+  blocklist: string[],
+  whitelist: string[],
+  temporaryAllows: string[],
+  extensionId: string
+): chrome.declarativeNetRequest.Rule[] {
   const blockedPageUrl = `chrome-extension://${extensionId}/${BLOCKED_PAGE_PATH}`;
   const rules: chrome.declarativeNetRequest.Rule[] = [];
   let id = BASE_RULE_ID;
 
-  for (const domain of domains) {
-    if (!domain) continue;
-
-    // Match bare domain
-    rules.push({
-      id: id++,
-      priority: 1,
-      action: {
-        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
-        redirect: { url: blockedPageUrl },
-      },
-      condition: {
-        urlFilter: `||${domain}^`,
-        resourceTypes: [
-          chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-        ],
-      },
-    });
-
-    // Match www. subdomain (in case urlFilter doesn't catch it)
-    rules.push({
-      id: id++,
-      priority: 1,
-      action: {
-        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
-        redirect: { url: blockedPageUrl },
-      },
-      condition: {
-        urlFilter: `||www.${domain}^`,
-        resourceTypes: [
-          chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
-        ],
-      },
-    });
+  for (const domain of whitelist) {
+    id = addDomainRules(rules, domain, 2, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
+  }
+  for (const domain of temporaryAllows) {
+    id = addDomainRules(rules, domain, 3, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
+  }
+  for (const domain of blocklist) {
+    id = addDomainRules(rules, domain, 1, {
+      type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+      redirect: { url: blockedPageUrl },
+    }, id);
   }
 
   return rules;
@@ -125,33 +139,23 @@ function buildRules(domains: string[], extensionId: string): chrome.declarativeN
  * Given a whitelist, generate rules for lockdown mode.
  * Blocks EVERYTHING (priority 1) except whitelisted domains and extension pages (priority 2).
  */
-function buildLockdownRules(whitelist: string[], extensionId: string): chrome.declarativeNetRequest.Rule[] {
+function buildLockdownRules(
+  whitelist: string[],
+  temporaryAllows: string[],
+  extensionId: string
+): chrome.declarativeNetRequest.Rule[] {
   const blockedPageUrl = `chrome-extension://${extensionId}/${BLOCKED_PAGE_PATH}`;
   const rules: chrome.declarativeNetRequest.Rule[] = [];
   let id = BASE_RULE_ID;
 
   // 1. Allow rules for whitelisted domains (priority 2)
   for (const domain of whitelist) {
-    if (!domain) continue;
+    id = addDomainRules(rules, domain, 2, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
+  }
 
-    rules.push({
-      id: id++,
-      priority: 2,
-      action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
-      condition: {
-        urlFilter: `||${domain}^`,
-        resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-      },
-    });
-    rules.push({
-      id: id++,
-      priority: 2,
-      action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
-      condition: {
-        urlFilter: `||www.${domain}^`,
-        resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-      },
-    });
+  // Temporary exceptions always win, including when permanent rules conflict.
+  for (const domain of temporaryAllows) {
+    id = addDomainRules(rules, domain, 3, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
   }
 
   // 2. Allow rule for extension pages so the popup and blocked page still work (priority 2)
@@ -203,6 +207,32 @@ async function updateBlockingRules(newRules: chrome.declarativeNetRequest.Rule[]
  */
 async function clearAllRules(): Promise<void> {
   await updateBlockingRules([]);
+}
+
+async function getActiveTemporaryAllows(): Promise<{ id: string; domain: string; expires_at: number }[]> {
+  const entries = await storageGet("temporary_allowlist");
+  const now = Date.now();
+  const active = (Array.isArray(entries) ? entries : []).filter((entry) =>
+    typeof entry?.id === "string" &&
+    typeof entry.domain === "string" &&
+    typeof entry.expires_at === "number" &&
+    entry.expires_at > now
+  );
+
+  if (active.length !== (entries?.length ?? 0)) {
+    await storageSet("temporary_allowlist", active);
+  }
+  return active;
+}
+
+async function scheduleTemporaryAllowExpiry(entries: { expires_at: number }[]): Promise<void> {
+  await chrome.alarms.clear(ALARM_TEMP_ALLOW_EXPIRY);
+  const nextExpiry = entries.reduce<number | null>((next, entry) =>
+    next === null || entry.expires_at < next ? entry.expires_at : next,
+  null);
+  if (nextExpiry !== null) {
+    await chrome.alarms.create(ALARM_TEMP_ALLOW_EXPIRY, { when: nextExpiry });
+  }
 }
 
 // ── Recurring schedule helpers ──────────────────────────────────────────────
@@ -340,6 +370,8 @@ async function expireSession(): Promise<void> {
 async function applyBlockingState(): Promise<void> {
   const schedules = (await storageGet("schedules")) ?? [];
   await scheduleNextBoundaryAlarm(schedules);
+  const temporaryAllows = await getActiveTemporaryAllows();
+  await scheduleTemporaryAllowExpiry(temporaryAllows);
 
   const suppressedUntil = await storageGet("schedule_suppressed_until");
   const scheduleSuppressed = typeof suppressedUntil === "number" && suppressedUntil > Date.now();
@@ -387,9 +419,18 @@ async function applyBlockingState(): Promise<void> {
   let rules: chrome.declarativeNetRequest.Rule[];
 
   if (session.mode === "lockdown") {
-    rules = buildLockdownRules(session.whitelist_snapshot, extensionId);
+    rules = buildLockdownRules(
+      session.whitelist_snapshot,
+      temporaryAllows.map((entry) => entry.domain),
+      extensionId
+    );
   } else {
-    rules = buildRules(session.blocklist_snapshot, extensionId);
+    rules = buildRules(
+      session.blocklist_snapshot,
+      session.whitelist_snapshot,
+      temporaryAllows.map((entry) => entry.domain),
+      extensionId
+    );
   }
 
   await updateBlockingRules(rules);
@@ -426,7 +467,7 @@ chrome.runtime.onStartup.addListener(async () => {
 chrome.storage.onChanged.addListener(async (changes, area) => {
   if (area !== "local") return;
 
-  const relevantKeys = ["active_session", "blocklist", "whitelist", "schedules"];
+  const relevantKeys = ["active_session", "blocklist", "whitelist", "temporary_allowlist", "schedules"];
   const hasRelevantChange = relevantKeys.some((k) => k in changes);
   if (!hasRelevantChange) return;
 
@@ -443,6 +484,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   }
   if (alarm.name === ALARM_SCHEDULE_BOUNDARY) {
     console.log("[FocusBlocker] Schedule boundary alarm fired.");
+    await applyBlockingState();
+  }
+  if (alarm.name === ALARM_TEMP_ALLOW_EXPIRY) {
+    console.log("[FocusBlocker] Temporary allow expired.");
     await applyBlockingState();
   }
 });

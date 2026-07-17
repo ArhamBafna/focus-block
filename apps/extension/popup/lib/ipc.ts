@@ -56,6 +56,12 @@ export interface DomainEntry {
   domain: string;
 }
 
+export interface TemporaryAllowEntry {
+  id: string;
+  domain: string;
+  expires_at: number;
+}
+
 export interface ServiceHealth {
   running: boolean;
   version: string;
@@ -153,6 +159,14 @@ export function normalizeDomain(input: string): string | null {
   let str = input.trim().toLowerCase();
   if (!str) return null;
 
+  if (str.startsWith("*")) {
+    const matchText = str.slice(1).trim();
+    if (!matchText || matchText.includes("*") || matchText.includes(" ") || matchText.includes("|") || matchText.includes("^")) {
+      return null;
+    }
+    return `*${matchText}`;
+  }
+
   if (str.startsWith("http://")) {
     str = str.slice(7);
   } else if (str.startsWith("https://")) {
@@ -247,7 +261,7 @@ export const ipc = {
 
   addBlocklist: async (domain: string): Promise<number> => {
     const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid domain format");
+    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
 
     const list = await storageGet("blocklist");
     if (list.some((d) => d.domain === norm)) {
@@ -272,7 +286,7 @@ export const ipc = {
 
   addWhitelist: async (domain: string): Promise<number> => {
     const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid domain format");
+    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
 
     const list = await storageGet("whitelist");
     if (list.some((d) => d.domain === norm)) {
@@ -288,6 +302,45 @@ export const ipc = {
     let list = await storageGet("whitelist");
     list = list.filter((d) => d.id !== id);
     await storageSet("whitelist", list);
+    return null;
+  },
+
+  // Temporary allowlist â€” persists locally until its expiry timestamp.
+  listTemporaryAllows: async (): Promise<TemporaryAllowEntry[]> => {
+    const entries = await storageGet("temporary_allowlist");
+    const now = Date.now();
+    const active = entries.filter((entry) =>
+      typeof entry?.id === "string" &&
+      typeof entry.domain === "string" &&
+      typeof entry.expires_at === "number" &&
+      entry.expires_at > now
+    );
+    if (active.length !== entries.length) {
+      await storageSet("temporary_allowlist", active);
+    }
+    return active;
+  },
+
+  addTemporaryAllow: async (domain: string, durationMinutes: number): Promise<TemporaryAllowEntry> => {
+    const norm = normalizeDomain(domain);
+    if (!norm) throw new Error("Enter a valid site or wildcard such as *game");
+    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+      throw new Error("Choose a valid duration");
+    }
+
+    const active = await ipc.listTemporaryAllows();
+    const entry: TemporaryAllowEntry = {
+      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      domain: norm,
+      expires_at: Date.now() + durationMinutes * 60 * 1000,
+    };
+    await storageSet("temporary_allowlist", [...active, entry]);
+    return entry;
+  },
+
+  removeTemporaryAllow: async (id: string): Promise<null> => {
+    const entries = await storageGet("temporary_allowlist");
+    await storageSet("temporary_allowlist", entries.filter((entry) => entry.id !== id));
     return null;
   },
 

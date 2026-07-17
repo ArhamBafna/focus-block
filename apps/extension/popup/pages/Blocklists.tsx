@@ -50,6 +50,9 @@ export default function Blocklists() {
         <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-neutral-500)" }}>
           Sites blocked during every focus session.
         </p>
+        <p style={{ margin: "5px 0 0", fontSize: "11px", color: "var(--color-neutral-400)" }}>
+          <strong>*word</strong> applies to all URLs containing <strong>word</strong>.
+        </p>
       </div>
 
       {/* Add form */}
@@ -58,7 +61,7 @@ export default function Blocklists() {
           type="text"
           value={newDomain}
           onChange={(e) => { setNewDomain(e.target.value); setError(null); }}
-          placeholder="e.g. youtube.com"
+          placeholder="e.g. youtube.com or *game"
           style={{
             flex: 1,
             padding: "8px 12px",

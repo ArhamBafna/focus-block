@@ -182,7 +182,7 @@ export default function Settings() {
             layout="vertical"
             title={
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                Stop Session Method
+                Stop Lockdown Session Method
                 <div
                   title="Challenge required to end a lockdown session early."
                   style={{
