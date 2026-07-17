@@ -351,7 +351,9 @@ export default function Home() {
               fontSize: "14px",
               color: "var(--color-neutral-500)",
               margin: "16px 0 0",
-              maxWidth: "260px",
+              width: "100%",
+              maxWidth: "320px",
+              whiteSpace: "nowrap",
             }}
           >
             {hoveredSessionMode === "blocklist"
