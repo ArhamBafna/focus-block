@@ -50,6 +50,7 @@ mod windows {
     const NETWORK_REFRESH_INTERVAL: Duration = Duration::from_secs(2);
     const FWP_E_PROVIDER_NOT_FOUND: u32 = 0x8032_0005;
     const FWP_E_SUBLAYER_NOT_FOUND: u32 = 0x8032_0007;
+    const FWP_E_NEVER_MATCH: u32 = 0x8032_0033;
 
     #[derive(Default)]
     struct ProcessMatchers {
@@ -378,10 +379,12 @@ mod windows {
     fn replace_focusblock_filters(identities: &BTreeSet<String>) -> Result<(), String> {
         unsafe {
             let engine = WfpEngine::open()?;
+            // The provider/sublayer must exist before the provider-scoped
+            // enumeration. Otherwise WFP returns FWP_E_NEVER_MATCH.
+            ensure_provider_and_sublayer(engine.handle)?;
             let filter_ids = enumerate_focusblock_filter_ids(engine.handle)?;
             let transaction = WfpTransaction::begin(engine.handle)?;
             let result = (|| {
-                ensure_provider_and_sublayer(engine.handle)?;
                 delete_focusblock_filters(engine.handle, &filter_ids)?;
 
                 for identity in identities {
@@ -538,10 +541,11 @@ mod windows {
         let mut template = FWPM_FILTER_ENUM_TEMPLATE0::default();
         template.providerKey = &mut provider_key;
         let mut enum_handle = ptr::null_mut();
-        check_wfp(
-            FwpmFilterCreateEnumHandle0(engine, &template, &mut enum_handle),
-            "FwpmFilterCreateEnumHandle0",
-        )?;
+        let status = FwpmFilterCreateEnumHandle0(engine, &template, &mut enum_handle);
+        if status == FWP_E_NEVER_MATCH {
+            return Ok(Vec::new());
+        }
+        check_wfp(status, "FwpmFilterCreateEnumHandle0")?;
 
         let mut filter_ids = Vec::new();
         let result: Result<(), String> = (|| {
