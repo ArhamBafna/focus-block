@@ -147,4 +147,4 @@ This is a **Rust + Node.js monorepo**. Changes to code should be scoped:
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file for details
+[Apache-2.0 License](LICENSE)
