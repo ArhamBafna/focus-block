@@ -378,10 +378,11 @@ mod windows {
     fn replace_focusblock_filters(identities: &BTreeSet<String>) -> Result<(), String> {
         unsafe {
             let engine = WfpEngine::open()?;
+            let filter_ids = enumerate_focusblock_filter_ids(engine.handle)?;
             let transaction = WfpTransaction::begin(engine.handle)?;
             let result = (|| {
                 ensure_provider_and_sublayer(engine.handle)?;
-                delete_focusblock_filters(engine.handle)?;
+                delete_focusblock_filters(engine.handle, &filter_ids)?;
 
                 for identity in identities {
                     if let Some(path) = identity.strip_prefix("exe:") {
@@ -406,8 +407,9 @@ mod windows {
     fn clear_focusblock_filters() -> Result<(), String> {
         unsafe {
             let engine = WfpEngine::open()?;
+            let filter_ids = enumerate_focusblock_filter_ids(engine.handle)?;
             let transaction = WfpTransaction::begin(engine.handle)?;
-            let result = delete_focusblock_filters(engine.handle);
+            let result = delete_focusblock_filters(engine.handle, &filter_ids);
             match result {
                 Ok(()) => transaction.commit(),
                 Err(error) => {
@@ -531,7 +533,7 @@ mod windows {
         Ok(())
     }
 
-    unsafe fn delete_focusblock_filters(engine: HANDLE) -> Result<(), String> {
+    unsafe fn enumerate_focusblock_filter_ids(engine: HANDLE) -> Result<Vec<u64>, String> {
         let mut provider_key = PROVIDER_KEY;
         let mut template = FWPM_FILTER_ENUM_TEMPLATE0::default();
         template.providerKey = &mut provider_key;
@@ -564,10 +566,14 @@ mod windows {
         })();
         let _ = FwpmFilterDestroyEnumHandle0(engine, enum_handle);
         result?;
+        Ok(filter_ids)
+    }
+
+    unsafe fn delete_focusblock_filters(engine: HANDLE, filter_ids: &[u64]) -> Result<(), String> {
 
         for filter_id in filter_ids {
             check_wfp(
-                FwpmFilterDeleteById0(engine, filter_id),
+                FwpmFilterDeleteById0(engine, *filter_id),
                 "FwpmFilterDeleteById0",
             )?;
         }
