@@ -28,17 +28,13 @@
   "permissions": [
     "declarativeNetRequest",
     "storage",
-    "tabs",
-    "alarms"
+    "alarms",
+    "nativeMessaging"
   ],
 
   "host_permissions": [
     "<all_urls>"
   ],
-
-  "declarative_net_request": {
-    "rule_resources": []
-  },
 
   "web_accessible_resources": [
     {

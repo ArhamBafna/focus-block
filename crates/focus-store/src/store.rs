@@ -2,7 +2,9 @@ use crate::error::StoreError;
 use crate::migrations::{SCHEMA, SEED_PRESETS};
 use chrono::{DateTime, Utc};
 use focus_core::protocol::DomainEntry;
-use focus_core::{normalize_domain, Preset, Session, SessionMode, SessionStatus};
+use focus_core::{
+    normalize_domain, AppBlockEntry, AppBlockTarget, Preset, Session, SessionMode, SessionStatus,
+};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -39,6 +41,7 @@ impl FocusStore {
 
     fn migrate(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(SCHEMA)?;
+        self.add_sessions_app_target_snapshot_column()?;
 
         let count: i64 = self
             .conn
@@ -121,6 +124,55 @@ impl FocusStore {
 
     pub fn remove_blocklist(&self, id: i64) -> Result<(), StoreError> {
         self.conn.execute("DELETE FROM blocklist_domains WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn list_app_block_targets(&self) -> Result<Vec<AppBlockEntry>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, target_kind, target_value FROM app_block_targets ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let kind: String = row.get(1)?;
+            let value: String = row.get(2)?;
+            let target = AppBlockTarget::from_storage(&kind, value).map_err(|message| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, message)),
+                )
+            })?;
+            Ok(AppBlockEntry { id, target })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn app_block_targets(&self) -> Result<Vec<AppBlockTarget>, StoreError> {
+        Ok(self
+            .list_app_block_targets()?
+            .into_iter()
+            .map(|entry| entry.target)
+            .collect())
+    }
+
+    pub fn add_app_block_target(&self, target: &AppBlockTarget) -> Result<i64, StoreError> {
+        let target = target.normalized().map_err(StoreError::Message)?;
+        let (kind, value) = target.storage_parts();
+        self.conn.execute(
+            "INSERT OR IGNORE INTO app_block_targets (target_kind, target_value) VALUES (?1, ?2)",
+            params![kind, value],
+        )?;
+
+        self.conn.query_row(
+            "SELECT id FROM app_block_targets WHERE target_kind = ?1 AND target_value = ?2",
+            params![kind, value],
+            |row| row.get(0),
+        ).map_err(StoreError::from)
+    }
+
+    pub fn remove_app_block_target(&self, id: i64) -> Result<(), StoreError> {
+        self.conn
+            .execute("DELETE FROM app_block_targets WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -249,7 +301,7 @@ impl FocusStore {
             SessionStatus::Stopped => "stopped",
         };
         self.conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 session.id.to_string(),
                 session.preset_id.map(|id| id.to_string()),
@@ -260,6 +312,7 @@ impl FocusStore {
                 status_str,
                 serde_json::to_string(&session.blocklist_snapshot)?,
                 serde_json::to_string(&session.whitelist_snapshot)?,
+                serde_json::to_string(&session.app_block_targets_snapshot)?,
             ],
         )?;
         Ok(())
@@ -267,7 +320,7 @@ impl FocusStore {
 
     pub fn get_active_session(&self) -> Result<Option<Session>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
         )?;
         let mut rows = stmt.query([])?;
         if let Some(row) = rows.next()? {
@@ -279,7 +332,7 @@ impl FocusStore {
 
     pub fn list_history(&self, limit: u32) -> Result<Vec<Session>, StoreError> {
         let mut stmt = self.conn.prepare(&format!(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT {}",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT {}",
             limit
         ))?;
         let rows = stmt.query_map([], row_to_session)?;
@@ -288,6 +341,23 @@ impl FocusStore {
 
     pub fn clear_history(&self) -> Result<(), StoreError> {
         self.conn.execute("DELETE FROM sessions WHERE status != 'active'", [])?;
+        Ok(())
+    }
+
+    /// Existing installations predate app blocking. SQLite's `CREATE TABLE IF
+    /// NOT EXISTS` does not add new columns, so make that upgrade explicit and
+    /// idempotent before any session is read or written.
+    fn add_sessions_app_target_snapshot_column(&self) -> Result<(), StoreError> {
+        let mut stmt = self.conn.prepare("PRAGMA table_info(sessions)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !columns.iter().any(|column| column == "app_block_targets_snapshot") {
+            self.conn.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN app_block_targets_snapshot TEXT NOT NULL DEFAULT '[]';",
+            )?;
+        }
         Ok(())
     }
 
@@ -311,6 +381,16 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, rusqlite::Error> {
         serde_json::from_str(&row.get::<_, String>(7)?).unwrap_or_default();
     let whitelist: Vec<String> =
         serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default();
+    let app_target_snapshot: String = row.get(9)?;
+    let app_block_targets: Vec<AppBlockTarget> = serde_json::from_str(&app_target_snapshot).map_err(
+        |error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                9,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        },
+    )?;
     Ok(Session {
         id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::new_v4()),
         preset_id: row
@@ -329,5 +409,6 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, rusqlite::Error> {
         status,
         blocklist_snapshot: blocklist,
         whitelist_snapshot: whitelist,
+        app_block_targets_snapshot: app_block_targets,
     })
 }

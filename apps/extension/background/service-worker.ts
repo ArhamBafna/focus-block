@@ -1,493 +1,411 @@
 /**
- * Focus Blocker — Chrome Extension Service Worker
+ * FocusBlock Chrome MV3 service worker.
  *
- * Responsibilities:
- * 1. Listen for changes in chrome.storage.local (blocklist + active_session)
- * 2. When a session is active: install declarativeNetRequest dynamic rules
- *    that redirect all blocked domains → the extension's blocked page.
- * 3. When a session ends / stops: remove all dynamic blocking rules.
- * 4. Handle chrome.alarms for session auto-expiry.
- *
- * NO UI dependencies. Pure background logic.
+ * Desktop service owns focus state. This worker stores only last service policy
+ * snapshot, turns it into Chrome DNR rules, and rehydrates rules after worker
+ * restart. Native-host failure never clears last known policy.
  */
 
-// ── Types (mirrored from popup/lib/ipc.ts) ──────────────────────────────────
+type SessionMode = "blocklist" | "lockdown";
 
-interface Session {
-  id: string;
-  preset_id: string | null;
-  mode: "blocklist" | "lockdown";
-  started_at: string;
-  ended_at: string | null;
-  planned_duration_sec: number;
-  status: "active" | "completed" | "stopped";
-  blocklist_snapshot: string[];
-  whitelist_snapshot: string[];
-  scheduled_schedule_id?: string | null;
+interface FocusBlockPolicySnapshot {
+  active: boolean;
+  mode: SessionMode;
+  blocklist: string[];
+  whitelist: string[];
+  blocked_domains: string[];
+  allowed_domains: string[];
+  version: string;
+  expires_at: string | number | null;
 }
 
-interface Schedule {
-  id: string;
-  start_time: string;
-  end_time: string;
-  mode: "blocklist" | "lockdown";
-  days_of_week?: number[];
-  ends_on?: string | null;
+interface ServiceRequestMessage {
+  type: "focusblock-service-request";
+  request: {
+    cmd: string;
+    data?: unknown;
+  };
 }
 
-interface StorageData {
-  blocklist: { id: number; domain: string }[];
-  whitelist: { id: number; domain: string }[];
-  temporary_allowlist: { id: string; domain: string; expires_at: number }[];
-  schedules: Schedule[];
-  active_session: Session | null;
-  history: Session[];
-  schedule_suppressed_until: number | null;
-  settings: { os_allowlist_enabled: boolean };
+interface IpcResponse {
+  status: "Ok" | "Err";
+  data?: unknown;
+  message?: string;
 }
 
-// ── Constants ────────────────────────────────────────────────────────────────
+const NATIVE_HOST_NAME = "com.focusblock.bridge";
+const POLICY_SNAPSHOT_KEY = "focusblockPolicySnapshot";
+const POLICY_SYNC_ALARM = "focusblock-policy-sync";
+const BLOCKED_PAGE_PATH = "/blocked/index.html";
+const FOCUSBLOCK_RULE_ID_MIN = 1;
+const FOCUSBLOCK_RULE_ID_MAX = 30_000;
 
-const ALARM_SESSION_EXPIRY = "focus_session_expiry";
-const ALARM_SCHEDULE_BOUNDARY = "focus_schedule_boundary";
-const ALARM_TEMP_ALLOW_EXPIRY = "focus_temp_allow_expiry";
-// Rule IDs start at 1. We use IDs 1..N for blocked domains.
-// We reserve no IDs for anything else.
-const BASE_RULE_ID = 1;
-const BLOCKED_PAGE_PATH = "blocked/index.html";
+const LEGACY_STORAGE_KEYS = [
+  "active_session",
+  "active_challenge",
+  "blocklist",
+  "whitelist",
+  "temporary_allowlist",
+  "schedules",
+  "history",
+  "schedule_suppressed_until",
+  "settings",
+  "presets",
+];
 
-// ── Storage helpers ──────────────────────────────────────────────────────────
+const SERVICE_COMMANDS = new Set([
+  "Ping",
+  "Health",
+  "GetStatus",
+  "ListBlocklist",
+  "AddBlocklist",
+  "RemoveBlocklist",
+  "ListWhitelist",
+  "AddWhitelist",
+  "RemoveWhitelist",
+  "ListPresets",
+  "CreatePreset",
+  "DeletePreset",
+  "StartSession",
+  "StopSession",
+  "ListHistory",
+  "ClearHistory",
+  "GetSettings",
+  "UpdateSettings",
+]);
 
-function storageGet<K extends keyof StorageData>(key: K): Promise<StorageData[K] | undefined> {
-  return new Promise((resolve) => {
-    chrome.storage.local.get(key, (result) => {
-      resolve(result[key] as StorageData[K] | undefined);
-    });
-  });
+const FRAME_RESOURCE_TYPES: chrome.declarativeNetRequest.ResourceType[] = [
+  chrome.declarativeNetRequest.ResourceType.MAIN_FRAME,
+  chrome.declarativeNetRequest.ResourceType.SUB_FRAME,
+];
+
+const LOADED_RESOURCE_TYPES: chrome.declarativeNetRequest.ResourceType[] = [
+  chrome.declarativeNetRequest.ResourceType.STYLESHEET,
+  chrome.declarativeNetRequest.ResourceType.SCRIPT,
+  chrome.declarativeNetRequest.ResourceType.IMAGE,
+  chrome.declarativeNetRequest.ResourceType.FONT,
+  chrome.declarativeNetRequest.ResourceType.OBJECT,
+  chrome.declarativeNetRequest.ResourceType.XMLHTTPREQUEST,
+  chrome.declarativeNetRequest.ResourceType.PING,
+  chrome.declarativeNetRequest.ResourceType.CSP_REPORT,
+  chrome.declarativeNetRequest.ResourceType.MEDIA,
+  chrome.declarativeNetRequest.ResourceType.WEBSOCKET,
+  chrome.declarativeNetRequest.ResourceType.WEBTRANSPORT,
+  chrome.declarativeNetRequest.ResourceType.WEBBUNDLE,
+  chrome.declarativeNetRequest.ResourceType.OTHER,
+];
+
+const ALL_BLOCKABLE_RESOURCE_TYPES = [
+  ...FRAME_RESOURCE_TYPES,
+  ...LOADED_RESOURCE_TYPES,
+];
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function storageSet<K extends keyof StorageData>(key: K, value: StorageData[K]): Promise<void> {
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ [key]: value }, resolve);
-  });
+function stringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.some((entry) => typeof entry !== "string")) {
+    return null;
+  }
+  return value;
 }
 
-// ── Rule management ──────────────────────────────────────────────────────────
+function parsePolicySnapshot(value: unknown): FocusBlockPolicySnapshot | null {
+  if (!isRecord(value) || typeof value.active !== "boolean") return null;
+  // A host-generated error is not an inactive policy. Keep prior good snapshot.
+  if (typeof value.error === "string" && value.error.length > 0) return null;
+  if (value.mode !== "blocklist" && value.mode !== "lockdown") return null;
 
-function addDomainRules(
-  rules: chrome.declarativeNetRequest.Rule[],
-  domain: string,
-  priority: number,
-  action: chrome.declarativeNetRequest.RuleAction,
-  nextId: number
-): number {
-  if (!domain) return nextId;
-
-  const resourceTypes = [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME];
-  if (domain.startsWith("*")) {
-    const matchText = domain.slice(1);
-    if (!matchText) return nextId;
-    rules.push({
-      id: nextId++,
-      priority,
-      action,
-      condition: { urlFilter: `*${matchText}*`, resourceTypes },
-    });
-    return nextId;
+  const blocklist = stringArray(value.blocklist);
+  const whitelist = stringArray(value.whitelist);
+  const blockedDomains = stringArray(value.blocked_domains);
+  const allowedDomains = stringArray(value.allowed_domains);
+  if (!blocklist || !whitelist || !blockedDomains || !allowedDomains) return null;
+  if (typeof value.version !== "string") return null;
+  if (
+    value.expires_at !== null &&
+    typeof value.expires_at !== "string" &&
+    typeof value.expires_at !== "number"
+  ) {
+    return null;
   }
 
-  // Keep exact-domain behavior unchanged: main domain plus explicit www.
-  for (const urlFilter of [`||${domain}^`, `||www.${domain}^`]) {
-    rules.push({
-      id: nextId++,
-      priority,
-      action,
-      condition: { urlFilter, resourceTypes },
-    });
+  return {
+    active: value.active,
+    mode: value.mode,
+    blocklist,
+    whitelist,
+    blocked_domains: blockedDomains,
+    allowed_domains: allowedDomains,
+    version: value.version,
+    expires_at: value.expires_at,
+  };
+}
+
+function targetToUrlFilter(rawTarget: string): string | null {
+  const target = rawTarget.trim();
+  if (!target) return null;
+
+  if (target.startsWith("http://") || target.startsWith("https://")) {
+    try {
+      const url = new URL(target);
+      const host = url.hostname.toLowerCase().replace(/^www\./, "");
+      if (!host) return null;
+      const path = `${url.pathname}${url.search}`;
+      return path === "/" ? `||${host}^` : `|${url.protocol}//${host}${path}`;
+    } catch {
+      return null;
+    }
+  }
+
+  if (target.startsWith("*")) {
+    const wildcard = target.slice(1).toLowerCase();
+    return /^[a-z0-9._/-]+$/.test(wildcard) ? `*${wildcard}*` : null;
+  }
+
+  const domain = target.toLowerCase().replace(/^www\./, "");
+  return /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9-]{2,63}$/.test(domain)
+    ? `||${domain}^`
+    : null;
+}
+
+function targetFilters(targets: string[]): string[] {
+  const filters = new Set<string>();
+  for (const target of targets) {
+    const filter = targetToUrlFilter(target);
+    if (filter) filters.add(filter);
+    else console.warn("[FocusBlock] Ignored invalid policy target:", target);
+  }
+  return [...filters];
+}
+
+function appendRule(
+  rules: chrome.declarativeNetRequest.Rule[],
+  nextId: number,
+  priority: number,
+  action: chrome.declarativeNetRequest.RuleAction,
+  resourceTypes: chrome.declarativeNetRequest.ResourceType[],
+  urlFilter?: string,
+): number {
+  if (nextId > FOCUSBLOCK_RULE_ID_MAX) {
+    throw new Error("FocusBlock policy exceeds Chrome dynamic-rule capacity.");
+  }
+
+  rules.push({
+    id: nextId,
+    priority,
+    action,
+    condition: {
+      ...(urlFilter ? { urlFilter } : {}),
+      resourceTypes,
+    },
+  });
+  return nextId + 1;
+}
+
+function appendAllowRules(
+  rules: chrome.declarativeNetRequest.Rule[],
+  filters: string[],
+  nextId: number,
+): number {
+  for (const urlFilter of filters) {
+    nextId = appendRule(
+      rules,
+      nextId,
+      4,
+      { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
+      ALL_BLOCKABLE_RESOURCE_TYPES,
+      urlFilter,
+    );
   }
   return nextId;
 }
 
-/** Build blocklist rules. Allowlist entries use higher priority than blocks. */
-function buildRules(
-  blocklist: string[],
-  whitelist: string[],
-  temporaryAllows: string[],
-  extensionId: string
-): chrome.declarativeNetRequest.Rule[] {
-  const blockedPageUrl = `chrome-extension://${extensionId}/${BLOCKED_PAGE_PATH}`;
+function appendBlockedTargetRules(
+  rules: chrome.declarativeNetRequest.Rule[],
+  filters: string[],
+  nextId: number,
+): number {
+  for (const urlFilter of filters) {
+    nextId = appendRule(
+      rules,
+      nextId,
+      2,
+      {
+        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+        redirect: { extensionPath: BLOCKED_PAGE_PATH },
+      },
+      FRAME_RESOURCE_TYPES,
+      urlFilter,
+    );
+    nextId = appendRule(
+      rules,
+      nextId,
+      2,
+      { type: chrome.declarativeNetRequest.RuleActionType.BLOCK },
+      LOADED_RESOURCE_TYPES,
+      urlFilter,
+    );
+  }
+  return nextId;
+}
+
+function buildPolicyRules(policy: FocusBlockPolicySnapshot): chrome.declarativeNetRequest.Rule[] {
+  if (!policy.active) return [];
+
+  const blocked = targetFilters([...policy.blocklist, ...policy.blocked_domains]);
+  const allowed = targetFilters([...policy.whitelist, ...policy.allowed_domains]);
   const rules: chrome.declarativeNetRequest.Rule[] = [];
-  let id = BASE_RULE_ID;
+  let nextId = FOCUSBLOCK_RULE_ID_MIN;
 
-  for (const domain of whitelist) {
-    id = addDomainRules(rules, domain, 2, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
-  }
-  for (const domain of temporaryAllows) {
-    id = addDomainRules(rules, domain, 3, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
-  }
-  for (const domain of blocklist) {
-    id = addDomainRules(rules, domain, 1, {
-      type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
-      redirect: { url: blockedPageUrl },
-    }, id);
-  }
+  nextId = appendAllowRules(rules, allowed, nextId);
 
-  return rules;
-}
-
-/**
- * Given a whitelist, generate rules for lockdown mode.
- * Blocks EVERYTHING (priority 1) except whitelisted domains and extension pages (priority 2).
- */
-function buildLockdownRules(
-  whitelist: string[],
-  temporaryAllows: string[],
-  extensionId: string
-): chrome.declarativeNetRequest.Rule[] {
-  const blockedPageUrl = `chrome-extension://${extensionId}/${BLOCKED_PAGE_PATH}`;
-  const rules: chrome.declarativeNetRequest.Rule[] = [];
-  let id = BASE_RULE_ID;
-
-  // 1. Allow rules for whitelisted domains (priority 2)
-  for (const domain of whitelist) {
-    id = addDomainRules(rules, domain, 2, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
-  }
-
-  // Temporary exceptions always win, including when permanent rules conflict.
-  for (const domain of temporaryAllows) {
-    id = addDomainRules(rules, domain, 3, { type: chrome.declarativeNetRequest.RuleActionType.ALLOW }, id);
-  }
-
-  // 2. Allow rule for extension pages so the popup and blocked page still work (priority 2)
-  rules.push({
-    id: id++,
-    priority: 2,
-    action: { type: chrome.declarativeNetRequest.RuleActionType.ALLOW },
-    condition: {
-      urlFilter: `chrome-extension://${extensionId}/*`,
-      resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-    },
-  });
-
-  // 3. Catch-all redirect rule (priority 1)
-  rules.push({
-    id: id++,
-    priority: 1,
-    action: {
-      type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
-      redirect: { url: blockedPageUrl },
-    },
-    condition: {
-      resourceTypes: [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME],
-    },
-  });
-
-  return rules;
-}
-
-/**
- * Remove all existing dynamic rules and optionally install new ones.
- */
-async function updateBlockingRules(newRules: chrome.declarativeNetRequest.Rule[]): Promise<void> {
-  const existing = await chrome.declarativeNetRequest.getDynamicRules();
-  const existingIds = existing.map((r) => r.id);
-
-  await chrome.declarativeNetRequest.updateDynamicRules({
-    removeRuleIds: existingIds,
-    addRules: newRules,
-  });
-
-  console.log(
-    `[FocusBlocker] Rules updated: removed ${existingIds.length}, added ${newRules.length}`
-  );
-}
-
-/**
- * Clear all blocking rules (session ended).
- */
-async function clearAllRules(): Promise<void> {
-  await updateBlockingRules([]);
-}
-
-async function getActiveTemporaryAllows(): Promise<{ id: string; domain: string; expires_at: number }[]> {
-  const entries = await storageGet("temporary_allowlist");
-  const now = Date.now();
-  const active = (Array.isArray(entries) ? entries : []).filter((entry) =>
-    typeof entry?.id === "string" &&
-    typeof entry.domain === "string" &&
-    typeof entry.expires_at === "number" &&
-    entry.expires_at > now
-  );
-
-  if (active.length !== (entries?.length ?? 0)) {
-    await storageSet("temporary_allowlist", active);
-  }
-  return active;
-}
-
-async function scheduleTemporaryAllowExpiry(entries: { expires_at: number }[]): Promise<void> {
-  await chrome.alarms.clear(ALARM_TEMP_ALLOW_EXPIRY);
-  const nextExpiry = entries.reduce<number | null>((next, entry) =>
-    next === null || entry.expires_at < next ? entry.expires_at : next,
-  null);
-  if (nextExpiry !== null) {
-    await chrome.alarms.create(ALARM_TEMP_ALLOW_EXPIRY, { when: nextExpiry });
-  }
-}
-
-// ── Recurring schedule helpers ──────────────────────────────────────────────
-
-function timeToMinutes(value: string): number | null {
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
-}
-
-function localDateKey(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function scheduleDays(schedule: Schedule): number[] {
-  const days = Array.isArray(schedule.days_of_week)
-    ? [...new Set(schedule.days_of_week.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))]
-    : [];
-  // Legacy schedules had no weekday choice and always repeated daily.
-  return days.length > 0 ? days : [0, 1, 2, 3, 4, 5, 6];
-}
-
-function scheduleRunsOn(schedule: Schedule, day: Date): boolean {
-  const endsOn = typeof schedule.ends_on === "string" ? schedule.ends_on : null;
-  return scheduleDays(schedule).includes(day.getDay()) && (endsOn === null || localDateKey(day) <= endsOn);
-}
-
-function getCurrentSchedule(schedules: Schedule[], now = new Date()): Schedule | null {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  return schedules.find((schedule) => {
-    const start = timeToMinutes(schedule.start_time);
-    const end = timeToMinutes(schedule.end_time);
-    return scheduleRunsOn(schedule, now) && start !== null && end !== null && start < end && currentMinutes >= start && currentMinutes < end;
-  }) ?? null;
-}
-
-function getScheduleBoundary(schedule: Schedule, key: "start_time" | "end_time", day: Date): Date | null {
-  const minutes = timeToMinutes(schedule[key]);
-  if (minutes === null) return null;
-  const boundary = new Date(day);
-  boundary.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
-  return boundary;
-}
-
-async function scheduleNextBoundaryAlarm(schedules: Schedule[]): Promise<void> {
-  await chrome.alarms.clear(ALARM_SCHEDULE_BOUNDARY);
-  if (schedules.length === 0) return;
-
-  const now = new Date();
-  const candidates: Date[] = [];
-  for (let offset = 0; offset <= 7; offset += 1) {
-    const day = new Date(now);
-    day.setDate(now.getDate() + offset);
-    for (const schedule of schedules) {
-      if (!scheduleRunsOn(schedule, day)) continue;
-      const start = getScheduleBoundary(schedule, "start_time", day);
-      const end = getScheduleBoundary(schedule, "end_time", day);
-      if (start && start.getTime() > Date.now() + 500) candidates.push(start);
-      if (end && end.getTime() > Date.now() + 500) candidates.push(end);
-    }
-  }
-
-  const nextBoundary = candidates.sort((a, b) => a.getTime() - b.getTime())[0];
-  if (nextBoundary) {
-    await chrome.alarms.create(ALARM_SCHEDULE_BOUNDARY, { when: nextBoundary.getTime() });
-  }
-}
-
-async function archiveActiveSession(session: Session): Promise<void> {
-  session.status = "stopped";
-  session.ended_at = new Date().toISOString();
-  const rawHistory = await storageGet("history");
-  const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
-  history.unshift(session);
-  await storageSet("history", history);
-}
-
-async function activateScheduledSession(schedule: Schedule, now: Date): Promise<Session> {
-  const active = await storageGet("active_session");
-  if (active && active.status === "active") {
-    await archiveActiveSession(active);
-  }
-
-  const blocklist = ((await storageGet("blocklist")) ?? []).map((entry) => entry.domain);
-  const whitelist = ((await storageGet("whitelist")) ?? []).map((entry) => entry.domain);
-  const end = getScheduleBoundary(schedule, "end_time", now);
-  const remaining = end ? Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 1000)) : 1;
-  const session: Session = {
-    id: `scheduled-${schedule.id}-${now.getTime()}`,
-    preset_id: null,
-    mode: schedule.mode,
-    started_at: now.toISOString(),
-    ended_at: null,
-    planned_duration_sec: remaining,
-    status: "active",
-    blocklist_snapshot: blocklist,
-    whitelist_snapshot: whitelist,
-    scheduled_schedule_id: schedule.id,
-  };
-
-  await storageSet("active_session", session);
-  return session;
-}
-
-// ── Session expiry ───────────────────────────────────────────────────────────
-
-async function expireSession(): Promise<void> {
-  const session = await storageGet("active_session");
-  if (!session || session.status !== "active") return;
-
-  session.status = "completed";
-  session.ended_at = new Date().toISOString();
-
-  const rawHistory = await storageGet("history");
-  const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
-  history.unshift(session);
-
-  await storageSet("history", history);
-  await storageSet("active_session", null);
-
-  await clearAllRules();
-  await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
-  console.log("[FocusBlocker] Session expired, blocking rules cleared.");
-}
-
-// ── Core: apply state ────────────────────────────────────────────────────────
-
-/**
- * Read current storage state and apply blocking rules accordingly.
- * Called on startup, on storage changes, and on alarm.
- */
-async function applyBlockingState(): Promise<void> {
-  const schedules = (await storageGet("schedules")) ?? [];
-  await scheduleNextBoundaryAlarm(schedules);
-  const temporaryAllows = await getActiveTemporaryAllows();
-  await scheduleTemporaryAllowExpiry(temporaryAllows);
-
-  const suppressedUntil = await storageGet("schedule_suppressed_until");
-  const scheduleSuppressed = typeof suppressedUntil === "number" && suppressedUntil > Date.now();
-  if (typeof suppressedUntil === "number" && !scheduleSuppressed) {
-    await storageSet("schedule_suppressed_until", null);
-  }
-
-  const currentSchedule = scheduleSuppressed ? null : getCurrentSchedule(schedules);
-  let session = await storageGet("active_session");
-
-  if (currentSchedule) {
-    if (!session || session.status !== "active" || session.scheduled_schedule_id !== currentSchedule.id) {
-      session = await activateScheduledSession(currentSchedule, new Date());
-    } else {
-      const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
-      if (end && end.getTime() <= Date.now()) {
-        await expireSession();
-        return;
-      }
-      if (end) {
-        session.planned_duration_sec = Math.max(1, Math.ceil((end.getTime() - Date.now()) / 1000));
-        await storageSet("active_session", session);
-      }
-    }
-  } else if (session?.scheduled_schedule_id) {
-    await expireSession();
-    return;
-  }
-
-  if (!session || session.status !== "active") {
-    // No active session — clear all rules
-    await clearAllRules();
-    chrome.alarms.clear(ALARM_SESSION_EXPIRY);
-    return;
-  }
-
-  // Check if session has already expired
-  const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
-  if (!session.scheduled_schedule_id && elapsed >= session.planned_duration_sec) {
-    await expireSession();
-    return;
-  }
-
-  const extensionId = chrome.runtime.id;
-  let rules: chrome.declarativeNetRequest.Rule[];
-
-  if (session.mode === "lockdown") {
-    rules = buildLockdownRules(
-      session.whitelist_snapshot,
-      temporaryAllows.map((entry) => entry.domain),
-      extensionId
+  if (policy.mode === "lockdown") {
+    nextId = appendRule(
+      rules,
+      nextId,
+      1,
+      {
+        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+        redirect: { extensionPath: BLOCKED_PAGE_PATH },
+      },
+      FRAME_RESOURCE_TYPES,
+    );
+    appendRule(
+      rules,
+      nextId,
+      1,
+      { type: chrome.declarativeNetRequest.RuleActionType.BLOCK },
+      LOADED_RESOURCE_TYPES,
     );
   } else {
-    rules = buildRules(
-      session.blocklist_snapshot,
-      session.whitelist_snapshot,
-      temporaryAllows.map((entry) => entry.domain),
-      extensionId
-    );
+    appendBlockedTargetRules(rules, blocked, nextId);
   }
 
-  await updateBlockingRules(rules);
+  return rules;
+}
 
-  // Schedule alarm for session expiry
-  const remainingSec = session.scheduled_schedule_id
-    ? session.planned_duration_sec
-    : session.planned_duration_sec - elapsed;
-  const remainingMs = remainingSec * 1000;
-  chrome.alarms.create(ALARM_SESSION_EXPIRY, {
-    when: Date.now() + remainingMs,
-  });
+function isFocusBlockRuleId(id: number): boolean {
+  return id >= FOCUSBLOCK_RULE_ID_MIN && id <= FOCUSBLOCK_RULE_ID_MAX;
+}
 
-  console.log(
-    `[FocusBlocker] Session active (${session.mode}). Expires in ${Math.round(remainingSec / 60)}m.`
+async function updateFocusBlockRules(rules: chrome.declarativeNetRequest.Rule[]): Promise<void> {
+  const existingRules = await chrome.declarativeNetRequest.getDynamicRules();
+  const removeRuleIds = existingRules
+    .filter((rule) => isFocusBlockRuleId(rule.id))
+    .map((rule) => rule.id);
+
+  // Chrome applies removal and addition as one atomic DNR transaction.
+  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds, addRules: rules });
+  console.info(`[FocusBlock] DNR policy rebuilt: ${rules.length} rules.`);
+}
+
+async function applyPolicySnapshot(policy: FocusBlockPolicySnapshot): Promise<void> {
+  await updateFocusBlockRules(buildPolicyRules(policy));
+}
+
+async function restoreStoredPolicy(): Promise<void> {
+  const stored = await chrome.storage.local.get(POLICY_SNAPSHOT_KEY);
+  const policy = parsePolicySnapshot(stored[POLICY_SNAPSHOT_KEY]);
+  if (!policy) {
+    await updateFocusBlockRules([]);
+    return;
+  }
+  await applyPolicySnapshot(policy);
+}
+
+async function refreshPolicyFromService(): Promise<boolean> {
+  try {
+    const nativeResponse = await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
+      type: "get-active-policy",
+    });
+    const policy = parsePolicySnapshot(nativeResponse);
+    if (!policy) throw new Error("Native host returned an invalid policy snapshot.");
+
+    await chrome.storage.local.set({ [POLICY_SNAPSHOT_KEY]: policy });
+    await applyPolicySnapshot(policy);
+    console.info(`[FocusBlock] Policy synced (${policy.active ? policy.mode : "inactive"}).`);
+    return true;
+  } catch (error) {
+    // Do not clear DNR rules or snapshot. Service may be restarting while policy remains active.
+    console.warn("[FocusBlock] Policy sync unavailable; retained last policy snapshot.", error);
+    return false;
+  }
+}
+
+async function ensurePolicySyncAlarm(): Promise<void> {
+  const existing = await chrome.alarms.get(POLICY_SYNC_ALARM);
+  if (!existing) {
+    chrome.alarms.create(POLICY_SYNC_ALARM, { periodInMinutes: 0.5 });
+  }
+}
+
+async function initializeWorker(): Promise<void> {
+  await ensurePolicySyncAlarm();
+  await restoreStoredPolicy();
+  await refreshPolicyFromService();
+}
+
+function isServiceRequestMessage(value: unknown): value is ServiceRequestMessage {
+  return (
+    isRecord(value) &&
+    value.type === "focusblock-service-request" &&
+    isRecord(value.request) &&
+    typeof value.request.cmd === "string" &&
+    SERVICE_COMMANDS.has(value.request.cmd)
   );
 }
 
-// ── Event listeners ──────────────────────────────────────────────────────────
+function isIpcResponse(value: unknown): value is IpcResponse {
+  return isRecord(value) && (value.status === "Ok" || value.status === "Err");
+}
 
-// On install / update
-chrome.runtime.onInstalled.addListener(async () => {
-  console.log("[FocusBlocker] Extension installed/updated. Applying state.");
-  await applyBlockingState();
-});
+function isOkIpcResponse(value: unknown): value is IpcResponse {
+  return isIpcResponse(value) && value.status === "Ok";
+}
 
-// On browser startup (service worker restarts)
-chrome.runtime.onStartup.addListener(async () => {
-  console.log("[FocusBlocker] Browser started. Applying state.");
-  await applyBlockingState();
-});
-
-// React to storage changes (popup writes to storage → service worker reacts)
-chrome.storage.onChanged.addListener(async (changes, area) => {
-  if (area !== "local") return;
-
-  const relevantKeys = ["active_session", "blocklist", "whitelist", "temporary_allowlist", "schedules"];
-  const hasRelevantChange = relevantKeys.some((k) => k in changes);
-  if (!hasRelevantChange) return;
-
-  console.log("[FocusBlocker] Storage changed:", Object.keys(changes));
-  await applyBlockingState();
-});
-
-// Alarm fires when session should expire
-chrome.alarms.onAlarm.addListener(async (alarm) => {
-  if (alarm.name === ALARM_SESSION_EXPIRY) {
-    console.log("[FocusBlocker] Session expiry alarm fired.");
-    await expireSession();
-    await applyBlockingState();
+async function forwardServiceRequest(request: ServiceRequestMessage["request"]): Promise<IpcResponse> {
+  const response = await chrome.runtime.sendNativeMessage(NATIVE_HOST_NAME, {
+    type: "service-request",
+    request,
+  });
+  if (!isIpcResponse(response)) {
+    throw new Error("Native host returned an invalid service response.");
   }
-  if (alarm.name === ALARM_SCHEDULE_BOUNDARY) {
-    console.log("[FocusBlocker] Schedule boundary alarm fired.");
-    await applyBlockingState();
+
+  // State-changing commands take effect in the desktop service first, then DNR syncs.
+  if (isOkIpcResponse(response)) {
+    await refreshPolicyFromService();
   }
-  if (alarm.name === ALARM_TEMP_ALLOW_EXPIRY) {
-    console.log("[FocusBlocker] Temporary allow expired.");
-    await applyBlockingState();
-  }
+  return response;
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  void (async () => {
+    await chrome.storage.local.remove(LEGACY_STORAGE_KEYS);
+    await initializeWorker();
+  })().catch((error) => console.error("[FocusBlock] Install initialization failed.", error));
 });
+
+chrome.runtime.onStartup.addListener(() => {
+  void initializeWorker().catch((error) => console.error("[FocusBlock] Startup initialization failed.", error));
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== POLICY_SYNC_ALARM) return;
+  void refreshPolicyFromService();
+});
+
+chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
+  if (sender.id && sender.id !== chrome.runtime.id) return;
+  if (!isServiceRequestMessage(message)) return;
+
+  void forwardServiceRequest(message.request)
+    .then(sendResponse)
+    .catch((error) => sendResponse({ status: "Err", message: error instanceof Error ? error.message : String(error) }));
+  return true;
+});
+
+// Runs whenever Chrome creates this worker, including after idle termination.
+void initializeWorker().catch((error) => console.error("[FocusBlock] Worker initialization failed.", error));

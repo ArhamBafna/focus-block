@@ -30,7 +30,16 @@ CREATE TABLE IF NOT EXISTS sessions (
     planned_duration_sec INTEGER NOT NULL,
     status TEXT NOT NULL,
     blocklist_snapshot TEXT NOT NULL DEFAULT '[]',
-    whitelist_snapshot TEXT NOT NULL DEFAULT '[]'
+    whitelist_snapshot TEXT NOT NULL DEFAULT '[]',
+    app_block_targets_snapshot TEXT NOT NULL DEFAULT '[]'
+);
+
+CREATE TABLE IF NOT EXISTS app_block_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    target_kind TEXT NOT NULL,
+    target_value TEXT NOT NULL COLLATE NOCASE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(target_kind, target_value)
 );
 
 CREATE TABLE IF NOT EXISTS settings (

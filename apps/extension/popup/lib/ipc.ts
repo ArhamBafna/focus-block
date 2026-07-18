@@ -1,17 +1,10 @@
 /**
- * Extension IPC layer.
+ * Popup IPC facade.
  *
- * Drop-in replacement for the desktop's ipc.ts. All method signatures are
- * identical so page components import this without any changes.
- *
- * Instead of Tauri invoke / localStorage mock, this reads and writes
- * chrome.storage.local and notifies the service worker of changes via storage
- * events (the service worker listens to chrome.storage.onChanged).
+ * The desktop service owns all focus data. Popup requests travel through the
+ * MV3 worker and the registered native host; this file never persists sessions,
+ * lists, presets, history, or settings in extension storage.
  */
-
-import { storageGet, storageSet, ScheduleRecord } from "./storage";
-
-// ── Types (mirrored from desktop ipc.ts) ────────────────────────────────────
 
 export type SessionMode = "blocklist" | "lockdown";
 export type SessionStatus = "active" | "completed" | "stopped";
@@ -38,7 +31,14 @@ export interface Preset {
   whitelist: string[];
 }
 
-export interface Schedule extends ScheduleRecord {}
+export interface Schedule {
+  id: string;
+  start_time: string;
+  end_time: string;
+  mode: SessionMode;
+  days_of_week: number[];
+  ends_on: string | null;
+}
 
 export interface ActiveSessionView {
   session: Session;
@@ -80,408 +80,141 @@ export interface AppSettings {
   challenge_countdown_breathing: boolean;
 }
 
-const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
-
-function parseTime(value: string): number | null {
-  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
-  const [hours, minutes] = value.split(":").map(Number);
-  return hours * 60 + minutes;
+interface IpcResponse {
+  status: "Ok" | "Err";
+  data?: unknown;
+  message?: string;
 }
 
-function isDateKey(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+const DEFAULT_UI_SETTINGS: Omit<AppSettings, "os_allowlist_enabled"> = {
+  stop_challenge: "none",
+  challenge_countdown_duration: 30,
+  challenge_countdown_breathing: false,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function localDateKey(date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
+function unwrapServiceData(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  return Object.prototype.hasOwnProperty.call(value, "data") ? value.data : value;
 }
 
-function normalizeDays(days: number[]): number[] {
-  return [...new Set(days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b);
-}
+async function request<T>(cmd: string, data?: unknown): Promise<T> {
+  const response = await chrome.runtime.sendMessage({
+    type: "focusblock-service-request",
+    request: data === undefined ? { cmd } : { cmd, data },
+  }) as IpcResponse;
 
-function dateRangesOverlap(firstEndsOn: string | null, secondEndsOn: string | null): boolean {
-  const today = localDateKey();
-  return (firstEndsOn === null || firstEndsOn >= today) && (secondEndsOn === null || secondEndsOn >= today);
-}
-
-function validateSchedule(
-  startTime: string,
-  endTime: string,
-  daysOfWeek: number[],
-  endsOn: string | null,
-  existingSchedules: Schedule[],
-  excludedId?: string
-): { days: number[]; endsOn: string | null } {
-  const start = parseTime(startTime);
-  const end = parseTime(endTime);
-  if (start === null || end === null) throw new Error("Enter valid start and end times.");
-  if (start >= end) throw new Error("End time must be after start time.");
-
-  const days = normalizeDays(daysOfWeek);
-  if (days.length === 0) throw new Error("Choose at least one day.");
-
-  if (endsOn !== null) {
-    if (!isDateKey(endsOn)) throw new Error("Choose a valid end date.");
-    if (endsOn < localDateKey()) throw new Error("End date cannot be in the past.");
+  if (!isRecord(response) || (response.status !== "Ok" && response.status !== "Err")) {
+    throw new Error("FocusBlock service returned an invalid response.");
   }
-
-  const overlap = existingSchedules.find((schedule) => {
-    if (schedule.id === excludedId) return false;
-    const existingStart = parseTime(schedule.start_time);
-    const existingEnd = parseTime(schedule.end_time);
-    return (
-      existingStart !== null &&
-      existingEnd !== null &&
-      start < existingEnd &&
-      end > existingStart &&
-      schedule.days_of_week.some((day) => days.includes(day)) &&
-      dateRangesOverlap(schedule.ends_on, endsOn)
-    );
-  });
-
-  if (overlap) {
-    throw new Error(`Schedule overlaps with ${overlap.start_time}–${overlap.end_time} on one or more selected days.`);
+  if (response.status === "Err") {
+    throw new Error(typeof response.message === "string" ? response.message : "FocusBlock service rejected request.");
   }
-
-  return { days, endsOn };
+  return unwrapServiceData(response.data) as T;
 }
 
-// ── Domain normalization (verbatim from desktop ipc.ts) ─────────────────────
+function desktopOnly(feature: string): never {
+  throw new Error(`${feature} is managed by FocusBlock desktop app.`);
+}
 
 export function normalizeDomain(input: string): string | null {
-  let str = input.trim().toLowerCase();
-  if (!str) return null;
+  let value = input.trim().toLowerCase();
+  if (!value) return null;
 
-  if (str.startsWith("*")) {
-    const matchText = str.slice(1).trim();
-    if (!matchText || matchText.includes("*") || matchText.includes(" ") || matchText.includes("|") || matchText.includes("^")) {
-      return null;
-    }
-    return `*${matchText}`;
+  if (value.startsWith("*")) {
+    const wildcard = value.slice(1).trim();
+    return wildcard && !/[ *|^]/.test(wildcard) ? `*${wildcard}` : null;
   }
+  if (value.startsWith("http://")) value = value.slice(7);
+  else if (value.startsWith("https://")) value = value.slice(8);
 
-  if (str.startsWith("http://")) {
-    str = str.slice(7);
-  } else if (str.startsWith("https://")) {
-    str = str.slice(8);
-  }
-
-  const slashIndex = str.indexOf("/");
-  if (slashIndex !== -1) str = str.slice(0, slashIndex);
-
-  const queryIndex = str.indexOf("?");
-  if (queryIndex !== -1) str = str.slice(0, queryIndex);
-
-  const hashIndex = str.indexOf("#");
-  if (hashIndex !== -1) str = str.slice(0, hashIndex);
-
-  const colonIndex = str.indexOf(":");
-  if (colonIndex !== -1) str = str.slice(0, colonIndex);
-
-  if (str.startsWith("www.")) str = str.slice(4);
-
-  if (!str || str.includes(" ") || !str.includes(".")) return null;
-
-  return str;
+  value = value.split(/[/?#]/, 1)[0] ?? "";
+  value = value.split(":", 1)[0] ?? "";
+  value = value.replace(/^www\./, "");
+  return value && !value.includes(" ") && value.includes(".") ? value : null;
 }
 
-// ── IPC implementation ───────────────────────────────────────────────────────
-
 export const ipc = {
-  // Health / status ──────────────────────────────────────────────────────────
-
-  ping: async (): Promise<null> => null,
-
-  getHealth: async (): Promise<ServiceHealth> => ({
-    running: true,
-    version: "0.1.0-ext",
-  }),
+  ping: (): Promise<null> => request<null>("Ping"),
+  getHealth: (): Promise<ServiceHealth> => request<ServiceHealth>("Health"),
 
   getStatus: async (): Promise<ServiceStatus> => {
-    let activeSession = await storageGet("active_session");
-    const activeChallenge = await storageGet("active_challenge");
-
-    if (activeSession && activeSession.status === "active") {
-      const elapsed = Math.floor(
-        (Date.now() - new Date(activeSession.started_at).getTime()) / 1000
-      );
-      const remaining = Math.max(
-        0,
-        activeSession.planned_duration_sec - elapsed
-      );
-
-      if (remaining <= 0) {
-        // Session expired — mark completed and move to history
-        activeSession.status = "completed";
-        activeSession.ended_at = new Date().toISOString();
-        const history = await storageGet("history");
-        history.unshift(activeSession);
-        await storageSet("history", history);
-        await storageSet("active_session", null);
-        activeSession = null;
-      }
-    }
-
-    return {
-      health: { running: true, version: "0.1.0-ext" },
-      active_session:
-        activeSession && activeSession.status === "active"
-          ? {
-              session: activeSession,
-              elapsed_sec: Math.floor(
-                (Date.now() -
-                  new Date(activeSession.started_at).getTime()) /
-                  1000
-              ),
-              remaining_sec: Math.max(
-                0,
-                activeSession.planned_duration_sec -
-                  Math.floor(
-                    (Date.now() -
-                      new Date(activeSession.started_at).getTime()) /
-                      1000
-                  )
-              ),
-            }
-          : null,
-      active_challenge: activeChallenge,
-    };
+    const status = await request<Omit<ServiceStatus, "active_challenge">>("GetStatus");
+    return { ...status, active_challenge: null };
   },
 
-  // Blocklist ────────────────────────────────────────────────────────────────
-
-  listBlocklist: async (): Promise<DomainEntry[]> => storageGet("blocklist"),
-
-  addBlocklist: async (domain: string): Promise<number> => {
-    const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
-
-    const list = await storageGet("blocklist");
-    if (list.some((d) => d.domain === norm)) {
-      throw new Error("Domain already in blocklist");
-    }
-    const id = Date.now();
-    list.push({ id, domain: norm });
-    await storageSet("blocklist", list);
-    return id;
+  listBlocklist: (): Promise<DomainEntry[]> => request<DomainEntry[]>("ListBlocklist"),
+  addBlocklist: (domain: string): Promise<number> => {
+    const normalized = normalizeDomain(domain);
+    if (!normalized) return Promise.reject(new Error("Invalid site or wildcard format."));
+    return request<number>("AddBlocklist", { domain: normalized });
   },
+  removeBlocklist: (id: number): Promise<null> => request<null>("RemoveBlocklist", { id }),
 
-  removeBlocklist: async (id: number): Promise<null> => {
-    let list = await storageGet("blocklist");
-    list = list.filter((d) => d.id !== id);
-    await storageSet("blocklist", list);
-    return null;
+  listWhitelist: (): Promise<DomainEntry[]> => request<DomainEntry[]>("ListWhitelist"),
+  addWhitelist: (domain: string): Promise<number> => {
+    const normalized = normalizeDomain(domain);
+    if (!normalized) return Promise.reject(new Error("Invalid site or wildcard format."));
+    return request<number>("AddWhitelist", { domain: normalized });
   },
+  removeWhitelist: (id: number): Promise<null> => request<null>("RemoveWhitelist", { id }),
 
-  // Whitelist ────────────────────────────────────────────────────────────────
-
-  listWhitelist: async (): Promise<DomainEntry[]> => storageGet("whitelist"),
-
-  addWhitelist: async (domain: string): Promise<number> => {
-    const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
-
-    const list = await storageGet("whitelist");
-    if (list.some((d) => d.domain === norm)) {
-      throw new Error("Domain already in whitelist");
-    }
-    const id = Date.now();
-    list.push({ id, domain: norm });
-    await storageSet("whitelist", list);
-    return id;
-  },
-
-  removeWhitelist: async (id: number): Promise<null> => {
-    let list = await storageGet("whitelist");
-    list = list.filter((d) => d.id !== id);
-    await storageSet("whitelist", list);
-    return null;
-  },
-
-  // Temporary allowlist â€” persists locally until its expiry timestamp.
-  listTemporaryAllows: async (): Promise<TemporaryAllowEntry[]> => {
-    const entries = await storageGet("temporary_allowlist");
-    const now = Date.now();
-    const active = entries.filter((entry) =>
-      typeof entry?.id === "string" &&
-      typeof entry.domain === "string" &&
-      typeof entry.expires_at === "number" &&
-      entry.expires_at > now
-    );
-    if (active.length !== entries.length) {
-      await storageSet("temporary_allowlist", active);
-    }
-    return active;
-  },
-
-  addTemporaryAllow: async (domain: string, durationMinutes: number): Promise<TemporaryAllowEntry> => {
-    const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Enter a valid site or wildcard such as *game");
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
-      throw new Error("Choose a valid duration");
-    }
-
-    const active = await ipc.listTemporaryAllows();
-    const entry: TemporaryAllowEntry = {
-      id: `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      domain: norm,
-      expires_at: Date.now() + durationMinutes * 60 * 1000,
-    };
-    await storageSet("temporary_allowlist", [...active, entry]);
-    return entry;
-  },
-
-  removeTemporaryAllow: async (id: string): Promise<null> => {
-    const entries = await storageGet("temporary_allowlist");
-    await storageSet("temporary_allowlist", entries.filter((entry) => entry.id !== id));
-    return null;
-  },
-
-
-  // Sessions & Challenges ────────────────────────────────────────────────────
-
-  getSchedules: async (): Promise<Schedule[]> => storageGet("schedules"),
-
-  createSchedule: async (
-    start_time: string,
-    end_time: string,
-    mode: SessionMode,
-    days_of_week: number[] = ALL_DAYS,
-    ends_on: string | null = null
-  ): Promise<Schedule> => {
-    const schedules = await storageGet("schedules");
-    const { days, endsOn } = validateSchedule(start_time, end_time, days_of_week, ends_on, schedules);
-
-    const schedule: Schedule = {
-      id: `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      start_time,
-      end_time,
-      mode,
-      days_of_week: days,
-      ends_on: endsOn,
-    };
-    await storageSet("schedules", [...schedules, schedule]);
-    return schedule;
-  },
-
-  updateSchedule: async (
-    id: string,
-    start_time: string,
-    end_time: string,
-    mode: SessionMode,
-    days_of_week: number[],
-    ends_on: string | null
-  ): Promise<Schedule> => {
-    const schedules = await storageGet("schedules");
-    if (!schedules.some((schedule) => schedule.id === id)) throw new Error("Schedule no longer exists.");
-    const { days, endsOn } = validateSchedule(start_time, end_time, days_of_week, ends_on, schedules, id);
-    const updated: Schedule = { id, start_time, end_time, mode, days_of_week: days, ends_on: endsOn };
-    await storageSet("schedules", schedules.map((schedule) => schedule.id === id ? updated : schedule));
-    return updated;
-  },
-
-  deleteSchedule: async (id: string): Promise<null> => {
-    const schedules = await storageGet("schedules");
-    await storageSet(
-      "schedules",
-      schedules.filter((schedule) => schedule.id !== id)
-    );
-    return null;
-  },
-
-  startChallenge: async (type: string): Promise<null> => {
-    await storageSet("active_challenge", { type, status: "pending" });
-    return null;
-  },
-
-  cancelChallenge: async (): Promise<null> => {
-    await storageSet("active_challenge", null);
-    return null;
-  },
-
-  startSession: async (
+  listPresets: (): Promise<Preset[]> => request<Preset[]>("ListPresets"),
+  createPreset: (
+    name: string,
     mode: SessionMode,
     duration_minutes: number,
-    preset_id?: string
-  ): Promise<null> => {
-    const active = await storageGet("active_session");
-    if (active && active.status === "active") {
-      throw new Error("A session is already active");
-    }
+    blocklist: string[],
+    whitelist: string[],
+  ): Promise<null> => request<null>("CreatePreset", {
+    name,
+    mode,
+    duration_minutes,
+    blocklist: blocklist.map(normalizeDomain).filter((domain): domain is string => Boolean(domain)),
+    whitelist: whitelist.map(normalizeDomain).filter((domain): domain is string => Boolean(domain)),
+  }),
+  deletePreset: (id: string): Promise<null> => request<null>("DeletePreset", { id }),
 
-    const blocklist = (await storageGet("blocklist")).map((d) => d.domain);
-    const whitelist = (await storageGet("whitelist")).map((d) => d.domain);
+  startSession: (mode: SessionMode, duration_minutes: number, preset_id?: string): Promise<null> =>
+    request<null>("StartSession", { mode, duration_minutes, preset_id }),
+  stopSession: (): Promise<null> => request<null>("StopSession"),
 
-    const newSession: Session = {
-      id: Math.random().toString(36).substring(2, 11),
-      preset_id: preset_id ?? null,
-      mode,
-      started_at: new Date().toISOString(),
-      ended_at: null,
-      planned_duration_sec: duration_minutes * 60,
-      status: "active",
-      blocklist_snapshot: blocklist,
-      whitelist_snapshot: whitelist,
-    };
+  listHistory: (limit = 50): Promise<Session[]> => request<Session[]>("ListHistory", { limit }),
+  clearHistory: (): Promise<null> => request<null>("ClearHistory"),
 
-    await storageSet("active_session", newSession);
-    return null;
-  },
+  getSettings: async (): Promise<AppSettings> => ({
+    ...DEFAULT_UI_SETTINGS,
+    ...(await request<{ os_allowlist_enabled: boolean }>("GetSettings")),
+  }),
+  updateSettings: (settings: AppSettings): Promise<null> =>
+    request<null>("UpdateSettings", { os_allowlist_enabled: settings.os_allowlist_enabled }),
 
-  stopSession: async (): Promise<null> => {
-    const active = await storageGet("active_session");
-    if (active) {
-      if (active.scheduled_schedule_id) {
-        const schedules = await storageGet("schedules");
-        const schedule = schedules.find((item) => item.id === active.scheduled_schedule_id);
-        const endMinutes = schedule ? parseTime(schedule.end_time) : null;
-        const scheduledEnd = endMinutes === null ? null : new Date();
-        if (scheduledEnd && endMinutes !== null) {
-          scheduledEnd.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-        }
-        await storageSet(
-          "schedule_suppressed_until",
-          scheduledEnd && scheduledEnd.getTime() > Date.now()
-            ? scheduledEnd.getTime()
-            : Date.now() + active.planned_duration_sec * 1000
-        );
-      }
-      active.status = "stopped";
-      active.ended_at = new Date().toISOString();
-      const history = await storageGet("history");
-      history.unshift(active);
-      await storageSet("history", history);
-      await storageSet("active_session", null);
-      await storageSet("active_challenge", null);
-    }
-    return null;
-  },
-
-  // History ──────────────────────────────────────────────────────────────────
-
-  listHistory: async (limit: number = 50): Promise<Session[]> => {
-    const history = await storageGet("history");
-    return history.slice(0, limit);
-  },
-
-  clearHistory: async (): Promise<null> => {
-    await storageSet("history", []);
-    return null;
-  },
-
-  // Settings ─────────────────────────────────────────────────────────────────
-
-  getSettings: async (): Promise<AppSettings> => storageGet("settings"),
-
-  updateSettings: async (settings: AppSettings): Promise<null> => {
-    await storageSet("settings", settings);
-    return null;
-  },
+  // No matching desktop service protocol exists for these former extension-only states.
+  // Reject instead of silently creating a second policy source in chrome.storage.
+  listTemporaryAllows: async (): Promise<TemporaryAllowEntry[]> => desktopOnly("Temporary allowlists"),
+  addTemporaryAllow: async (_domain: string, _durationMinutes: number): Promise<TemporaryAllowEntry> =>
+    desktopOnly("Temporary allowlists"),
+  removeTemporaryAllow: async (_id: string): Promise<null> => desktopOnly("Temporary allowlists"),
+  getSchedules: async (): Promise<Schedule[]> => desktopOnly("Schedules"),
+  createSchedule: async (
+    _startTime: string,
+    _endTime: string,
+    _mode: SessionMode,
+    _daysOfWeek?: number[],
+    _endsOn?: string | null,
+  ): Promise<Schedule> => desktopOnly("Schedules"),
+  updateSchedule: async (
+    _id: string,
+    _startTime: string,
+    _endTime: string,
+    _mode: SessionMode,
+    _daysOfWeek: number[],
+    _endsOn: string | null,
+  ): Promise<Schedule> => desktopOnly("Schedules"),
+  deleteSchedule: async (_id: string): Promise<null> => desktopOnly("Schedules"),
+  startChallenge: async (_type: string): Promise<null> => desktopOnly("Stop challenges"),
+  cancelChallenge: async (): Promise<null> => desktopOnly("Stop challenges"),
 };
