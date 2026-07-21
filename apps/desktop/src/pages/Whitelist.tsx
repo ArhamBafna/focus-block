@@ -33,39 +33,42 @@ export default function Whitelist() {
   };
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: "720px" }}>
+    <div style={{ padding: "20px", maxWidth: "380px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
+      <div style={{ marginBottom: "16px" }}>
         <h1
           style={{
-            fontSize: "24px",
+            fontSize: "18px",
             fontWeight: 700,
             color: "var(--color-vast)",
             margin: 0,
-            letterSpacing: "-0.4px",
+            letterSpacing: "-0.3px",
           }}
         >
-          Whitelist
+          Allowlist
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
-          Sites always allowed, even during Lockdown mode.
+        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-neutral-500)" }}>
+          Sites always allowed, even in Lockdown mode.
+        </p>
+        <p style={{ margin: "5px 0 0", fontSize: "11px", color: "var(--color-neutral-400)" }}>
+          <strong>*word</strong> applies to all URLs containing <strong>word</strong>.
         </p>
       </div>
 
       {/* Add form */}
-      <form onSubmit={handleAdd} style={{ display: "flex", gap: "10px", marginBottom: "24px" }}>
+      <form onSubmit={handleAdd} style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
         <input
           type="text"
           value={newDomain}
           onChange={(e) => { setNewDomain(e.target.value); setError(null); }}
-          placeholder="e.g. github.com or https://notion.so/"
+          placeholder="e.g. github.com or *game"
           style={{
             flex: 1,
-            padding: "10px 14px",
-            fontSize: "14px",
+            padding: "8px 12px",
+            fontSize: "13px",
             fontFamily: "var(--font-sans)",
             border: error ? "1.5px solid #e05c5c" : "1.5px solid var(--color-lumen-dark)",
-            borderRadius: "10px",
+            borderRadius: "8px",
             background: "var(--color-surface)",
             color: "var(--color-vast)",
             outline: "none",
@@ -79,15 +82,15 @@ export default function Whitelist() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "6px",
-            padding: "10px 18px",
-            fontSize: "14px",
+            gap: "4px",
+            padding: "8px 14px",
+            fontSize: "13px",
             fontWeight: 600,
             fontFamily: "var(--font-sans)",
             background: "var(--color-vast)",
             color: "var(--color-lumen)",
             border: "none",
-            borderRadius: "10px",
+            borderRadius: "8px",
             cursor: "pointer",
             whiteSpace: "nowrap",
             transition: "opacity 0.15s",
@@ -95,8 +98,8 @@ export default function Whitelist() {
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.85")}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
         >
-          <Plus size={15} weight="bold" />
-          Add Domain
+          <Plus size={13} weight="bold" />
+          Add
         </button>
       </form>
 
@@ -104,13 +107,13 @@ export default function Whitelist() {
       {error && (
         <div
           style={{
-            marginBottom: "16px",
-            padding: "10px 14px",
+            marginBottom: "12px",
+            padding: "8px 12px",
             background: "#fff0f0",
             border: "1px solid #f8d0d0",
             borderRadius: "8px",
-            fontSize: "13px",
-            color: "#b02020",
+            fontSize: "12px",
+            color: "var(--color-pulse)",
           }}
         >
           {error}
@@ -118,7 +121,7 @@ export default function Whitelist() {
       )}
 
       {/* Domain list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "300px", overflowY: "auto" }}>
         {domains.map((d) => (
           <div
             key={d.id}
@@ -126,13 +129,13 @@ export default function Whitelist() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "12px 16px",
+              padding: "10px 12px",
               background: "var(--color-surface)",
               border: "1px solid var(--color-lumen-dark)",
-              borderRadius: "10px",
+              borderRadius: "8px",
             }}
           >
-            <span style={{ fontSize: "14px", fontWeight: 500, color: "var(--color-vast)" }}>
+            <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--color-vast)" }}>
               {d.domain}
             </span>
             <button
@@ -144,8 +147,8 @@ export default function Whitelist() {
                 background: "none",
                 border: "none",
                 cursor: "pointer",
-                padding: "4px",
-                borderRadius: "6px",
+                padding: "3px",
+                borderRadius: "5px",
                 color: "var(--color-neutral-400)",
                 display: "flex",
                 alignItems: "center",
@@ -154,7 +157,7 @@ export default function Whitelist() {
               onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#e05c5c")}
               onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--color-neutral-400)")}
             >
-              <Trash size={16} />
+              <Trash size={14} />
             </button>
           </div>
         ))}
@@ -162,12 +165,12 @@ export default function Whitelist() {
           <div
             style={{
               textAlign: "center",
-              padding: "48px 0",
+              padding: "36px 0",
               color: "var(--color-neutral-400)",
-              fontSize: "14px",
+              fontSize: "13px",
             }}
           >
-            No domains whitelisted. Sites added here bypass Lockdown mode.
+            No domains yet. Add one above.
           </div>
         )}
       </div>

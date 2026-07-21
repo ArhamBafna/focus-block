@@ -6,10 +6,8 @@ This is the complete local testing procedure. Use **PowerShell as Administrator*
 
 Install:
 
-- Rust (rustup): https://rustup.rs/
-- Node.js 18 or newer: https://nodejs.org/
-- Google Chrome
-- WebView2 (normally already installed with Windows)
+- Rust (rustup)
+- Node.js 18+
 
 Confirm they work:
 
@@ -32,15 +30,6 @@ Set-Location C:\Users\bafna\Desktop\Projects\blocking
 cargo build -p focus-service --release
 ```
 
-This creates:
-
-```text
-target\release\focus-service.exe
-target\release\focus-native-host.exe
-```
-
-Do not open these files manually. The installer registers them correctly.
-
 ## 4. Build and load the Chrome extension
 
 ```powershell
@@ -57,10 +46,7 @@ Load it in Chrome:
 4. Select `C:\Users\bafna\Desktop\Projects\blocking\apps\extension\dist`.
 5. Copy the 32-character extension ID shown under **Focus Blocker**.
 
-The ID in the next command must exactly match the ID Chrome shows. Example only:
-
-```text
-fmfabpemofdkhhcmjaejhinplelkiokm
+The ID in the next command must match the ID Chrome shows.
 ```
 
 ## 5. Install and start the Windows service/native bridge
@@ -82,7 +68,7 @@ Verify the service:
 Get-Service FocusBlockService
 ```
 
-It must say `Running`. If it says `Stopped`, use the same Administrator window:
+It must say `Running`. If it says `Stopped`, run in same Admin window:
 
 ```powershell
 Start-Service FocusBlockService
@@ -90,32 +76,20 @@ Start-Sleep -Seconds 3
 Get-Service FocusBlockService
 ```
 
-The installer also configures automatic startup and Windows service recovery.
-
 ## 6. Start the desktop UI
 
-Open a **second normal PowerShell window** (the service remains installed and running):
+Open a **second normal PowerShell window** at same time:
 
 ```powershell
 Set-Location C:\Users\bafna\Desktop\Projects\blocking\apps\desktop
 npm install
 npm run tauri dev
 ```
-
 Keep this terminal open while using the desktop UI.
 
-## 7. Use the system
+## 7. Verification
 
-- Start a focus session in the desktop app.
-- Website policies are sent to `FocusBlockService`, then to Chrome through the native-messaging bridge.
-- The Chrome extension applies the received policy with dynamic `declarativeNetRequest` rules.
-- App enforcement is handled by the Windows service, not the desktop window.
-
-The current desktop UI does not yet expose an app-target selector. App-target backend support exists, but selecting `.exe`, folder, or Store apps requires that UI to be added.
-
-## 8. Verify everything
-
-Check the service:
+Check service:
 
 ```powershell
 Get-Service FocusBlockService
@@ -128,9 +102,7 @@ Check Chrome:
 3. Confirm there is no **Errors** badge.
 4. Click **service worker** to inspect logs if needed.
 
-After adding a blocked website in an active desktop session, refresh the Chrome page. It should redirect to the bundled blocked page.
-
-## 9. Reboot test
+## 8. Reboot test
 
 Restart Windows. Do not manually start the service afterward. Confirm:
 
@@ -140,7 +112,7 @@ Get-Service FocusBlockService
 
 It should return `Running`, and the active policy should still be enforced.
 
-## 10. Troubleshooting
+## 9. Troubleshooting
 
 ### Service is stopped
 
@@ -159,7 +131,6 @@ Start-Service FocusBlockService
 Get-Service FocusBlockService
 ```
 
-Do not diagnose WFP or database access from a non-Administrator console. A normal-user `--console` run can show `attempt to write a readonly database` even though the installed LocalSystem service has the required permissions.
 
 For direct diagnostics, use Administrator PowerShell:
 
@@ -169,17 +140,10 @@ For direct diagnostics, use Administrator PowerShell:
 
 The process should stay running. Stop it with `Ctrl+C`.
 
-### Chrome does not update
-
-- Confirm the native host was installed with the current extension ID.
-- Reload the unpacked extension from `chrome://extensions`.
-- Confirm `FocusBlockService` is `Running`.
-- Refresh the blocked website tab.
 
 ### Rebuilding after code changes
 
 After extension changes:
-
 ```powershell
 Set-Location C:\Users\bafna\Desktop\Projects\blocking\apps\extension
 npm run build
@@ -189,7 +153,7 @@ Then click **Reload** for the extension in `chrome://extensions`.
 
 After service changes, rebuild release and rerun the installer from Administrator PowerShell.
 
-## 11. Remove the test installation
+## 10. Remove the test installation
 
 Run as Administrator:
 

@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "desktop",
+  "productName": "Focus Blocker",
   "version": "0.1.0",
   "identifier": "com.bafna.desktop",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "desktop",
+        "title": "Focus Blocker",
         "width": 800,
         "height": 600
       }

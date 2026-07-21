@@ -11,46 +11,52 @@ function formatTime(sec: number) {
 export default function Home() {
   const [status, setStatus] = useState<ServiceStatus | null>(null);
   const [loading, setLoading] = useState(true);
+  const [sessionInputMode, setSessionInputMode] = useState<"blocklist" | "lockdown" | null>(null);
+  const [minutesStr, setMinutesStr] = useState("25");
+  const [hoveredSessionMode, setHoveredSessionMode] = useState<"blocklist" | "lockdown" | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
-      const data = await ipc.getStatus();
-      setStatus(data);
-    } catch (e) {
-      console.error(e);
+      setStatus(await ipc.getStatus());
+    } catch (fetchError) {
+      console.error(fetchError);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 1000);
-    return () => clearInterval(interval);
+    void fetchStatus();
+    const interval = window.setInterval(() => void fetchStatus(), 1000);
+    return () => window.clearInterval(interval);
   }, []);
 
-  const handleStartSession = async (mode: "blocklist" | "lockdown") => {
-    const input = window.prompt("Enter time in minutes:", "25");
-    if (input === null) return;
-    const time = parseInt(input, 10);
-    if (isNaN(time) || time <= 0) {
-      alert("Invalid time");
+  const startConfiguredSession = async () => {
+    if (!sessionInputMode) return;
+    const minutes = Number.parseInt(minutesStr, 10);
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setError("Enter a whole number of minutes above zero.");
       return;
     }
+
+    setError(null);
     try {
-      await ipc.startSession(mode, time);
-      fetchStatus();
-    } catch (e) {
-      alert("Failed to start: " + e);
+      await ipc.startSession(sessionInputMode, minutes);
+      setSessionInputMode(null);
+      await fetchStatus();
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Could not start session.");
     }
   };
 
   const stopSession = async () => {
+    setError(null);
     try {
       await ipc.stopSession();
-      fetchStatus();
-    } catch (e) {
-      alert("Failed to stop: " + e);
+      await fetchStatus();
+    } catch (stopError) {
+      setError(stopError instanceof Error ? stopError.message : "Could not stop session.");
     }
   };
 
@@ -58,7 +64,7 @@ export default function Home() {
     return (
       <div
         style={{
-          height: "100%",
+          minHeight: "440px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -72,118 +78,88 @@ export default function Home() {
   }
 
   const active = status?.active_session;
-  const serviceDown = status && !status.health.running;
 
   return (
     <div
       style={{
-        height: "100%",
+        minHeight: "440px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "40px",
+        padding: "24px 32px",
         textAlign: "center",
       }}
     >
-      {/* Service warning */}
-      {serviceDown && (
-        <div
-          style={{
-            marginBottom: "24px",
-            padding: "12px 20px",
-            background: "#fff8e0",
-            border: "1px solid #f0d070",
-            borderRadius: "10px",
-            fontSize: "13px",
-            color: "#7a5c00",
-            maxWidth: "480px",
-            width: "100%",
-          }}
-        >
-          ⚠ FocusBlock service is not running. Start it to enable blocking.
-        </div>
-      )}
-
-      {/* Status icon */}
       <div
         style={{
-          width: "80px",
-          height: "80px",
+          width: "72px",
+          height: "72px",
           borderRadius: "50%",
           background: active ? "var(--color-fathom)" : "var(--color-lumen-dark)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          marginBottom: "24px",
+          marginBottom: "20px",
           transition: "background 0.3s ease",
         }}
       >
         <ShieldCheck
-          size={36}
+          size={32}
           weight="fill"
           color={active ? "var(--color-lumen)" : "var(--color-neutral-400)"}
         />
       </div>
 
-      {/* Main heading */}
       <h1
         style={{
-          fontSize: "28px",
+          fontSize: "22px",
           fontWeight: 700,
-          letterSpacing: "-0.6px",
+          letterSpacing: "-0.5px",
           color: "var(--color-vast)",
-          margin: "0 0 8px",
+          margin: "0 0 6px",
         }}
       >
         {active ? (
           active.session.mode === "lockdown" ? (
             <span>
-              <span style={{ color: "#d93025" }}>Lockdown</span> Mode Active
+              <span style={{ color: "var(--color-pulse)" }}>Lockdown</span> Mode Active
             </span>
           ) : (
             "Focus Mode Active"
           )
         ) : (
-          "Ready to Focus"
+          "ready to focus?"
         )}
       </h1>
 
-      {/* Timer or subtitle */}
       {active ? (
         <>
           <div
             style={{
-              fontSize: "56px",
+              fontSize: "52px",
               fontWeight: 700,
               letterSpacing: "-2px",
               fontVariantNumeric: "tabular-nums",
               color: "var(--color-fathom)",
-              margin: "12px 0 28px",
+              margin: "10px 0 20px",
               fontFamily: "var(--font-sans)",
             }}
           >
             {active.remaining_sec !== null ? formatTime(active.remaining_sec) : "∞"}
           </div>
-
-          <div
-            style={{
-              fontSize: "13px",
-              color: "var(--color-neutral-500)",
-              marginBottom: "28px",
-            }}
-          >
+          <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", marginBottom: "24px" }}>
             {active.session.blocklist_snapshot.length} site
             {active.session.blocklist_snapshot.length !== 1 ? "s" : ""} blocked
           </div>
-
           <button
+            type="button"
             onClick={stopSession}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              padding: "12px 28px",
+              padding: "11px 28px",
               fontSize: "15px",
               fontWeight: 600,
               fontFamily: "var(--font-sans)",
@@ -195,35 +171,98 @@ export default function Home() {
               transition: "opacity 0.15s",
               boxShadow: "0 2px 12px rgba(26,26,26,0.15)",
             }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.85")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
+            onMouseEnter={(event) => { event.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={(event) => { event.currentTarget.style.opacity = "1"; }}
           >
-            <Stop weight="fill" size={18} />
+            <Stop weight="fill" size={17} />
             Stop Session
           </button>
         </>
-      ) : (
-        <>
-          <p
+      ) : sessionInputMode ? (
+        <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
+          <div
             style={{
-              fontSize: "15px",
-              color: "var(--color-neutral-500)",
-              margin: "0 0 32px",
-              maxWidth: "300px",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              background: "var(--color-surface)",
+              padding: "4px 12px",
+              borderRadius: "100px",
+              border: "1px solid var(--color-neutral-200)",
             }}
           >
-            Start a focus session to block distracting sites.
-          </p>
-
+            <input
+              type="number"
+              min={1}
+              value={minutesStr}
+              onChange={(event) => { setMinutesStr(event.target.value); setError(null); }}
+              style={{
+                width: "50px",
+                border: "none",
+                outline: "none",
+                background: "transparent",
+                fontSize: "16px",
+                fontWeight: 600,
+                color: "var(--color-vast)",
+                textAlign: "center",
+                fontFamily: "var(--font-sans)",
+              }}
+              autoFocus
+            />
+            <span style={{ fontSize: "14px", color: "var(--color-vast)", fontWeight: 600 }}>minutes</span>
+          </div>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => { setSessionInputMode(null); setError(null); }}
+              style={{
+                padding: "10px 20px",
+                fontSize: "14px",
+                fontWeight: 600,
+                fontFamily: "var(--font-sans)",
+                background: "transparent",
+                color: "var(--color-neutral-500)",
+                border: "none",
+                borderRadius: "100px",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={startConfiguredSession}
+              style={{
+                padding: "10px 24px",
+                fontSize: "14px",
+                fontWeight: 600,
+                fontFamily: "var(--font-sans)",
+                background: sessionInputMode === "lockdown" ? "var(--color-pulse)" : "var(--color-fathom)",
+                color: "var(--color-lumen)",
+                border: "none",
+                borderRadius: "100px",
+                cursor: "pointer",
+                boxShadow: sessionInputMode === "lockdown"
+                  ? "0 4px 12px rgba(127, 28, 52, 0.25)"
+                  : "0 4px 12px rgba(3,79,70,0.25)",
+              }}
+            >
+              Start
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
           <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
             <button
-              onClick={() => handleStartSession("blocklist")}
+              type="button"
+              onClick={() => setSessionInputMode("blocklist")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "14px 36px",
-                fontSize: "16px",
+                padding: "13px 24px",
+                fontSize: "15px",
                 fontWeight: 700,
                 fontFamily: "var(--font-sans)",
                 background: "var(--color-fathom)",
@@ -234,51 +273,77 @@ export default function Home() {
                 transition: "opacity 0.15s, transform 0.15s",
                 boxShadow: "0 4px 20px rgba(3,79,70,0.3)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+              onMouseEnter={(event) => {
+                event.currentTarget.style.opacity = "0.9";
+                event.currentTarget.style.transform = "translateY(-1px)";
+                setHoveredSessionMode("blocklist");
               }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              onMouseLeave={(event) => {
+                event.currentTarget.style.opacity = "1";
+                event.currentTarget.style.transform = "translateY(0)";
+                setHoveredSessionMode(null);
               }}
             >
-              <Play weight="fill" size={18} />
-              Focus
+              <Play weight="fill" size={17} />
+              focus
             </button>
-
             <button
-              onClick={() => handleStartSession("lockdown")}
+              type="button"
+              onClick={() => setSessionInputMode("lockdown")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "14px 36px",
-                fontSize: "16px",
+                padding: "13px 24px",
+                fontSize: "15px",
                 fontWeight: 700,
                 fontFamily: "var(--font-sans)",
-                background: "#d93025",
+                background: "var(--color-pulse)",
                 color: "var(--color-lumen)",
                 border: "none",
                 borderRadius: "100px",
                 cursor: "pointer",
                 transition: "opacity 0.15s, transform 0.15s",
-                boxShadow: "0 4px 20px rgba(217, 48, 37, 0.3)",
+                boxShadow: "0 4px 20px rgba(127, 28, 52, 0.3)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+              onMouseEnter={(event) => {
+                event.currentTarget.style.opacity = "0.9";
+                event.currentTarget.style.transform = "translateY(-1px)";
+                setHoveredSessionMode("lockdown");
               }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              onMouseLeave={(event) => {
+                event.currentTarget.style.opacity = "1";
+                event.currentTarget.style.transform = "translateY(0)";
+                setHoveredSessionMode(null);
               }}
             >
-              <ShieldCheck weight="fill" size={18} />
-              Locked Down
+              <ShieldCheck weight="fill" size={17} />
+              lockdown
             </button>
           </div>
+          <p
+            style={{
+              fontSize: "14px",
+              color: "var(--color-neutral-500)",
+              margin: "16px 0 0",
+              width: "100%",
+              maxWidth: "320px",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {hoveredSessionMode === "blocklist"
+              ? "block sites in blocked list for a set time"
+              : hoveredSessionMode === "lockdown"
+                ? "block all sites except those in allow list for a set time"
+                : "hover over button for details"}
+          </p>
         </>
+      )}
+
+      {error && (
+        <div role="alert" style={{ marginTop: "16px", color: "var(--color-pulse)", fontSize: "12px" }}>
+          {error}
+        </div>
       )}
     </div>
   );

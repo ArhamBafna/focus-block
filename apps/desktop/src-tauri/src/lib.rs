@@ -1,8 +1,8 @@
 use focus_core::{IpcRequest, IpcResponse};
 use focus_ipc::IpcClient;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct StoreApp {
     display_name: String,
@@ -77,4 +77,24 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![ipc_request, list_store_apps])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::StoreApp;
+
+    #[test]
+    fn parses_store_apps_from_the_powershell_json_shape() {
+        let apps: Vec<StoreApp> = serde_json::from_str(
+            r#"[{"displayName":"Calculator","packageFamilyName":"Microsoft.WindowsCalculator_8wekyb3d8bbwe"}]"#,
+        )
+        .expect("Start-menu app JSON should deserialize");
+
+        assert_eq!(apps.len(), 1);
+        assert_eq!(apps[0].display_name, "Calculator");
+        assert_eq!(
+            apps[0].package_family_name,
+            "Microsoft.WindowsCalculator_8wekyb3d8bbwe"
+        );
+    }
 }

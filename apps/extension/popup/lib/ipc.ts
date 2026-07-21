@@ -101,6 +101,18 @@ function unwrapServiceData(value: unknown): unknown {
   return Object.prototype.hasOwnProperty.call(value, "data") ? value.data : value;
 }
 
+export function getServiceErrorMessage(response: IpcResponse): string {
+  if (typeof response.message === "string") return response.message;
+
+  // Rust's externally tagged IpcResponse puts Err fields inside `data`:
+  // { status: "Err", data: { message: "..." } }.
+  if (isRecord(response.data) && typeof response.data.message === "string") {
+    return response.data.message;
+  }
+
+  return "FocusBlock service rejected request.";
+}
+
 async function request<T>(cmd: string, data?: unknown): Promise<T> {
   const response = await chrome.runtime.sendMessage({
     type: "focusblock-service-request",
@@ -111,7 +123,7 @@ async function request<T>(cmd: string, data?: unknown): Promise<T> {
     throw new Error("FocusBlock service returned an invalid response.");
   }
   if (response.status === "Err") {
-    throw new Error(typeof response.message === "string" ? response.message : "FocusBlock service rejected request.");
+    throw new Error(getServiceErrorMessage(response));
   }
   return unwrapServiceData(response.data) as T;
 }

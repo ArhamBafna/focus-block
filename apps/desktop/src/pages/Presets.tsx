@@ -15,6 +15,7 @@ export default function Presets() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<NewPresetForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchPresets = async () => {
     try {
@@ -32,27 +33,28 @@ export default function Presets() {
     e.preventDefault();
     if (!form.name.trim()) return;
     setSaving(true);
+    setError(null);
     try {
       await ipc.createPreset(form.name.trim(), form.mode, form.duration_minutes, [], []);
       setForm(EMPTY_FORM);
       setShowForm(false);
       fetchPresets();
     } catch (err) {
-      alert("Failed to create preset: " + err);
+      setError(err instanceof Error ? err.message : "Could not create preset.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: "720px" }}>
+    <div style={{ padding: "20px", maxWidth: "380px" }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "28px" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
         <div>
-          <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--color-vast)", margin: 0, letterSpacing: "-0.4px" }}>
+          <h1 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-vast)", margin: 0, letterSpacing: "-0.3px" }}>
             Presets
           </h1>
-          <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
+          <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-neutral-500)" }}>
             Saved session configurations you can launch instantly.
           </p>
         </div>
@@ -61,15 +63,15 @@ export default function Presets() {
           style={{
             display: "flex",
             alignItems: "center",
-            gap: "6px",
-            padding: "9px 16px",
-            fontSize: "14px",
+            gap: "4px",
+            padding: "8px 12px",
+            fontSize: "12px",
             fontWeight: 600,
             fontFamily: "var(--font-sans)",
             background: "var(--color-vast)",
             color: "var(--color-lumen)",
             border: "none",
-            borderRadius: "10px",
+            borderRadius: "8px",
             cursor: "pointer",
             whiteSpace: "nowrap",
             transition: "opacity 0.15s",
@@ -77,7 +79,7 @@ export default function Presets() {
           onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.85")}
           onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
         >
-          <Plus size={15} weight="bold" />
+          <Plus size={13} weight="bold" />
           New Preset
         </button>
       </div>
@@ -226,19 +228,25 @@ export default function Presets() {
         </div>
       )}
 
+      {error && (
+        <div role="alert" style={{ marginBottom: "12px", padding: "8px 12px", background: "#fff0f0", border: "1px solid #f8d0d0", borderRadius: "8px", fontSize: "12px", color: "var(--color-pulse)" }}>
+          {error}
+        </div>
+      )}
+
       {/* Preset grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "8px" }}>
         {presets.map((p) => (
           <div
             key={p.id}
             style={{
-              padding: "16px 18px",
+              padding: "12px",
               background: "var(--color-surface)",
               border: "1px solid var(--color-lumen-dark)",
-              borderRadius: "12px",
+              borderRadius: "8px",
               display: "flex",
               flexDirection: "column",
-              gap: "10px",
+              gap: "8px",
             }}
           >
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "8px" }}>
@@ -280,7 +288,7 @@ export default function Presets() {
       </div>
 
       {presets.length === 0 && !showForm && (
-        <div style={{ textAlign: "center", padding: "56px 0", color: "var(--color-neutral-400)", fontSize: "14px" }}>
+          <div style={{ textAlign: "center", padding: "36px 0", color: "var(--color-neutral-400)", fontSize: "13px" }}>
           No presets yet. Create one to quickly launch your favourite session setup.
         </div>
       )}

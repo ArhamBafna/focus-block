@@ -8,46 +8,43 @@ import History from "./pages/History";
 import Settings from "./pages/Settings";
 import "./App.css";
 
-function Sidebar() {
-  const location = useLocation();
-  const navItems = [
-    { path: "/", label: "Focus", icon: <Timer size={20} /> },
-    { path: "/blocklists", label: "Blocklists", icon: <Shield size={20} /> },
-    { path: "/whitelist", label: "Whitelist", icon: <ListChecks size={20} /> },
-    { path: "/presets", label: "Presets", icon: <ListPlus size={20} /> },
-    { path: "/history", label: "History", icon: <ClockCounterClockwise size={20} /> },
-    { path: "/settings", label: "Settings", icon: <Gear size={20} /> },
-  ];
+const navItems = [
+  { path: "/", label: "Focus", icon: <Timer size={18} /> },
+  { path: "/blocklists", label: "Block", icon: <Shield size={18} /> },
+  { path: "/whitelist", label: "Allow", icon: <ListChecks size={18} /> },
+  { path: "/presets", label: "Presets", icon: <ListPlus size={18} /> },
+  { path: "/history", label: "History", icon: <ClockCounterClockwise size={18} /> },
+  { path: "/settings", label: "Settings", icon: <Gear size={18} /> },
+];
 
+function Topbar() {
+  const location = useLocation();
   return (
     <div
       style={{
-        width: "220px",
-        minWidth: "220px",
-        height: "100vh",
         background: "var(--color-vast)",
         display: "flex",
-        flexDirection: "column",
-        paddingTop: "24px",
-        paddingBottom: "16px",
+        alignItems: "stretch",
+        padding: "0 8px",
         flexShrink: 0,
       }}
     >
-      {/* Logo / Brand */}
+      {/* Brand */}
       <div
         style={{
-          padding: "0 20px",
-          marginBottom: "32px",
           display: "flex",
           alignItems: "center",
-          gap: "8px",
+          gap: "6px",
+          padding: "10px 10px 10px 4px",
+          borderRight: "1px solid rgba(255,255,235,0.1)",
+          marginRight: "4px",
         }}
       >
         <div
           style={{
-            width: "28px",
-            height: "28px",
-            borderRadius: "8px",
+            width: "22px",
+            height: "22px",
+            borderRadius: "6px",
             background: "var(--color-dawn)",
             display: "flex",
             alignItems: "center",
@@ -55,74 +52,54 @@ function Sidebar() {
             flexShrink: 0,
           }}
         >
-          <Shield size={16} weight="fill" color="var(--color-vast)" />
+          <Shield size={13} weight="fill" color="var(--color-vast)" />
         </div>
         <span
           style={{
             fontFamily: "var(--font-sans)",
             fontWeight: 700,
-            fontSize: "15px",
+            fontSize: "13px",
             color: "var(--color-lumen)",
-            letterSpacing: "-0.3px",
+            letterSpacing: "-0.2px",
+            whiteSpace: "nowrap",
           }}
         >
           Focus Blocker
         </span>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: "0 12px", display: "flex", flexDirection: "column", gap: "2px" }}>
+      <nav
+        className="top-nav"
+        style={{ display: "flex", flex: 1, minWidth: 0, alignItems: "stretch", gap: "2px", padding: "6px 0" }}
+      >
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
             <Link
               key={item.path}
               to={item.path}
+              title={item.label}
+              className={`top-nav-item${isActive ? " is-active" : ""}`}
               style={{
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                gap: "10px",
-                padding: "9px 12px",
-                borderRadius: "10px",
-                fontSize: "14px",
+                justifyContent: "center",
+                gap: "2px",
+                padding: "4px 8px",
+                borderRadius: "8px",
+                fontSize: "10px",
                 fontWeight: isActive ? 600 : 400,
-                color: isActive ? "var(--color-vast)" : "var(--color-lumen)",
-                background: isActive ? "var(--color-dawn)" : "transparent",
-                transition: "all 0.15s ease",
                 textDecoration: "none",
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = "rgba(255,255,235,0.07)";
-                  (e.currentTarget as HTMLElement).style.color = "var(--color-lumen)";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) {
-                  (e.currentTarget as HTMLElement).style.background = "transparent";
-                  (e.currentTarget as HTMLElement).style.color = "rgba(255,255,235,0.6)";
-                }
+                minWidth: item.label === "Settings" ? "58px" : "50px",
               }}
             >
               {item.icon}
-              <span>{item.label}</span>
+              <span style={{ fontSize: "9px", letterSpacing: "0.2px" }}>{item.label}</span>
             </Link>
           );
         })}
       </nav>
-
-      {/* Footer hint */}
-      <div
-        style={{
-          padding: "12px 20px 0",
-          borderTop: "1px solid rgba(255,255,235,0.08)",
-          marginTop: "8px",
-        }}
-      >
-        <span style={{ fontSize: "12px", color: "rgba(255,255,235,0.3)", fontWeight: 400 }}>
-          v0.1.0
-        </span>
-      </div>
     </div>
   );
 }
@@ -133,17 +110,17 @@ function App() {
       <div
         style={{
           display: "flex",
-          height: "100vh",
+          flexDirection: "column",
+          minHeight: "100vh",
           overflow: "hidden",
           background: "var(--color-background)",
           fontFamily: "var(--font-sans)",
         }}
       >
-        <Sidebar />
+        <Topbar />
         <main
           style={{
             flex: 1,
-            height: "100%",
             overflowY: "auto",
             background: "var(--color-background)",
             color: "var(--color-foreground)",
