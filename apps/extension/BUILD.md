@@ -19,13 +19,13 @@ cd apps/extension
 ### 2. Install dependencies
 
 ```powershell
-npm install
+npm.cmd install
 ```
 
 ### 3. Build the extension
 
 ```powershell
-npm run build
+npm.cmd run build
 ```
 
 This runs three steps in sequence:
@@ -62,7 +62,7 @@ Final output: **`apps/extension/dist/`** — this folder is a complete Chrome ex
 | Step | Expected result |
 |------|-----------------|
 | Click the extension icon | Popup opens (380px wide) |
-| Navigate between tabs (Focus/Block/Allow/Presets/History/Settings) | Views switch correctly |
+| Navigate between tabs (Focus/Block/Allow/Schedule/History/Settings) | Views switch correctly |
 | Data persists after closing/reopening popup | Yes (stored in chrome.storage.local) |
 
 ### Blocking test (core feature)
@@ -123,6 +123,11 @@ Popup (React UI)
       service worker calls chrome.declarativeNetRequest.updateDynamicRules
         Chrome blocks matching requests at network level
 ```
+
+The desktop app is optional. When its local native bridge is installed, the
+extension automatically merges permanent Block and Allow entries and mirrors
+desktop-started browser protection. Extension-started sessions never start a
+desktop session.
 
 ### Storage keys (chrome.storage.local)
 

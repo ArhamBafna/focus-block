@@ -16,6 +16,7 @@ export default function Home() {
   const [sessionInputMode, setSessionInputMode] = useState<"blocklist" | "lockdown" | null>(null);
   const [minutesStr, setMinutesStr] = useState("25");
   const [hoveredSessionMode, setHoveredSessionMode] = useState<"blocklist" | "lockdown" | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {
@@ -30,6 +31,7 @@ export default function Home() {
   useEffect(() => {
     void fetchStatus();
     void ipc.getSettings().then(setSettings).catch(console.error);
+    void ipc.consumeDesktopSyncNotice().then(setMessage).catch(console.error);
     const interval = setInterval(fetchStatus, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -45,6 +47,7 @@ export default function Home() {
       void fetchStatus();
     } catch (error) {
       console.error(error);
+      setMessage(error instanceof Error ? error.message : "Could not start session.");
     }
   };
 
@@ -69,6 +72,7 @@ export default function Home() {
       void fetchStatus();
     } catch (error) {
       console.error(error);
+      setMessage(error instanceof Error ? error.message : "Could not stop session.");
     }
   };
 
@@ -91,6 +95,7 @@ export default function Home() {
 
   const active = status?.active_session;
   const challenge = status?.active_challenge;
+  const desktopManaged = active?.session.source === "desktop";
 
   if (challenge && challenge.status === "pending" && settings) {
     return (
@@ -151,6 +156,7 @@ export default function Home() {
         }}
       >
         {active ? (
+          desktopManaged ? "Desktop Session Active" :
           active.session.mode === "lockdown" ? (
             <span>
               <span style={{ color: "var(--color-pulse)" }}>Lockdown</span> Mode Active
@@ -182,7 +188,16 @@ export default function Home() {
             {active.session.blocklist_snapshot.length} site
             {active.session.blocklist_snapshot.length !== 1 ? "s" : ""} blocked
           </div>
-          <button
+          {status?.desktop_session_active && (
+            <div style={{ fontSize: "12px", color: "var(--color-neutral-500)", margin: "-12px 0 18px", lineHeight: 1.4 }}>
+              {desktopManaged ? "Browser protection mirrors your desktop session." : "Desktop session also active. Stricter rules apply."}
+            </div>
+          )}
+          {desktopManaged ? (
+            <div style={{ fontSize: "12px", color: "var(--color-neutral-500)", marginBottom: "10px" }}>
+              End this session in FocusBlock desktop.
+            </div>
+          ) : <button
             onClick={stopSession}
             style={{
               display: "inline-flex",
@@ -205,7 +220,7 @@ export default function Home() {
           >
             <Stop weight="fill" size={17} />
             Stop Session
-          </button>
+          </button>}
         </>
       ) : sessionInputMode ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>
@@ -363,6 +378,11 @@ export default function Home() {
                 : "hover over button for details"}
           </p>
         </>
+      )}
+      {message && (
+        <div role="status" style={{ marginTop: "16px", padding: "8px 10px", borderRadius: "8px", background: "var(--color-surface)", color: "var(--color-neutral-600)", fontSize: "12px" }}>
+          {message}
+        </div>
       )}
     </div>
   );

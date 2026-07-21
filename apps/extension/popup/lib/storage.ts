@@ -61,6 +61,19 @@ export interface StorageData {
     whitelist_snapshot: string[];
     scheduled_schedule_id?: string | null;
   } | null;
+  /** A read-only browser view of a session started by FocusBlock desktop. */
+  desktop_session: {
+    id: string;
+    preset_id: string | null;
+    mode: "blocklist" | "lockdown";
+    started_at: string;
+    ended_at: string | null;
+    planned_duration_sec: number;
+    status: "active" | "completed" | "stopped";
+    blocklist_snapshot: string[];
+    whitelist_snapshot: string[];
+    scheduled_schedule_id?: string | null;
+  } | null;
   history: {
     id: string;
     preset_id: string | null;
@@ -78,6 +91,20 @@ export interface StorageData {
     type: string;
     status: "pending" | "passed";
   } | null;
+  /** Last known desktop lists. Used for three-way list reconciliation. */
+  desktop_sync_baseline: {
+    blocklist: string[];
+    whitelist: string[];
+  } | null;
+  /** Extension deletions waiting to be applied to a desktop installed later. */
+  desktop_sync_tombstones: {
+    scope: "blocklist" | "whitelist";
+    domain: string;
+  }[];
+  /** True after first successful automatic merge with desktop. */
+  desktop_sync_paired: boolean;
+  /** One-time confirmation shown after first automatic desktop list merge. */
+  desktop_sync_notice: string | null;
   settings: {
     os_allowlist_enabled: boolean;
     stop_challenge: string;
@@ -93,9 +120,14 @@ const DEFAULTS: StorageData = {
   presets: [],
   schedules: [],
   active_session: null,
+  desktop_session: null,
   history: [],
   schedule_suppressed_until: null,
   active_challenge: null,
+  desktop_sync_baseline: null,
+  desktop_sync_tombstones: [],
+  desktop_sync_paired: false,
+  desktop_sync_notice: null,
   settings: {
     os_allowlist_enabled: false,
     stop_challenge: "none",

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Focus Blocker",
   "version": "0.1.0",
-  "description": "Block distracting websites and stay in focus. A browser extension mirroring the Focus Blocker desktop app.",
+  "description": "Block distracting websites, schedule focus time, and use Lockdown directly in Chrome.",
 
   "icons": {
     "16": "icons/icon16.png",

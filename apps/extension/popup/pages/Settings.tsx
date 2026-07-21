@@ -86,6 +86,7 @@ function SettingRow({
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.getSettings().then(setSettings).catch(console.error);
@@ -100,7 +101,7 @@ export default function Settings() {
       await ipc.updateSettings(updated);
       setSettings(updated);
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setError(e instanceof Error ? e.message : "Failed to save setting.");
     } finally {
       setSaving(false);
     }
@@ -115,7 +116,7 @@ export default function Settings() {
       await ipc.updateSettings(updated);
       setSettings(updated);
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setError(e instanceof Error ? e.message : "Failed to save setting.");
     } finally {
       setSaving(false);
     }
@@ -130,7 +131,7 @@ export default function Settings() {
       await ipc.updateSettings(updated);
       setSettings(updated);
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setError(e instanceof Error ? e.message : "Failed to save setting.");
     } finally {
       setSaving(false);
     }
@@ -145,7 +146,7 @@ export default function Settings() {
       await ipc.updateSettings(updated);
       setSettings(updated);
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setError(e instanceof Error ? e.message : "Failed to save setting.");
     } finally {
       setSaving(false);
     }
@@ -167,6 +168,7 @@ export default function Settings() {
         <div style={{ color: "var(--color-neutral-400)", fontSize: "13px" }}>Loading…</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {error && <div role="alert" style={{ padding: "9px 10px", borderRadius: "8px", background: "var(--color-pulse-soft)", color: "var(--color-pulse)", fontSize: "12px" }}>{error}</div>}
           <SettingRow
             title="OS Essentials Allowlist"
             description="Allow essential Windows services even during Lockdown mode."

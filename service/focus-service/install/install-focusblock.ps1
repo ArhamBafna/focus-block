@@ -9,7 +9,6 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$NativeHostExecutablePath,
 
-    [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-p]{32}$')]
     [string]$ExtensionId,
 
@@ -18,6 +17,16 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$releaseExtensionIdPath = Join-Path $PSScriptRoot 'focusblock-web-store-extension-id.txt'
+if ([string]::IsNullOrWhiteSpace($ExtensionId)) {
+    if (-not (Test-Path -LiteralPath $releaseExtensionIdPath)) {
+        throw "Release package missing focusblock-web-store-extension-id.txt. Developers may pass -ExtensionId for an unpacked extension."
+    }
+    $ExtensionId = (Get-Content -LiteralPath $releaseExtensionIdPath -Raw).Trim()
+    if ($ExtensionId -notmatch '^[a-p]{32}$') {
+        throw "focusblock-web-store-extension-id.txt must contain one Chrome Web Store extension ID."
+    }
+}
 $serviceName = 'FocusBlockService'
 $hostName = 'com.focusblock.bridge'
 $servicePath = (Resolve-Path -LiteralPath $ServiceExecutablePath).Path
@@ -54,8 +63,14 @@ New-Item -ItemType Directory -Force -Path $registryKey | Out-Null
 New-ItemProperty -Path $registryKey -Name '(Default)' -Value $manifestPath -PropertyType String -Force | Out-Null
 
 $service = Get-Service -Name $serviceName
-if ($service.Status -ne 'Running') {
+if ($service.Status -eq 'Running') {
+    Restart-Service -Name $serviceName -Force
+} else {
     Start-Service -Name $serviceName
+}
+$service.WaitForStatus('Running', [TimeSpan]::FromSeconds(30))
+if ($service.Status -ne 'Running') {
+    throw "FocusBlock service did not reach the Running state."
 }
 
 Write-Output "Installed $serviceName and registered $hostName for chrome-extension://$ExtensionId/."

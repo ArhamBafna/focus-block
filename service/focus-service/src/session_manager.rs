@@ -90,20 +90,24 @@ impl SessionManager {
                     data: ResponseData::Domains(domains),
                 })
                 .unwrap_or_else(store_error),
-            IpcRequest::AddBlocklist { domain } => self
-                .store
-                .add_blocklist(&domain)
-                .map(|id| IpcResponse::Ok {
-                    data: ResponseData::Id(id),
-                })
-                .unwrap_or_else(store_error),
-            IpcRequest::RemoveBlocklist { id } => self
-                .store
-                .remove_blocklist(id)
-                .map(|_| IpcResponse::Ok {
-                    data: ResponseData::Unit(()),
-                })
-                .unwrap_or_else(store_error),
+            IpcRequest::AddBlocklist { domain } => match self.store.add_blocklist(&domain) {
+                Ok(id) => match self.sync_active_site_lists() {
+                    Ok(()) => IpcResponse::Ok {
+                        data: ResponseData::Id(id),
+                    },
+                    Err(message) => IpcResponse::Err { message },
+                },
+                Err(error) => store_error(error),
+            },
+            IpcRequest::RemoveBlocklist { id } => match self.store.remove_blocklist(id) {
+                Ok(()) => match self.sync_active_site_lists() {
+                    Ok(()) => IpcResponse::Ok {
+                        data: ResponseData::Unit(()),
+                    },
+                    Err(message) => IpcResponse::Err { message },
+                },
+                Err(error) => store_error(error),
+            },
             IpcRequest::ListAppBlockTargets => self
                 .store
                 .list_app_block_targets()
@@ -142,20 +146,24 @@ impl SessionManager {
                     data: ResponseData::Domains(domains),
                 })
                 .unwrap_or_else(store_error),
-            IpcRequest::AddWhitelist { domain } => self
-                .store
-                .add_whitelist(&domain)
-                .map(|id| IpcResponse::Ok {
-                    data: ResponseData::Id(id),
-                })
-                .unwrap_or_else(store_error),
-            IpcRequest::RemoveWhitelist { id } => self
-                .store
-                .remove_whitelist(id)
-                .map(|_| IpcResponse::Ok {
-                    data: ResponseData::Unit(()),
-                })
-                .unwrap_or_else(store_error),
+            IpcRequest::AddWhitelist { domain } => match self.store.add_whitelist(&domain) {
+                Ok(id) => match self.sync_active_site_lists() {
+                    Ok(()) => IpcResponse::Ok {
+                        data: ResponseData::Id(id),
+                    },
+                    Err(message) => IpcResponse::Err { message },
+                },
+                Err(error) => store_error(error),
+            },
+            IpcRequest::RemoveWhitelist { id } => match self.store.remove_whitelist(id) {
+                Ok(()) => match self.sync_active_site_lists() {
+                    Ok(()) => IpcResponse::Ok {
+                        data: ResponseData::Unit(()),
+                    },
+                    Err(message) => IpcResponse::Err { message },
+                },
+                Err(error) => store_error(error),
+            },
             IpcRequest::ListPresets => self
                 .store
                 .list_presets()
@@ -395,6 +403,31 @@ impl SessionManager {
                 )),
             };
         }
+        self.active_session = Some(candidate_session);
+        Ok(())
+    }
+
+    /// Browser rules use the active session snapshot supplied through native
+    /// messaging. Keep that snapshot current when either permanent site list
+    /// changes, including changes mirrored from the Chrome extension.
+    fn sync_active_site_lists(&mut self) -> Result<(), String> {
+        let Some(previous_session) = self.active_session.clone() else {
+            return Ok(());
+        };
+        let blocklist = self
+            .store
+            .blocklist_domains()
+            .map_err(|error| error.to_string())?;
+        let whitelist = self
+            .store
+            .whitelist_domains()
+            .map_err(|error| error.to_string())?;
+        let mut candidate_session = previous_session;
+        candidate_session.blocklist_snapshot = blocklist;
+        candidate_session.whitelist_snapshot = whitelist;
+        self.store
+            .save_session(&candidate_session)
+            .map_err(|error| error.to_string())?;
         self.active_session = Some(candidate_session);
         Ok(())
     }
