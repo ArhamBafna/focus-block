@@ -87,22 +87,56 @@ function addDomainRules(
   if (domain.startsWith("*")) {
     const matchText = domain.slice(1);
     if (!matchText) return nextId;
+
+    let ruleAction = action;
+    let condition: chrome.declarativeNetRequest.RuleCondition = { urlFilter: `*${matchText}*`, resourceTypes };
+
+    if (action.type === chrome.declarativeNetRequest.RuleActionType.REDIRECT && action.redirect?.url) {
+      const regexStr = `^https?://.*${matchText.replace(/\./g, '\\.')}.*`;
+      ruleAction = {
+        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+        redirect: {
+          regexSubstitution: `${action.redirect.url}?url=\\0`
+        }
+      };
+      condition = { regexFilter: regexStr, resourceTypes };
+    }
+
     rules.push({
       id: nextId++,
       priority,
-      action,
-      condition: { urlFilter: `*${matchText}*`, resourceTypes },
+      action: ruleAction,
+      condition,
     });
     return nextId;
   }
 
   // Keep exact-domain behavior unchanged: main domain plus explicit www.
   for (const urlFilter of [`||${domain}^`, `||www.${domain}^`]) {
+    let ruleAction = action;
+    let condition: chrome.declarativeNetRequest.RuleCondition = { urlFilter, resourceTypes };
+
+    if (action.type === chrome.declarativeNetRequest.RuleActionType.REDIRECT && action.redirect?.url) {
+      // urlFilter format is ||domain^. To capture the full URL for substitution we use regexFilter.
+      // match any protocol, optional subdomains matching our urlFilter intent, the domain, and any path.
+      const isWww = urlFilter.startsWith('||www.');
+      const exactDomain = isWww ? `www.${domain}` : domain;
+      const regexStr = `^https?://([^/]*\\.)?(${exactDomain.replace(/\./g, '\\.')})(/.*)?$`;
+
+      ruleAction = {
+        type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
+        redirect: {
+          regexSubstitution: `${action.redirect.url}?url=\\0`
+        }
+      };
+      condition = { regexFilter: regexStr, resourceTypes };
+    }
+
     rules.push({
       id: nextId++,
       priority,
-      action,
-      condition: { urlFilter, resourceTypes },
+      action: ruleAction,
+      condition,
     });
   }
   return nextId;

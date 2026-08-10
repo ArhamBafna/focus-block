@@ -16,6 +16,7 @@
       --color-neutral-400: #888880;
       --color-neutral-500: #666;
       --font-sans: "Figtree", Arial, system-ui, sans-serif;
+      --font-heading: "Eb garamond", Arial, sans-serif;
     }
 
     *, *::before, *::after { box-sizing: border-box; }
@@ -55,7 +56,8 @@
     }
 
     h1 {
-      font-size: 28px;
+      font-family: var(--font-heading);
+      font-size: 48px;
       font-weight: 700;
       color: var(--color-vast);
       margin: 0 0 12px;
@@ -103,14 +105,14 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 11px 28px;
+      padding: 16px 24px;
       font-size: 14px;
       font-weight: 600;
       font-family: var(--font-sans);
-      background: var(--color-vast);
-      color: var(--color-lumen);
-      border: none;
-      border-radius: 100px;
+      background: var(--color-dawn);
+      color: var(--color-vast);
+      border: 2px solid var(--color-vast);
+      border-radius: 12px;
       cursor: pointer;
       transition: opacity 0.15s;
       text-decoration: none;
