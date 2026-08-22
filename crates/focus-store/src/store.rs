@@ -1,11 +1,16 @@
+use crate::codec;
 use crate::error::StoreError;
 use crate::migrations::{SCHEMA, SEED_PRESETS};
 use chrono::{DateTime, Utc};
 use focus_core::protocol::DomainEntry;
-use focus_core::{normalize_domain, Preset, Session, SessionMode, SessionStatus};
+use focus_core::{normalize_domain, Preset, Session, SessionMode};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
+
+/// Every setting default is declared here and nowhere else. `migrate` seeds
+/// these rows; the getters fall back to them when a row is missing.
+const SETTING_DEFAULTS: &[(&str, &str)] = &[("os_allowlist_enabled", "true")];
 
 pub struct FocusStore {
     conn: Connection,
@@ -53,7 +58,9 @@ impl FocusStore {
             }
         }
 
-        self.set_default_setting("os_allowlist_enabled", "true")?;
+        for (key, value) in SETTING_DEFAULTS {
+            self.set_default_setting(key, value)?;
+        }
         Ok(())
     }
 
@@ -65,28 +72,37 @@ impl FocusStore {
         Ok(())
     }
 
-    pub fn get_setting_bool(&self, key: &str) -> Result<bool, StoreError> {
-        let value: String = self
-            .conn
-            .query_row(
-                "SELECT value FROM settings WHERE key = ?1",
-                params![key],
-                |r| r.get(0),
-            )
-            .unwrap_or_else(|_| "false".into());
-        Ok(value == "true")
+    fn raw_setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+        let value = self.conn.query_row(
+            "SELECT value FROM settings WHERE key = ?1",
+            params![key],
+            |r| r.get::<_, String>(0),
+        );
+        match value {
+            Ok(v) => Ok(Some(v)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e.into()),
+        }
     }
 
+    pub fn get_setting_bool(&self, key: &str) -> Result<bool, StoreError> {
+        match self.raw_setting(key)? {
+            Some(value) => Ok(value == "true"),
+            // Declared default wins when no row exists; real DB errors above propagate.
+            None => Ok(SETTING_DEFAULTS
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, v)| *v == "true")
+                .unwrap_or(false)),
+        }
+    }
+
+    /// Numeric settings have no declared defaults yet; missing rows read as 0.
     pub fn get_setting_u64(&self, key: &str) -> Result<u64, StoreError> {
-        let value: String = self
-            .conn
-            .query_row(
-                "SELECT value FROM settings WHERE key = ?1",
-                params![key],
-                |r| r.get(0),
-            )
-            .unwrap_or_else(|_| "0".into());
-        Ok(value.parse().unwrap_or(0))
+        match self.raw_setting(key)? {
+            Some(value) => Ok(value.parse().unwrap_or(0)),
+            None => Ok(0),
+        }
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> Result<(), StoreError> {
@@ -171,24 +187,24 @@ impl FocusStore {
         let mut stmt = self.conn.prepare(
             "SELECT id, name, mode, duration_minutes, blocklist_json, whitelist_json FROM presets ORDER BY name",
         )?;
-        let rows = stmt.query_map([], |row| {
-            let mode_str: String = row.get(2)?;
-            let mode = match mode_str.as_str() {
-                "lockdown" => SessionMode::Lockdown,
-                _ => SessionMode::Blocklist,
-            };
-            let blocklist: Vec<String> = serde_json::from_str(&row.get::<_, String>(4)?).unwrap_or_default();
-            let whitelist: Vec<String> = serde_json::from_str(&row.get::<_, String>(5)?).unwrap_or_default();
-            Ok(Preset {
-                id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::new_v4()),
+        let mut rows = stmt.query([])?;
+        let mut presets = Vec::new();
+        while let Some(row) = rows.next()? {
+            let id_raw: String = row.get(0)?;
+            let id = codec::parse_id(&id_raw)?;
+            let mode = codec::parse_mode(&row.get::<_, String>(2)?);
+            let blocklist = codec::parse_domain_list(&row.get::<_, String>(4)?);
+            let whitelist = codec::parse_domain_list(&row.get::<_, String>(5)?);
+            presets.push(Preset {
+                id,
                 name: row.get(1)?,
                 mode,
                 duration_minutes: row.get(3)?,
                 blocklist,
                 whitelist,
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+            });
+        }
+        Ok(presets)
     }
 
     pub fn create_preset(
@@ -207,10 +223,7 @@ impl FocusStore {
             blocklist: blocklist.clone(),
             whitelist: whitelist.clone(),
         };
-        let mode_str = match mode {
-            SessionMode::Blocklist => "blocklist",
-            SessionMode::Lockdown => "lockdown",
-        };
+        let mode_str = codec::encode_mode(mode);
         self.conn.execute(
             "INSERT INTO presets (id, name, mode, duration_minutes, blocklist_json, whitelist_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
@@ -218,8 +231,8 @@ impl FocusStore {
                 preset.name,
                 mode_str,
                 preset.duration_minutes,
-                serde_json::to_string(&blocklist)?,
-                serde_json::to_string(&whitelist)?,
+                codec::encode_domain_list(&blocklist),
+                codec::encode_domain_list(&whitelist),
             ],
         )?;
         Ok(preset)
@@ -239,15 +252,8 @@ impl FocusStore {
     }
 
     pub fn save_session(&self, session: &Session) -> Result<(), StoreError> {
-        let mode_str = match session.mode {
-            SessionMode::Blocklist => "blocklist",
-            SessionMode::Lockdown => "lockdown",
-        };
-        let status_str = match session.status {
-            SessionStatus::Active => "active",
-            SessionStatus::Completed => "completed",
-            SessionStatus::Stopped => "stopped",
-        };
+        let mode_str = codec::encode_mode(session.mode);
+        let status_str = codec::encode_status(session.status);
         self.conn.execute(
             "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
@@ -258,8 +264,8 @@ impl FocusStore {
                 session.ended_at.map(|t| t.to_rfc3339()),
                 session.planned_duration_sec,
                 status_str,
-                serde_json::to_string(&session.blocklist_snapshot)?,
-                serde_json::to_string(&session.whitelist_snapshot)?,
+                codec::encode_domain_list(&session.blocklist_snapshot),
+                codec::encode_domain_list(&session.whitelist_snapshot),
             ],
         )?;
         Ok(())
@@ -278,12 +284,15 @@ impl FocusStore {
     }
 
     pub fn list_history(&self, limit: u32) -> Result<Vec<Session>, StoreError> {
-        let mut stmt = self.conn.prepare(&format!(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT {}",
-            limit
-        ))?;
-        let rows = stmt.query_map([], row_to_session)?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        let mut stmt = self.conn.prepare(
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT ?1",
+        )?;
+        let mut rows = stmt.query(params![limit])?;
+        let mut sessions = Vec::new();
+        while let Some(row) = rows.next()? {
+            sessions.push(row_to_session(row)?);
+        }
+        Ok(sessions)
     }
 
     pub fn clear_history(&self) -> Result<(), StoreError> {
@@ -293,29 +302,20 @@ impl FocusStore {
 
 }
 
-fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, rusqlite::Error> {
-    let mode_str: String = row.get(2)?;
-    let mode = match mode_str.as_str() {
-        "lockdown" => SessionMode::Lockdown,
-        _ => SessionMode::Blocklist,
-    };
-    let status_str: String = row.get(6)?;
-    let status = match status_str.as_str() {
-        "completed" => SessionStatus::Completed,
-        "stopped" => SessionStatus::Stopped,
-        _ => SessionStatus::Active,
-    };
+fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
+    let mode = codec::parse_mode(&row.get::<_, String>(2)?);
+    let status = codec::parse_status(&row.get::<_, String>(6)?);
     let started_at: String = row.get(3)?;
     let ended_at: Option<String> = row.get(4)?;
-    let blocklist: Vec<String> =
-        serde_json::from_str(&row.get::<_, String>(7)?).unwrap_or_default();
-    let whitelist: Vec<String> =
-        serde_json::from_str(&row.get::<_, String>(8)?).unwrap_or_default();
+    let blocklist = codec::parse_domain_list(&row.get::<_, String>(7)?);
+    let whitelist = codec::parse_domain_list(&row.get::<_, String>(8)?);
+    let id = codec::parse_id(&row.get::<_, String>(0)?)?;
     Ok(Session {
-        id: Uuid::parse_str(&row.get::<_, String>(0)?).unwrap_or_else(|_| Uuid::new_v4()),
+        id,
         preset_id: row
             .get::<_, Option<String>>(1)?
-            .and_then(|s| Uuid::parse_str(&s).ok()),
+            .map(|s| codec::parse_id(&s))
+            .transpose()?,
         mode,
         started_at: DateTime::parse_from_rfc3339(&started_at)
             .map(|d| d.with_timezone(&Utc))
@@ -330,4 +330,104 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, rusqlite::Error> {
         blocklist_snapshot: blocklist,
         whitelist_snapshot: whitelist,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use focus_core::{SessionEndReason, SessionMode};
+
+    fn memory_store() -> FocusStore {
+        FocusStore::open(":memory:").expect("in-memory store opens")
+    }
+
+    #[test]
+    fn lockdown_preset_survives_round_trip() {
+        let store = memory_store();
+        let created = store
+            .create_preset("Locked", SessionMode::Lockdown, 45, vec![], vec!["mail.com".into()])
+            .expect("create");
+        let loaded = store.get_preset(created.id).expect("get").expect("exists");
+        assert_eq!(loaded.mode, SessionMode::Lockdown);
+        assert_eq!(loaded.whitelist, vec!["mail.com".to_string()]);
+    }
+
+    #[test]
+    fn corrupt_mode_row_uses_documented_fallback() {
+        let store = memory_store();
+        store
+            .conn
+            .execute(
+                "INSERT INTO presets (id, name, mode, duration_minutes) VALUES ('not-a-uuid', 'Bad', 'garbled', 10)",
+                [],
+            )
+            .expect("insert corrupt row");
+        // Corrupt id is loud, not silently regenerated.
+        assert!(store.list_presets().is_err());
+    }
+
+    #[test]
+    fn corrupt_status_row_falls_back_to_stopped_in_history() {
+        let store = memory_store();
+        store
+            .conn
+            .execute(
+                "INSERT INTO sessions (id, preset_id, mode, started_at, planned_duration_sec, status) VALUES ('00000000-0000-0000-0000-000000000009', NULL, 'blocklist', '2026-01-01T00:00:00Z', 60, 'garbled')",
+                [],
+            )
+            .expect("insert corrupt row");
+        let history = store.list_history(10).expect("history loads");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].status, focus_core::SessionStatus::Stopped);
+        // And it can never surface as the active session.
+        assert!(store.get_active_session().expect("ok").is_none());
+    }
+
+    #[test]
+    fn legacy_row_without_end_timestamp_loads_unchanged() {
+        let store = memory_store();
+        store
+            .conn
+            .execute(
+                "INSERT INTO sessions (id, preset_id, mode, started_at, planned_duration_sec, status) VALUES ('00000000-0000-0000-0000-000000000008', NULL, 'lockdown', '2026-01-01T00:00:00Z', 60, 'completed')",
+                [],
+            )
+            .expect("insert legacy row");
+        let history = store.list_history(10).expect("history loads");
+        assert_eq!(history[0].mode, SessionMode::Lockdown);
+        assert!(history[0].ended_at.is_none());
+    }
+
+    #[test]
+    fn settings_default_declared_once_and_reads_propagate() {
+        let store = memory_store();
+        // Fresh database: declared default applies without a row existing.
+        let enabled = store.get_setting_bool("os_allowlist_enabled").expect("read ok");
+        assert!(enabled);
+
+        // Explicit value overrides default and persists.
+        store
+            .set_setting("os_allowlist_enabled", "false")
+            .expect("write ok");
+        let enabled = store.get_setting_bool("os_allowlist_enabled").expect("read ok");
+        assert!(!enabled);
+
+        // Unknown key with no declared default reads as false.
+        let unknown = store.get_setting_bool("no_such_setting").expect("read ok");
+        assert!(!unknown);
+    }
+
+    #[test]
+    fn end_transition_persists_through_store() {
+        use focus_core::SessionStatus;
+        let store = memory_store();
+        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], None);
+        store.save_session(&session).expect("save active");
+        session.end(SessionEndReason::Stopped);
+        store.save_session(&session).expect("save stopped");
+        let history = store.list_history(10).expect("history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].status, SessionStatus::Stopped);
+        assert!(store.get_active_session().expect("ok").is_none());
+    }
 }

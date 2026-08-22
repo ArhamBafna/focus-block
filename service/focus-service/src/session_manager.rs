@@ -145,8 +145,13 @@ impl SessionManager {
                 Err(e) => IpcResponse::Err { message: e.to_string() },
             },
             IpcRequest::GetSettings => {
-                let os_allowlist_enabled = self.store.get_setting_bool("os_allowlist_enabled").unwrap_or(true);
-                IpcResponse::Ok { data: ResponseData::Settings(AppSettings { os_allowlist_enabled }) }
+                // Real database errors surface instead of silently reading as a default.
+                match self.store.get_setting_bool("os_allowlist_enabled") {
+                    Ok(os_allowlist_enabled) => IpcResponse::Ok {
+                        data: ResponseData::Settings(AppSettings { os_allowlist_enabled }),
+                    },
+                    Err(e) => IpcResponse::Err { message: e.to_string() },
+                }
             }
             IpcRequest::UpdateSettings { os_allowlist_enabled } => {
                 if let Err(e) = self.store.set_setting("os_allowlist_enabled", if os_allowlist_enabled { "true" } else { "false" }) {

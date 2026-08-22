@@ -1,3 +1,4 @@
+mod codec;
 mod error;
 mod migrations;
 mod store;
