@@ -2,17 +2,68 @@
  * Typed chrome.storage.local adapter.
  * Mirrors the shape used by the desktop app's localStorage mock so that
  * all page components and IPC logic work identically.
+ *
+ * This module OWNS the stored-entity shapes; ipc.ts re-exports them so
+ * components keep importing from one place.
  */
+
+export type SessionMode = "blocklist" | "lockdown";
+export type SessionStatus = "active" | "completed" | "stopped";
+
+export interface DomainListEntry {
+  id: number;
+  domain: string;
+}
 
 export interface ScheduleRecord {
   id: string;
   start_time: string;
   end_time: string;
-  mode: "blocklist" | "lockdown";
+  mode: SessionMode;
   /** JavaScript weekday numbers: Sunday = 0 through Saturday = 6. */
   days_of_week: number[];
   /** Local calendar date (`YYYY-MM-DD`) of the final occurrence, or never. */
   ends_on: string | null;
+}
+
+export interface SessionRecord {
+  id: string;
+  preset_id: string | null;
+  mode: SessionMode;
+  started_at: string;
+  ended_at: string | null;
+  planned_duration_sec: number;
+  status: SessionStatus;
+  blocklist_snapshot: string[];
+  whitelist_snapshot: string[];
+  scheduled_schedule_id?: string | null;
+}
+
+export interface PresetRecord {
+  id: string;
+  name: string;
+  mode: SessionMode;
+  duration_minutes: number;
+  blocklist: string[];
+  whitelist: string[];
+}
+
+export interface TemporaryAllowRecord {
+  id: string;
+  domain: string;
+  expires_at: number;
+}
+
+export interface ChallengeRecord {
+  type: string;
+  status: "pending" | "passed";
+}
+
+export interface SettingsRecord {
+  os_allowlist_enabled: boolean;
+  stop_challenge: string;
+  challenge_countdown_duration: number;
+  challenge_countdown_breathing: boolean;
 }
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
@@ -37,53 +88,16 @@ function normalizeSchedule(record: unknown): ScheduleRecord {
 }
 
 export interface StorageData {
-  blocklist: { id: number; domain: string }[];
-  whitelist: { id: number; domain: string }[];
-  temporary_allowlist: { id: string; domain: string; expires_at: number }[];
-  presets: {
-    id: string;
-    name: string;
-    mode: "blocklist" | "lockdown";
-    duration_minutes: number;
-    blocklist: string[];
-    whitelist: string[];
-  }[];
+  blocklist: DomainListEntry[];
+  whitelist: DomainListEntry[];
+  temporary_allowlist: TemporaryAllowRecord[];
+  presets: PresetRecord[];
   schedules: ScheduleRecord[];
-  active_session: {
-    id: string;
-    preset_id: string | null;
-    mode: "blocklist" | "lockdown";
-    started_at: string;
-    ended_at: string | null;
-    planned_duration_sec: number;
-    status: "active" | "completed" | "stopped";
-    blocklist_snapshot: string[];
-    whitelist_snapshot: string[];
-    scheduled_schedule_id?: string | null;
-  } | null;
-  history: {
-    id: string;
-    preset_id: string | null;
-    mode: "blocklist" | "lockdown";
-    started_at: string;
-    ended_at: string | null;
-    planned_duration_sec: number;
-    status: "active" | "completed" | "stopped";
-    blocklist_snapshot: string[];
-    whitelist_snapshot: string[];
-    scheduled_schedule_id?: string | null;
-  }[];
+  active_session: SessionRecord | null;
+  history: SessionRecord[];
   schedule_suppressed_until: number | null;
-  active_challenge: {
-    type: string;
-    status: "pending" | "passed";
-  } | null;
-  settings: {
-    os_allowlist_enabled: boolean;
-    stop_challenge: string;
-    challenge_countdown_duration: number;
-    challenge_countdown_breathing: boolean;
-  };
+  active_challenge: ChallengeRecord | null;
+  settings: SettingsRecord;
 }
 
 const DEFAULTS: StorageData = {

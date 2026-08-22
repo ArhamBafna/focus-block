@@ -9,35 +9,28 @@
  * events (the service worker listens to chrome.storage.onChanged).
  */
 
-import { storageGet, storageSet, ScheduleRecord } from "./storage";
+import {
+  storageGet,
+  storageSet,
+  ScheduleRecord,
+  SessionRecord,
+  PresetRecord,
+  TemporaryAllowRecord,
+  SettingsRecord,
+} from "./storage";
 
-// ── Types (mirrored from desktop ipc.ts) ────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
+//
+// Stored-entity shapes are owned by ./storage and re-exported here under the
+// names components already import. No second hand-written declaration.
 
 export type SessionMode = "blocklist" | "lockdown";
 export type SessionStatus = "active" | "completed" | "stopped";
 
-export interface Session {
-  id: string;
-  preset_id: string | null;
-  mode: SessionMode;
-  started_at: string;
-  ended_at: string | null;
-  planned_duration_sec: number;
-  status: SessionStatus;
-  blocklist_snapshot: string[];
-  whitelist_snapshot: string[];
-  scheduled_schedule_id?: string | null;
-}
-
-export interface Preset {
-  id: string;
-  name: string;
-  mode: SessionMode;
-  duration_minutes: number;
-  blocklist: string[];
-  whitelist: string[];
-}
-
+export type Session = SessionRecord;
+export type Preset = PresetRecord;
+export type TemporaryAllowEntry = TemporaryAllowRecord;
+export type AppSettings = SettingsRecord;
 export interface Schedule extends ScheduleRecord {}
 
 export interface ActiveSessionView {
@@ -56,12 +49,6 @@ export interface DomainEntry {
   domain: string;
 }
 
-export interface TemporaryAllowEntry {
-  id: string;
-  domain: string;
-  expires_at: number;
-}
-
 export interface ServiceHealth {
   running: boolean;
   version: string;
@@ -71,13 +58,6 @@ export interface ServiceStatus {
   health: ServiceHealth;
   active_session: ActiveSessionView | null;
   active_challenge: ActiveChallengeView | null;
-}
-
-export interface AppSettings {
-  os_allowlist_enabled: boolean;
-  stop_challenge: string;
-  challenge_countdown_duration: number;
-  challenge_countdown_breathing: boolean;
 }
 
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
