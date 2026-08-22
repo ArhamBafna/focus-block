@@ -27,7 +27,7 @@ pub enum SessionEndReason {
     Stopped,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Session {
     pub id: Uuid,
     pub preset_id: Option<Uuid>,
@@ -40,7 +40,7 @@ pub struct Session {
     pub whitelist_snapshot: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Preset {
     pub id: Uuid,
     pub name: String,
@@ -50,7 +50,7 @@ pub struct Preset {
     pub whitelist: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActiveSessionView {
     pub session: Session,
     pub elapsed_sec: u64,
