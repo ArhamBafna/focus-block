@@ -184,29 +184,58 @@ interface BackgroundResponse {
   error?: string;
 }
 
-function sendToBackground<T>(message: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
+export type BridgeFailureKind = "app" | "unavailable";
+
+export interface BridgeFailure {
+  kind: BridgeFailureKind;
+  message: string;
+}
+
+export type BridgeEnvelope<T> = { ok: true; data: T } | ({ ok: false } & BridgeFailure);
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function sendToBackground<T>(message: Record<string, unknown>): Promise<BridgeEnvelope<T>> {
+  return new Promise((resolve) => {
     try {
       chrome.runtime.sendMessage(message, (response: BackgroundResponse | undefined) => {
         const lastError = chrome.runtime.lastError;
         if (lastError) {
-          reject(new Error(lastError.message));
+          resolve({
+            ok: false,
+            kind: "unavailable",
+            message: lastError.message ?? "Background service unreachable",
+          });
           return;
         }
         if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
-          reject(new Error("Background service did not respond"));
+          resolve({ ok: false, kind: "unavailable", message: "Background service did not respond" });
           return;
         }
         if (!response.ok) {
-          reject(new Error(response.error ?? "Unknown background error"));
+          const failure: BridgeFailure = {
+            kind: "app",
+            message: response.error ?? "Unknown background error",
+          };
+          resolve({ ok: false, ...failure });
           return;
         }
-        resolve(response.result as T);
+        resolve({ ok: true, data: response.result as T });
       });
     } catch (error) {
-      reject(error instanceof Error ? error : new Error(String(error)));
+      resolve({ ok: false, kind: "unavailable", message: errorMessage(error) });
     }
   });
+}
+
+/** Turn an envelope into a plain promise; the error carries its kind. */
+function unwrap<T>(envelope: BridgeEnvelope<T>): Promise<T> {
+  if (envelope.ok) return Promise.resolve(envelope.data);
+  const error = new Error(envelope.message) as Error & { kind?: BridgeFailureKind };
+  error.kind = envelope.kind;
+  return Promise.reject(error);
 }
 
 // ── IPC implementation ───────────────────────────────────────────────────────
@@ -224,7 +253,7 @@ export const ipc = {
   getStatus: async (): Promise<ServiceStatus> => {
     // Let the service worker finalize any due session under its mutation lock
     // before reading; if it cannot be reached, degrade to a read-only view.
-    await sendToBackground<null>({ type: "session:expire" }).catch(() => null);
+    await sendToBackground<null>({ type: "session:expire" });
 
     const activeSession = await storageGet("active_session");
     const activeChallenge = await storageGet("active_challenge");
@@ -411,16 +440,32 @@ export const ipc = {
     duration_minutes: number,
     preset_id?: string
   ): Promise<null> => {
-    return sendToBackground<null>({
+    const envelope = await sendToBackground<null>({
       type: "session:start",
       mode,
       duration_minutes,
       preset_id,
     });
+    return unwrap(envelope);
   },
 
   stopSession: async (): Promise<null> => {
-    return sendToBackground<null>({ type: "session:stop" });
+    const envelope = await sendToBackground<null>({ type: "session:stop" });
+    return unwrap(envelope);
+  },
+
+  /**
+   * Envelope-returning status probe, mirroring the desktop ipc so both
+   * layers keep identical signatures. In the extension the background
+   * service always exists; a failure surfaces as an arm instead of a throw.
+   */
+  getStatusSafe: async (): Promise<BridgeEnvelope<ServiceStatus>> => {
+    try {
+      return { ok: true, data: await ipc.getStatus() };
+    } catch (e) {
+      const error = e as Error & { kind?: BridgeFailureKind };
+      return { ok: false, kind: error.kind ?? "unavailable", message: errorMessage(e) };
+    }
   },
 
   // History ──────────────────────────────────────────────────────────────────
