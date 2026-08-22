@@ -17,6 +17,16 @@ pub enum SessionStatus {
     Stopped,
 }
 
+/// Why a session left the Active state. The only two legal exits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SessionEndReason {
+    /// Reached its planned duration.
+    Completed,
+    /// Ended early by user request or service shutdown.
+    Stopped,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: Uuid,
@@ -82,5 +92,92 @@ impl Session {
         }
         let elapsed = (Utc::now() - self.started_at).num_seconds().max(0) as u64;
         elapsed >= self.planned_duration_sec
+    }
+
+    /// The single lifecycle transition out of `Active`.
+    ///
+    /// Records the end timestamp and terminal status in one step. Returns
+    /// `false` (and changes nothing) when the session already ended, making
+    /// double-end impossible. The serialized shape is unchanged.
+    pub fn end(&mut self, reason: SessionEndReason) -> bool {
+        if self.status != SessionStatus::Active {
+            return false;
+        }
+        self.status = match reason {
+            SessionEndReason::Completed => SessionStatus::Completed,
+            SessionEndReason::Stopped => SessionStatus::Stopped,
+        };
+        self.ended_at = Some(Utc::now());
+        true
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_session() -> Session {
+        Session::new(
+            SessionMode::Blocklist,
+            60,
+            vec!["example.com".to_string()],
+            vec![],
+            None,
+        )
+    }
+
+    #[test]
+    fn end_records_timestamp_and_reason() {
+        let mut session = sample_session();
+        assert!(session.end(SessionEndReason::Completed));
+        assert_eq!(session.status, SessionStatus::Completed);
+        assert!(session.ended_at.is_some());
+    }
+
+    #[test]
+    fn stop_reason_maps_to_stopped_status() {
+        let mut session = sample_session();
+        assert!(session.end(SessionEndReason::Stopped));
+        assert_eq!(session.status, SessionStatus::Stopped);
+        assert!(session.ended_at.is_some());
+    }
+
+    #[test]
+    fn double_end_is_impossible() {
+        let mut session = sample_session();
+        assert!(session.end(SessionEndReason::Completed));
+        let first_ended_at = session.ended_at;
+        assert!(!session.end(SessionEndReason::Stopped));
+        assert_eq!(session.status, SessionStatus::Completed);
+        assert_eq!(session.ended_at, first_ended_at);
+    }
+
+    #[test]
+    fn legacy_row_without_end_timestamp_loads_and_ends_once() {
+        let json = r#"{
+            "id": "00000000-0000-0000-0000-000000000001",
+            "preset_id": null,
+            "mode": "blocklist",
+            "started_at": "2026-01-01T00:00:00Z",
+            "planned_duration_sec": 60,
+            "status": "active",
+            "blocklist_snapshot": [],
+            "whitelist_snapshot": []
+        }"#;
+        let mut session: Session = serde_json::from_str(json).expect("legacy row must load");
+        assert_eq!(session.status, SessionStatus::Active);
+        assert!(session.ended_at.is_none());
+        assert!(session.end(SessionEndReason::Stopped));
+        assert!(!session.end(SessionEndReason::Stopped));
+    }
+
+    #[test]
+    fn ended_session_serializes_to_stable_wire_shape() {
+        let mut session = sample_session();
+        session.end(SessionEndReason::Stopped);
+        let value: serde_json::Value = serde_json::to_value(&session).unwrap();
+        assert_eq!(value["status"], "stopped");
+        assert!(value["ended_at"].is_string());
+        assert!(value["started_at"].is_string());
     }
 }

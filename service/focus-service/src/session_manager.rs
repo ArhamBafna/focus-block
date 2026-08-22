@@ -1,7 +1,7 @@
 use chrono::Utc;
 use focus_core::{
     ActiveSessionView, AppSettings, IpcRequest, IpcResponse, ResponseData,
-    ServiceHealth, ServiceStatus, Session, SessionStatus,
+    ServiceHealth, ServiceStatus, Session, SessionEndReason,
 };
 use focus_store::FocusStore;
 use std::path::PathBuf;
@@ -35,8 +35,7 @@ impl SessionManager {
             } else {
                 mgr.stop_enforcement();
                 let mut s = session.clone();
-                s.status = SessionStatus::Completed;
-                s.ended_at = Some(Utc::now());
+                s.end(SessionEndReason::Completed);
                 let _ = mgr.store.save_session(&s);
             }
         }
@@ -127,9 +126,8 @@ impl SessionManager {
             }
             IpcRequest::StopSession => {
                 if let Some(mut session) = self.active_session.take() {
-                    session.status = SessionStatus::Stopped;
-                    session.ended_at = Some(Utc::now());
-                    
+                    session.end(SessionEndReason::Stopped);
+
                     self.stop_enforcement();
 
                     if let Err(e) = self.store.save_session(&session) {
@@ -165,8 +163,7 @@ impl SessionManager {
             if session.is_expired() {
                 info!("Session expired, stopping");
                 let mut s = self.active_session.take().unwrap();
-                s.status = SessionStatus::Completed;
-                s.ended_at = Some(Utc::now());
+                s.end(SessionEndReason::Completed);
                 self.stop_enforcement();
                 if let Err(e) = self.store.save_session(&s) {
                     error!("Failed to save completed session: {}", e);
@@ -178,8 +175,7 @@ impl SessionManager {
 
     pub async fn shutdown(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         if let Some(mut session) = self.active_session.take() {
-            session.status = SessionStatus::Stopped;
-            session.ended_at = Some(Utc::now());
+            session.end(SessionEndReason::Stopped);
             self.stop_enforcement();
             let _ = self.store.save_session(&session);
         }
