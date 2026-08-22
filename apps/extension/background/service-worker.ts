@@ -35,14 +35,30 @@ interface Schedule {
   ends_on?: string | null;
 }
 
+interface Preset {
+  id: string;
+  name: string;
+  mode: "blocklist" | "lockdown";
+  duration_minutes: number;
+  blocklist: string[];
+  whitelist: string[];
+}
+
+interface ActiveChallenge {
+  type: string;
+  status: "pending" | "passed";
+}
+
 interface StorageData {
   blocklist: { id: number; domain: string }[];
   whitelist: { id: number; domain: string }[];
   temporary_allowlist: { id: string; domain: string; expires_at: number }[];
+  presets: Preset[];
   schedules: Schedule[];
   active_session: Session | null;
   history: Session[];
   schedule_suppressed_until: number | null;
+  active_challenge: ActiveChallenge | null;
   settings: { os_allowlist_enabled: boolean };
 }
 
@@ -69,6 +85,44 @@ function storageGet<K extends keyof StorageData>(key: K): Promise<StorageData[K]
 function storageSet<K extends keyof StorageData>(key: K, value: StorageData[K]): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [key]: value }, resolve);
+  });
+}
+
+/** Write only when the value actually differs, so reconcile passes never self-trigger. */
+async function setIfChanged<K extends keyof StorageData>(key: K, value: StorageData[K]): Promise<boolean> {
+  const current = await storageGet(key);
+  if (JSON.stringify(current) === JSON.stringify(value)) return false;
+  await storageSet(key, value);
+  return true;
+}
+
+// ── Mutation lock ────────────────────────────────────────────────────────────
+//
+// All state-mutating work (reconcile passes, session start/stop/expire from the
+// popup) runs inside one serialized queue. Overlapping triggers coalesce into a
+// single follow-up pass instead of running concurrently, which is what used to
+// lose history entries and temporary allows.
+
+let mutationTail: Promise<unknown> = Promise.resolve();
+
+function withLock<T>(task: () => Promise<T>): Promise<T> {
+  const run = mutationTail.then(task, task);
+  mutationTail = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+let reconcileRequested = false;
+
+function requestReconcile(): Promise<void> {
+  reconcileRequested = true;
+  return withLock(async () => {
+    while (reconcileRequested) {
+      reconcileRequested = false;
+      await applyBlockingState();
+    }
   });
 }
 
@@ -221,8 +275,15 @@ function buildLockdownRules(
 
 /**
  * Remove all existing dynamic rules and optionally install new ones.
+ * Skips the DNR round-trip when the rule set is byte-identical to the last
+ * applied one, so reconcile passes never churn the rules engine.
  */
+let lastRulesJson: string | null = null;
+
 async function updateBlockingRules(newRules: chrome.declarativeNetRequest.Rule[]): Promise<void> {
+  const json = JSON.stringify(newRules);
+  if (json === lastRulesJson) return;
+
   const existing = await chrome.declarativeNetRequest.getDynamicRules();
   const existingIds = existing.map((r) => r.id);
 
@@ -230,6 +291,7 @@ async function updateBlockingRules(newRules: chrome.declarativeNetRequest.Rule[]
     removeRuleIds: existingIds,
     addRules: newRules,
   });
+  lastRulesJson = json;
 
   console.log(
     `[FocusBlocker] Rules updated: removed ${existingIds.length}, added ${newRules.length}`
@@ -254,7 +316,7 @@ async function getActiveTemporaryAllows(): Promise<{ id: string; domain: string;
   );
 
   if (active.length !== (entries?.length ?? 0)) {
-    await storageSet("temporary_allowlist", active);
+    await setIfChanged("temporary_allowlist", active);
   }
   return active;
 }
@@ -380,6 +442,13 @@ async function expireSession(): Promise<void> {
   const session = await storageGet("active_session");
   if (!session || session.status !== "active") return;
 
+  // A manual session started after this expiry was scheduled must survive.
+  // Stale alarms racing a fresh start are no-ops; real expiry still fires.
+  if (!session.scheduled_schedule_id) {
+    const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
+    if (elapsed < session.planned_duration_sec) return;
+  }
+
   session.status = "completed";
   session.ended_at = new Date().toISOString();
 
@@ -410,7 +479,7 @@ async function applyBlockingState(): Promise<void> {
   const suppressedUntil = await storageGet("schedule_suppressed_until");
   const scheduleSuppressed = typeof suppressedUntil === "number" && suppressedUntil > Date.now();
   if (typeof suppressedUntil === "number" && !scheduleSuppressed) {
-    await storageSet("schedule_suppressed_until", null);
+    await setIfChanged("schedule_suppressed_until", null);
   }
 
   const currentSchedule = scheduleSuppressed ? null : getCurrentSchedule(schedules);
@@ -425,10 +494,8 @@ async function applyBlockingState(): Promise<void> {
         await expireSession();
         return;
       }
-      if (end) {
-        session.planned_duration_sec = Math.max(1, Math.ceil((end.getTime() - Date.now()) / 1000));
-        await storageSet("active_session", session);
-      }
+      // planned_duration_sec stays frozen at the activation value; the expiry
+      // alarm below is recomputed from live time without rewriting storage.
     }
   } else if (session?.scheduled_schedule_id) {
     await expireSession();
@@ -438,7 +505,7 @@ async function applyBlockingState(): Promise<void> {
   if (!session || session.status !== "active") {
     // No active session — clear all rules
     await clearAllRules();
-    chrome.alarms.clear(ALARM_SESSION_EXPIRY);
+    await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
     return;
   }
 
@@ -469,10 +536,15 @@ async function applyBlockingState(): Promise<void> {
 
   await updateBlockingRules(rules);
 
-  // Schedule alarm for session expiry
-  const remainingSec = session.scheduled_schedule_id
-    ? session.planned_duration_sec
-    : session.planned_duration_sec - elapsed;
+  // Schedule alarm for session expiry. Scheduled sessions track the live
+  // schedule boundary; manual sessions count down from started_at.
+  let remainingSec: number;
+  if (session.scheduled_schedule_id && currentSchedule?.id === session.scheduled_schedule_id) {
+    const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
+    remainingSec = end ? Math.max(1, Math.ceil((end.getTime() - Date.now()) / 1000)) : 1;
+  } else {
+    remainingSec = Math.max(1, session.planned_duration_sec - elapsed);
+  }
   const remainingMs = remainingSec * 1000;
   chrome.alarms.create(ALARM_SESSION_EXPIRY, {
     when: Date.now() + remainingMs,
@@ -483,22 +555,136 @@ async function applyBlockingState(): Promise<void> {
   );
 }
 
+// ── Popup-driven session mutations ───────────────────────────────────────────
+//
+// The popup no longer mutates active_session/history directly. Every mutation
+// runs inside the mutation lock here, so rapid clicks and expiry alarms
+// serialize instead of racing read-modify-write updates.
+
+async function startSessionLocked(
+  mode: Session["mode"],
+  duration_minutes: number,
+  preset_id?: string
+): Promise<null> {
+  return withLock(async () => {
+    const active = await storageGet("active_session");
+    if (active && active.status === "active") {
+      throw new Error("A session is already active");
+    }
+
+    const blocklist = ((await storageGet("blocklist")) ?? []).map((d) => d.domain);
+    const whitelist = ((await storageGet("whitelist")) ?? []).map((d) => d.domain);
+
+    const newSession: Session = {
+      id: Math.random().toString(36).substring(2, 11),
+      preset_id: preset_id ?? null,
+      mode,
+      started_at: new Date().toISOString(),
+      ended_at: null,
+      planned_duration_sec: duration_minutes * 60,
+      status: "active",
+      blocklist_snapshot: blocklist,
+      whitelist_snapshot: whitelist,
+    };
+
+    await storageSet("active_session", newSession);
+    await applyBlockingState();
+    return null;
+  });
+}
+
+async function stopSessionLocked(): Promise<null> {
+  return withLock(async () => {
+    const active = await storageGet("active_session");
+    if (active) {
+      if (active.scheduled_schedule_id) {
+        const schedules = (await storageGet("schedules")) ?? [];
+        const schedule = schedules.find((item) => item.id === active.scheduled_schedule_id);
+        const endMinutes = schedule ? timeToMinutes(schedule.end_time) : null;
+        const scheduledEnd = endMinutes === null ? null : new Date();
+        if (scheduledEnd && endMinutes !== null) {
+          scheduledEnd.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+        }
+        await setIfChanged(
+          "schedule_suppressed_until",
+          scheduledEnd && scheduledEnd.getTime() > Date.now()
+            ? scheduledEnd.getTime()
+            : Date.now() + active.planned_duration_sec * 1000
+        );
+      }
+      active.status = "stopped";
+      active.ended_at = new Date().toISOString();
+      const rawHistory = await storageGet("history");
+      const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
+      history.unshift(active);
+      await storageSet("history", history);
+      await storageSet("active_session", null);
+      await setIfChanged("active_challenge", null);
+      await applyBlockingState();
+    }
+    return null;
+  });
+}
+
+interface BackgroundResponse {
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+async function handleBackgroundMessage(message: unknown): Promise<unknown> {
+  const request = message as { type?: string; mode?: string; duration_minutes?: number; preset_id?: string };
+  switch (request?.type) {
+    case "session:start":
+      return startSessionLocked(
+        request.mode === "lockdown" ? "lockdown" : "blocklist",
+        typeof request.duration_minutes === "number" ? request.duration_minutes : 0,
+        request.preset_id
+      );
+    case "session:stop":
+      return stopSessionLocked();
+    case "session:expire":
+      return withLock(async () => {
+        await expireSession();
+        return null;
+      });
+    default:
+      throw new Error(`Unknown background message type`);
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  handleBackgroundMessage(message)
+    .then((result) => {
+      const response: BackgroundResponse = { ok: true, result };
+      sendResponse(response);
+    })
+    .catch((error: unknown) => {
+      const response: BackgroundResponse = {
+        ok: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+      sendResponse(response);
+    });
+  return true; // async sendResponse
+});
+
 // ── Event listeners ──────────────────────────────────────────────────────────
 
 // On install / update
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(() => {
   console.log("[FocusBlocker] Extension installed/updated. Applying state.");
-  await applyBlockingState();
+  void requestReconcile();
 });
 
 // On browser startup (service worker restarts)
-chrome.runtime.onStartup.addListener(async () => {
+chrome.runtime.onStartup.addListener(() => {
   console.log("[FocusBlocker] Browser started. Applying state.");
-  await applyBlockingState();
+  void requestReconcile();
 });
 
 // React to storage changes (popup writes to storage → service worker reacts)
-chrome.storage.onChanged.addListener(async (changes, area) => {
+chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
 
   const relevantKeys = ["active_session", "blocklist", "whitelist", "temporary_allowlist", "schedules"];
@@ -506,22 +692,21 @@ chrome.storage.onChanged.addListener(async (changes, area) => {
   if (!hasRelevantChange) return;
 
   console.log("[FocusBlocker] Storage changed:", Object.keys(changes));
-  await applyBlockingState();
+  void requestReconcile();
 });
 
 // Alarm fires when session should expire
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_SESSION_EXPIRY) {
     console.log("[FocusBlocker] Session expiry alarm fired.");
-    await expireSession();
-    await applyBlockingState();
+    void requestReconcile();
   }
   if (alarm.name === ALARM_SCHEDULE_BOUNDARY) {
     console.log("[FocusBlocker] Schedule boundary alarm fired.");
-    await applyBlockingState();
+    void requestReconcile();
   }
   if (alarm.name === ALARM_TEMP_ALLOW_EXPIRY) {
     console.log("[FocusBlocker] Temporary allow expired.");
-    await applyBlockingState();
+    void requestReconcile();
   }
 });

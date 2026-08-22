@@ -192,6 +192,43 @@ export function normalizeDomain(input: string): string | null {
   return str;
 }
 
+// ── Background channel ───────────────────────────────────────────────────────
+//
+// Session lifecycle mutations run in the service worker under its mutation
+// lock. Sending them as messages means rapid clicks and expiry alarms
+// serialize instead of racing read-modify-write updates on chrome.storage.
+
+interface BackgroundResponse {
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+function sendToBackground<T>(message: Record<string, unknown>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    try {
+      chrome.runtime.sendMessage(message, (response: BackgroundResponse | undefined) => {
+        const lastError = chrome.runtime.lastError;
+        if (lastError) {
+          reject(new Error(lastError.message));
+          return;
+        }
+        if (!response || typeof response !== "object" || typeof response.ok !== "boolean") {
+          reject(new Error("Background service did not respond"));
+          return;
+        }
+        if (!response.ok) {
+          reject(new Error(response.error ?? "Unknown background error"));
+          return;
+        }
+        resolve(response.result as T);
+      });
+    } catch (error) {
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+}
+
 // ── IPC implementation ───────────────────────────────────────────────────────
 
 export const ipc = {
@@ -205,29 +242,12 @@ export const ipc = {
   }),
 
   getStatus: async (): Promise<ServiceStatus> => {
-    let activeSession = await storageGet("active_session");
+    // Let the service worker finalize any due session under its mutation lock
+    // before reading; if it cannot be reached, degrade to a read-only view.
+    await sendToBackground<null>({ type: "session:expire" }).catch(() => null);
+
+    const activeSession = await storageGet("active_session");
     const activeChallenge = await storageGet("active_challenge");
-
-    if (activeSession && activeSession.status === "active") {
-      const elapsed = Math.floor(
-        (Date.now() - new Date(activeSession.started_at).getTime()) / 1000
-      );
-      const remaining = Math.max(
-        0,
-        activeSession.planned_duration_sec - elapsed
-      );
-
-      if (remaining <= 0) {
-        // Session expired — mark completed and move to history
-        activeSession.status = "completed";
-        activeSession.ended_at = new Date().toISOString();
-        const history = await storageGet("history");
-        history.unshift(activeSession);
-        await storageSet("history", history);
-        await storageSet("active_session", null);
-        activeSession = null;
-      }
-    }
 
     return {
       health: { running: true, version: "0.1.0-ext" },
@@ -411,57 +431,16 @@ export const ipc = {
     duration_minutes: number,
     preset_id?: string
   ): Promise<null> => {
-    const active = await storageGet("active_session");
-    if (active && active.status === "active") {
-      throw new Error("A session is already active");
-    }
-
-    const blocklist = (await storageGet("blocklist")).map((d) => d.domain);
-    const whitelist = (await storageGet("whitelist")).map((d) => d.domain);
-
-    const newSession: Session = {
-      id: Math.random().toString(36).substring(2, 11),
-      preset_id: preset_id ?? null,
+    return sendToBackground<null>({
+      type: "session:start",
       mode,
-      started_at: new Date().toISOString(),
-      ended_at: null,
-      planned_duration_sec: duration_minutes * 60,
-      status: "active",
-      blocklist_snapshot: blocklist,
-      whitelist_snapshot: whitelist,
-    };
-
-    await storageSet("active_session", newSession);
-    return null;
+      duration_minutes,
+      preset_id,
+    });
   },
 
   stopSession: async (): Promise<null> => {
-    const active = await storageGet("active_session");
-    if (active) {
-      if (active.scheduled_schedule_id) {
-        const schedules = await storageGet("schedules");
-        const schedule = schedules.find((item) => item.id === active.scheduled_schedule_id);
-        const endMinutes = schedule ? parseTime(schedule.end_time) : null;
-        const scheduledEnd = endMinutes === null ? null : new Date();
-        if (scheduledEnd && endMinutes !== null) {
-          scheduledEnd.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-        }
-        await storageSet(
-          "schedule_suppressed_until",
-          scheduledEnd && scheduledEnd.getTime() > Date.now()
-            ? scheduledEnd.getTime()
-            : Date.now() + active.planned_duration_sec * 1000
-        );
-      }
-      active.status = "stopped";
-      active.ended_at = new Date().toISOString();
-      const history = await storageGet("history");
-      history.unshift(active);
-      await storageSet("history", history);
-      await storageSet("active_session", null);
-      await storageSet("active_challenge", null);
-    }
-    return null;
+    return sendToBackground<null>({ type: "session:stop" });
   },
 
   // History ──────────────────────────────────────────────────────────────────
