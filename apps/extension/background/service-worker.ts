@@ -11,19 +11,32 @@
  * NO UI dependencies. Pure background logic.
  */
 
-// ── Types (mirrored from popup/lib/ipc.ts) ──────────────────────────────────
+// ── Types (owned by popup/lib/storage; mirrored here for the worker bundle) ─
 
-interface Session {
+interface SessionBase {
   id: string;
   preset_id: string | null;
   mode: "blocklist" | "lockdown";
   started_at: string;
-  ended_at: string | null;
   planned_duration_sec: number;
-  status: "active" | "completed" | "stopped";
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
   scheduled_schedule_id?: string | null;
+}
+
+/** A live session occupying the active slot. */
+interface ActiveSessionRecord extends SessionBase {
+  status: "active";
+  ended_at: null;
+}
+
+/** Why an archived session finished. Expire completes; stop/supersede stop. */
+type ArchivedOutcome = "completed" | "stopped";
+
+/** A finished session, as stored in history. */
+interface ArchivedSessionRecord extends SessionBase {
+  status: ArchivedOutcome;
+  ended_at: string;
 }
 
 interface Schedule {
@@ -55,8 +68,8 @@ interface StorageData {
   temporary_allowlist: { id: string; domain: string; expires_at: number }[];
   presets: Preset[];
   schedules: Schedule[];
-  active_session: Session | null;
-  history: Session[];
+  active_session: ActiveSessionRecord | null;
+  history: ArchivedSessionRecord[];
   schedule_suppressed_until: number | null;
   active_challenge: ActiveChallenge | null;
   settings: { os_allowlist_enabled: boolean };
@@ -85,6 +98,13 @@ function storageGet<K extends keyof StorageData>(key: K): Promise<StorageData[K]
 function storageSet<K extends keyof StorageData>(key: K, value: StorageData[K]): Promise<void> {
   return new Promise((resolve) => {
     chrome.storage.local.set({ [key]: value }, resolve);
+  });
+}
+
+/** Untyped read for keys whose stored value may predate the current shape. */
+function storageGetRaw(key: string): Promise<unknown> {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(key, (result) => resolve(result[key]));
   });
 }
 
@@ -400,26 +420,105 @@ async function scheduleNextBoundaryAlarm(schedules: Schedule[]): Promise<void> {
   }
 }
 
-async function archiveActiveSession(session: Session): Promise<void> {
-  session.status = "stopped";
-  session.ended_at = new Date().toISOString();
+// ── Session finalize (the one shared transition) ─────────────────────────────
+//
+// Expiry, manual stop, and schedule supersede all end a session through
+// finalizeActiveSession. There is exactly one way to move a record from the
+// active slot into history.
+
+async function pushHistory(archived: ArchivedSessionRecord): Promise<void> {
   const rawHistory = await storageGet("history");
-  const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
-  history.unshift(session);
+  const history: ArchivedSessionRecord[] = Array.isArray(rawHistory) ? rawHistory : [];
+  history.unshift(archived);
   await storageSet("history", history);
 }
 
-async function activateScheduledSession(schedule: Schedule, now: Date): Promise<Session> {
+async function finalizeActiveSession(outcome: ArchivedOutcome): Promise<ArchivedSessionRecord | null> {
+  const session = await storageGet("active_session");
+  if (!session) return null;
+
+  const archived: ArchivedSessionRecord = {
+    ...session,
+    status: outcome,
+    ended_at: new Date().toISOString(),
+  };
+  await pushHistory(archived);
+  await storageSet("active_session", null);
+  return archived;
+}
+
+/**
+ * A terminal-status record sitting in the active slot is a stray from a
+ * partial write. On the next apply it is archived into history with its own
+ * recorded end time (or now) and blocking rules are cleared.
+ */
+function isActiveSessionShape(value: unknown): value is ActiveSessionRecord {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.id === "string" &&
+    (v.mode === "blocklist" || v.mode === "lockdown") &&
+    typeof v.started_at === "string" &&
+    typeof v.planned_duration_sec === "number" &&
+    Array.isArray(v.blocklist_snapshot) &&
+    Array.isArray(v.whitelist_snapshot)
+  );
+}
+
+async function migrateStrayActiveSession(): Promise<ActiveSessionRecord | null> {
+  const value = await storageGetRaw("active_session");
+  if (value === undefined || value === null) return null;
+
+  if (isActiveSessionShape(value)) {
+    // Normalize: live records never carry an end time.
+    return { ...value, status: "active", ended_at: null };
+  }
+
+  const stray = value as Partial<ArchivedSessionRecord>;
+  if (stray.status !== "completed" && stray.status !== "stopped") {
+    console.warn("[FocusBlocker] Unrecognizable record in active slot; discarding.");
+    await storageSet("active_session", null);
+    return null;
+  }
+
+  console.warn("[FocusBlocker] Stray terminal record in active slot; archiving.");
+  const archived: ArchivedSessionRecord = {
+    id: typeof stray.id === "string" ? stray.id : `stray-${Date.now()}`,
+    preset_id: typeof stray.preset_id === "string" ? stray.preset_id : null,
+    mode: stray.mode === "lockdown" ? "lockdown" : "blocklist",
+    started_at: typeof stray.started_at === "string" ? stray.started_at : new Date().toISOString(),
+    planned_duration_sec:
+      typeof stray.planned_duration_sec === "number" ? stray.planned_duration_sec : 0,
+    blocklist_snapshot: Array.isArray(stray.blocklist_snapshot)
+      ? stray.blocklist_snapshot
+      : [],
+    whitelist_snapshot: Array.isArray(stray.whitelist_snapshot)
+      ? stray.whitelist_snapshot
+      : [],
+    scheduled_schedule_id:
+      typeof stray.scheduled_schedule_id === "string" ? stray.scheduled_schedule_id : null,
+    status: stray.status,
+    ended_at: typeof stray.ended_at === "string" ? stray.ended_at : new Date().toISOString(),
+  };
+  await pushHistory(archived);
+  await storageSet("active_session", null);
+  await clearAllRules();
+  await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
+  return null;
+}
+
+async function activateScheduledSession(schedule: Schedule, now: Date): Promise<ActiveSessionRecord> {
   const active = await storageGet("active_session");
-  if (active && active.status === "active") {
-    await archiveActiveSession(active);
+  if (active) {
+    // Superseded by the new scheduled session.
+    await finalizeActiveSession("stopped");
   }
 
   const blocklist = ((await storageGet("blocklist")) ?? []).map((entry) => entry.domain);
   const whitelist = ((await storageGet("whitelist")) ?? []).map((entry) => entry.domain);
   const end = getScheduleBoundary(schedule, "end_time", now);
   const remaining = end ? Math.max(1, Math.ceil((end.getTime() - now.getTime()) / 1000)) : 1;
-  const session: Session = {
+  const session: ActiveSessionRecord = {
     id: `scheduled-${schedule.id}-${now.getTime()}`,
     preset_id: null,
     mode: schedule.mode,
@@ -440,7 +539,7 @@ async function activateScheduledSession(schedule: Schedule, now: Date): Promise<
 
 async function expireSession(): Promise<void> {
   const session = await storageGet("active_session");
-  if (!session || session.status !== "active") return;
+  if (!session) return;
 
   // A manual session started after this expiry was scheduled must survive.
   // Stale alarms racing a fresh start are no-ops; real expiry still fires.
@@ -449,15 +548,7 @@ async function expireSession(): Promise<void> {
     if (elapsed < session.planned_duration_sec) return;
   }
 
-  session.status = "completed";
-  session.ended_at = new Date().toISOString();
-
-  const rawHistory = await storageGet("history");
-  const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
-  history.unshift(session);
-
-  await storageSet("history", history);
-  await storageSet("active_session", null);
+  await finalizeActiveSession("completed");
 
   await clearAllRules();
   await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
@@ -483,10 +574,11 @@ async function applyBlockingState(): Promise<void> {
   }
 
   const currentSchedule = scheduleSuppressed ? null : getCurrentSchedule(schedules);
-  let session = await storageGet("active_session");
+  // Reads also migrate any stray terminal record out of the active slot.
+  let session = await migrateStrayActiveSession();
 
   if (currentSchedule) {
-    if (!session || session.status !== "active" || session.scheduled_schedule_id !== currentSchedule.id) {
+    if (!session || session.scheduled_schedule_id !== currentSchedule.id) {
       session = await activateScheduledSession(currentSchedule, new Date());
     } else {
       const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
@@ -502,7 +594,7 @@ async function applyBlockingState(): Promise<void> {
     return;
   }
 
-  if (!session || session.status !== "active") {
+  if (!session) {
     // No active session — clear all rules
     await clearAllRules();
     await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
@@ -562,20 +654,20 @@ async function applyBlockingState(): Promise<void> {
 // serialize instead of racing read-modify-write updates.
 
 async function startSessionLocked(
-  mode: Session["mode"],
+  mode: ActiveSessionRecord["mode"],
   duration_minutes: number,
   preset_id?: string
 ): Promise<null> {
   return withLock(async () => {
     const active = await storageGet("active_session");
-    if (active && active.status === "active") {
+    if (active) {
       throw new Error("A session is already active");
     }
 
     const blocklist = ((await storageGet("blocklist")) ?? []).map((d) => d.domain);
     const whitelist = ((await storageGet("whitelist")) ?? []).map((d) => d.domain);
 
-    const newSession: Session = {
+    const newSession: ActiveSessionRecord = {
       id: Math.random().toString(36).substring(2, 11),
       preset_id: preset_id ?? null,
       mode,
@@ -612,13 +704,10 @@ async function stopSessionLocked(): Promise<null> {
             : Date.now() + active.planned_duration_sec * 1000
         );
       }
-      active.status = "stopped";
-      active.ended_at = new Date().toISOString();
-      const rawHistory = await storageGet("history");
-      const history: Session[] = Array.isArray(rawHistory) ? rawHistory : [];
-      history.unshift(active);
-      await storageSet("history", history);
-      await storageSet("active_session", null);
+
+      // The one shared finalize transition; expiry uses it with "completed".
+      await finalizeActiveSession("stopped");
+
       await setIfChanged("active_challenge", null);
       await applyBlockingState();
     }

@@ -26,18 +26,38 @@ export interface ScheduleRecord {
   ends_on: string | null;
 }
 
-export interface SessionRecord {
+/**
+ * A live session occupying the active slot. `ended_at` is always null while
+ * a session is running; anything else in the slot is a stray from a partial
+ * write and must be migrated (see the reader below).
+ */
+export interface ActiveSessionRecord extends SessionBase {
+  status: "active";
+  ended_at: null;
+}
+
+/** Why an archived session finished. Expire completes; stop/supersede stop. */
+export type ArchivedOutcome = "completed" | "stopped";
+
+/** A finished session, as stored in history. `ended_at` always recorded. */
+export interface ArchivedSessionRecord extends SessionBase {
+  status: ArchivedOutcome;
+  ended_at: string;
+}
+
+interface SessionBase {
   id: string;
   preset_id: string | null;
   mode: SessionMode;
   started_at: string;
-  ended_at: string | null;
   planned_duration_sec: number;
-  status: SessionStatus;
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
   scheduled_schedule_id?: string | null;
 }
+
+/** Any session record, live or archived. */
+export type SessionRecord = ActiveSessionRecord | ArchivedSessionRecord;
 
 export interface PresetRecord {
   id: string;
@@ -93,8 +113,8 @@ export interface StorageData {
   temporary_allowlist: TemporaryAllowRecord[];
   presets: PresetRecord[];
   schedules: ScheduleRecord[];
-  active_session: SessionRecord | null;
-  history: SessionRecord[];
+  active_session: ActiveSessionRecord | null;
+  history: ArchivedSessionRecord[];
   schedule_suppressed_until: number | null;
   active_challenge: ChallengeRecord | null;
   settings: SettingsRecord;
@@ -131,6 +151,17 @@ export async function storageGet<K extends keyof StorageData>(
       await chrome.storage.local.set({ schedules });
     }
     return schedules as StorageData[K];
+  }
+
+  // A terminal-status record in the active slot is a stray from a partial
+  // write. The service worker owns migrating it into history on its next
+  // apply; readers here just refuse to treat it as live.
+  if (key === "active_session" && val !== undefined && val !== null) {
+    const candidate = val as Partial<SessionRecord>;
+    if (candidate.status !== "active") {
+      return null as StorageData[typeof key];
+    }
+    return { ...(candidate as ActiveSessionRecord), ended_at: null } as StorageData[typeof key];
   }
 
   return (val !== undefined ? val : DEFAULTS[key]) as StorageData[K];
