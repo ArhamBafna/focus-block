@@ -9,8 +9,9 @@
 //! - Unknown/corrupt `status` strings degrade to [`SessionStatus::Stopped`] —
 //!   a row of uncertain liveness must never resurrect as an active session,
 //!   and history rows stay visible rather than disappearing.
-//! - Corrupt UUID ids are an error, never a freshly generated id: inventing an
-//!   id silently rewires references (preset_id) to the wrong entity.
+//! - Corrupt UUID ids mark the row as corrupt: readers skip that row (with a
+//!   warning) and keep serving the rest of the list, never inventing a new id
+//!   to take its place.
 //! - Unparseable domain-list JSON degrades to an empty list; snapshots are
 //!   advisory copies of live tables, not authoritative data.
 
@@ -94,7 +95,7 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_id_is_loud_not_random() {
+    fn corrupt_id_is_flagged_not_random() {
         assert!(parse_id("not-a-uuid").is_err());
         let id = uuid::Uuid::new_v4();
         assert_eq!(parse_id(&id.to_string()).unwrap(), id);

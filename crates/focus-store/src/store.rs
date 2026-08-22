@@ -196,7 +196,14 @@ impl FocusStore {
         let mut presets = Vec::new();
         while let Some(row) = rows.next()? {
             let id_raw: String = row.get(0)?;
-            let id = codec::parse_id(&id_raw)?;
+            let id = match codec::parse_id(&id_raw) {
+                Ok(id) => id,
+                Err(_) => {
+                    // Skip the broken row, keep the rest of the list usable.
+                    tracing::warn!(id = %id_raw, "preset row has corrupt id, skipping it");
+                    continue;
+                }
+            };
             let mode = codec::parse_mode(&row.get::<_, String>(2)?);
             let blocklist = codec::parse_domain_list(&row.get::<_, String>(4)?);
             let whitelist = codec::parse_domain_list(&row.get::<_, String>(5)?);
@@ -281,11 +288,17 @@ impl FocusStore {
             "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
         )?;
         let mut rows = stmt.query([])?;
-        if let Some(row) = rows.next()? {
-            Ok(Some(row_to_session(row)?))
-        } else {
-            Ok(None)
+        while let Some(row) = rows.next()? {
+            match row_to_session(row) {
+                Ok(session) => return Ok(Some(session)),
+                Err(StoreError::CorruptRow(message)) => {
+                    tracing::warn!(reason = %message, "active session row corrupt, treating as none");
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
         }
+        Ok(None)
     }
 
     pub fn list_history(&self, limit: u32) -> Result<Vec<Session>, StoreError> {
@@ -295,7 +308,15 @@ impl FocusStore {
         let mut rows = stmt.query(params![limit])?;
         let mut sessions = Vec::new();
         while let Some(row) = rows.next()? {
-            sessions.push(row_to_session(row)?);
+            match row_to_session(row) {
+                Ok(session) => sessions.push(session),
+                // Skip the broken row, keep the rest of the history usable.
+                Err(StoreError::CorruptRow(message)) => {
+                    tracing::warn!(reason = %message, "history row corrupt, skipping it");
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
         }
         Ok(sessions)
     }
@@ -307,6 +328,8 @@ impl FocusStore {
 
 }
 
+/// Ok(session) for a good row; Err(CorruptRow) marks a row that should be
+/// skipped (broken identity); other errors are real failures.
 fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
     let mode = codec::parse_mode(&row.get::<_, String>(2)?);
     let status = codec::parse_status(&row.get::<_, String>(6)?);
@@ -314,13 +337,22 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
     let ended_at: Option<String> = row.get(4)?;
     let blocklist = codec::parse_domain_list(&row.get::<_, String>(7)?);
     let whitelist = codec::parse_domain_list(&row.get::<_, String>(8)?);
-    let id = codec::parse_id(&row.get::<_, String>(0)?)?;
+    let id = codec::parse_id(&row.get::<_, String>(0)?)
+        .map_err(|e| StoreError::CorruptRow(e.to_string()))?;
+    let preset_id = match row.get::<_, Option<String>>(1)? {
+        Some(s) => match codec::parse_id(&s) {
+            Ok(id) => Some(id),
+            // A broken reference doesn't invalidate the session itself.
+            Err(_) => {
+                tracing::warn!(preset_id = %s, "session references a corrupt preset id; dropping the link");
+                None
+            }
+        },
+        None => None,
+    };
     Ok(Session {
         id,
-        preset_id: row
-            .get::<_, Option<String>>(1)?
-            .map(|s| codec::parse_id(&s))
-            .transpose()?,
+        preset_id,
         mode,
         started_at: DateTime::parse_from_rfc3339(&started_at)
             .map(|d| d.with_timezone(&Utc))
@@ -358,8 +390,11 @@ mod tests {
     }
 
     #[test]
-    fn corrupt_mode_row_uses_documented_fallback() {
+    fn corrupt_preset_row_is_skipped_others_still_load() {
         let store = memory_store();
+        let good = store
+            .create_preset("Good", SessionMode::Blocklist, 25, vec![], vec![])
+            .expect("create");
         store
             .conn
             .execute(
@@ -367,8 +402,31 @@ mod tests {
                 [],
             )
             .expect("insert corrupt row");
-        // Corrupt id is loud, not silently regenerated.
-        assert!(store.list_presets().is_err());
+
+        let presets = store.list_presets().expect("list still loads");
+        // Seed presets plus the good one; the corrupt row is gone.
+        let loaded: Vec<_> = presets.iter().filter(|p| p.id == good.id).collect();
+        assert_eq!(loaded.len(), 1);
+        assert!(presets.iter().all(|p| p.id != Uuid::nil()));
+    }
+
+    #[test]
+    fn corrupt_history_row_is_skipped_others_still_load() {
+        let store = memory_store();
+        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], None);
+        session.end(SessionEndReason::Stopped);
+        store.save_session(&session).expect("save");
+        store
+            .conn
+            .execute(
+                "INSERT INTO sessions (id, preset_id, mode, started_at, planned_duration_sec, status) VALUES ('broken-id', NULL, 'blocklist', '2026-01-01T00:00:00Z', 60, 'completed')",
+                [],
+            )
+            .expect("insert corrupt row");
+
+        let history = store.list_history(10).expect("history still loads");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].id, session.id);
     }
 
     #[test]
