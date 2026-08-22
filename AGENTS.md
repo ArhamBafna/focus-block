@@ -15,3 +15,13 @@ For Chrome extensions, use following:
 After EVERY big change, go to `apps/extension` folder and run `npm run build`.
 
 - There are two user-facing parts: desktop app `apps/desktop/` and Chrome extension `apps/extension/`. For feature request, find which part(s) affected and change. Desktop code no change extension code, or vice versa.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`ArhamBafna/focus-block`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
