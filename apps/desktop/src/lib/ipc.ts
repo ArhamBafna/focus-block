@@ -272,58 +272,102 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
   }
 }
 
-// Request helpers
-async function request<T>(cmd: string, data?: any): Promise<T> {
+// ── Bridge envelope ──────────────────────────────────────────────────────────
+//
+// The bridge resolves EVERY command with exactly one envelope. Application
+// errors and transport failures travel the same channel as distinct arms, so
+// callers never guess payload shapes or juggle rejected promises.
+
+export type BridgeFailureKind = "app" | "unavailable";
+
+export interface BridgeFailure {
+  kind: BridgeFailureKind;
+  message: string;
+}
+
+export type BridgeEnvelope<T> = { ok: true; data: T } | ({ ok: false } & BridgeFailure);
+
+function errorMessage(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+async function request<T>(cmd: string, data?: any): Promise<BridgeEnvelope<T>> {
   if (!isTauri) {
-    return Promise.resolve(handleMockRequest<T>(cmd, data));
+    try {
+      return { ok: true, data: handleMockRequest<T>(cmd, data) };
+    } catch (e) {
+      return { ok: false, kind: "app", message: errorMessage(e) };
+    }
   }
+
   const req = data ? { cmd, data } : { cmd };
-  const res = await invoke<any>("ipc_request", { request: req });
-  if (res.status === "Ok") {
-    // Serde serializes `Ok { data: ResponseData }` with `tag="status", content="data"` 
-    // as `{ "status": "Ok", "data": { "data": <actual_payload> } }`. We must unwrap the extra "data".
-    const payload = (res.data && res.data.data !== undefined) ? res.data.data : res.data;
-    return payload as T;
+
+  let raw: any;
+  try {
+    raw = await invoke<any>("ipc_request", { request: req });
+  } catch (e) {
+    // Rejection means the bridge/daemon itself failed, not the command.
+    return { ok: false, kind: "unavailable", message: errorMessage(e) };
   }
-  throw new Error(res.message);
+
+  // Decode once, typed: IpcResponse is tagged `status` with the payload
+  // inline under `data`; no shape guessing.
+  if (raw?.status === "Ok") {
+    return { ok: true, data: raw.data as T };
+  }
+  if (raw?.status === "Err") {
+    return { ok: false, kind: "app", message: String(raw.message ?? "Unknown service error") };
+  }
+  return { ok: false, kind: "unavailable", message: "Unrecognized bridge response" };
+}
+
+/** Turn an envelope into a plain promise; the error carries its kind. */
+function unwrap<T>(envelope: BridgeEnvelope<T>): Promise<T> {
+  if (envelope.ok) return Promise.resolve(envelope.data);
+  const error = new Error(envelope.message) as Error & { kind?: BridgeFailureKind };
+  error.kind = envelope.kind;
+  return Promise.reject(error);
 }
 
 export const ipc = {
-  ping: () => request<null>("Ping"),
-  getHealth: () => request<ServiceHealth>("Health"),
-  getStatus: () => request<ServiceStatus>("GetStatus"),
+  ping: () => request<null>("Ping").then(unwrap),
+  getHealth: () => request<ServiceHealth>("Health").then(unwrap),
+  getStatus: () => request<ServiceStatus>("GetStatus").then(unwrap),
+
+  /** Envelope-returning status probe: daemon-down is an arm, never a throw. */
+  getStatusSafe: () => request<ServiceStatus>("GetStatus"),
   
-  listBlocklist: () => request<DomainEntry[]>("ListBlocklist"),
+  listBlocklist: () => request<DomainEntry[]>("ListBlocklist").then(unwrap),
   addBlocklist: (domain: string) => {
     const norm = normalizeDomain(domain);
     if (!norm) return Promise.reject(new Error("Invalid domain format"));
-    return request<number>("AddBlocklist", { domain: norm });
+    return request<number>("AddBlocklist", { domain: norm }).then(unwrap);
   },
-  removeBlocklist: (id: number) => request<null>("RemoveBlocklist", { id }),
+  removeBlocklist: (id: number) => request<null>("RemoveBlocklist", { id }).then(unwrap),
 
-  listWhitelist: () => request<DomainEntry[]>("ListWhitelist"),
+  listWhitelist: () => request<DomainEntry[]>("ListWhitelist").then(unwrap),
   addWhitelist: (domain: string) => {
     const norm = normalizeDomain(domain);
     if (!norm) return Promise.reject(new Error("Invalid domain format"));
-    return request<number>("AddWhitelist", { domain: norm });
+    return request<number>("AddWhitelist", { domain: norm }).then(unwrap);
   },
-  removeWhitelist: (id: number) => request<null>("RemoveWhitelist", { id }),
+  removeWhitelist: (id: number) => request<null>("RemoveWhitelist", { id }).then(unwrap),
 
-  listPresets: () => request<Preset[]>("ListPresets"),
+  listPresets: () => request<Preset[]>("ListPresets").then(unwrap),
   createPreset: (name: string, mode: SessionMode, duration_minutes: number, blocklist: string[], whitelist: string[]) => {
     const normBlocklist = blocklist.map(d => normalizeDomain(d)).filter((d): d is string => !!d);
     const normWhitelist = whitelist.map(d => normalizeDomain(d)).filter((d): d is string => !!d);
-    return request<null>("CreatePreset", { name, mode, duration_minutes, blocklist: normBlocklist, whitelist: normWhitelist });
+    return request<null>("CreatePreset", { name, mode, duration_minutes, blocklist: normBlocklist, whitelist: normWhitelist }).then(unwrap);
   },
-  deletePreset: (id: string) => request<null>("DeletePreset", { id }),
+  deletePreset: (id: string) => request<null>("DeletePreset", { id }).then(unwrap),
 
-  startSession: (mode: SessionMode, duration_minutes: number, preset_id?: string) => 
-    request<null>("StartSession", { mode, duration_minutes, preset_id }),
-  stopSession: () => request<null>("StopSession"),
+  startSession: (mode: SessionMode, duration_minutes: number, preset_id?: string) =>
+    request<null>("StartSession", { mode, duration_minutes, preset_id }).then(unwrap),
+  stopSession: () => request<null>("StopSession").then(unwrap),
 
-  listHistory: (limit: number = 50) => request<Session[]>("ListHistory", { limit }),
-  clearHistory: () => request<null>("ClearHistory"),
-  
-  getSettings: () => request<AppSettings>("GetSettings"),
-  updateSettings: (os_allowlist_enabled: boolean) => request<null>("UpdateSettings", { os_allowlist_enabled }),
+  listHistory: (limit: number = 50) => request<Session[]>("ListHistory", { limit }).then(unwrap),
+  clearHistory: () => request<null>("ClearHistory").then(unwrap),
+
+  getSettings: () => request<AppSettings>("GetSettings").then(unwrap),
+  updateSettings: (os_allowlist_enabled: boolean) => request<null>("UpdateSettings", { os_allowlist_enabled }).then(unwrap),
 };
