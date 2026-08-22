@@ -113,58 +113,63 @@ impl FocusStore {
         Ok(())
     }
 
-    pub fn list_blocklist(&self) -> Result<Vec<DomainEntry>, StoreError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, domain FROM blocklist_domains ORDER BY domain")?;
-        let rows = stmt.query_map([], |row| {
-            Ok(DomainEntry {
+    // ── Domain lists ─────────────────────────────────────────────────────────
+    //
+    // Blocklist and whitelist share one implementation; the table is the only
+    // difference between them. Public methods keep their names so callers and
+    // the IPC surface are untouched.
+
+    fn list_domains_in(&self, table: &'static str) -> Result<Vec<DomainEntry>, StoreError> {
+        let mut stmt = self.conn.prepare(&format!("SELECT id, domain FROM {table} ORDER BY domain"))?;
+        let mut rows = stmt.query([])?;
+        let mut entries = Vec::new();
+        while let Some(row) = rows.next()? {
+            entries.push(DomainEntry {
                 id: row.get(0)?,
                 domain: row.get(1)?,
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+            });
+        }
+        Ok(entries)
+    }
+
+    fn add_domain_to(&self, table: &'static str, domain: &str) -> Result<i64, StoreError> {
+        let domain =
+            normalize_domain(domain).ok_or_else(|| StoreError::Message("invalid domain".into()))?;
+        self.conn.execute(
+            &format!("INSERT OR IGNORE INTO {table} (domain) VALUES (?1)"),
+            params![domain],
+        )?;
+        Ok(self.conn.last_insert_rowid())
+    }
+
+    fn remove_domain_from(&self, table: &'static str, id: i64) -> Result<(), StoreError> {
+        self.conn
+            .execute(&format!("DELETE FROM {table} WHERE id = ?1"), params![id])?;
+        Ok(())
+    }
+
+    pub fn list_blocklist(&self) -> Result<Vec<DomainEntry>, StoreError> {
+        self.list_domains_in("blocklist_domains")
     }
 
     pub fn add_blocklist(&self, domain: &str) -> Result<i64, StoreError> {
-        let domain = normalize_domain(domain).ok_or_else(|| StoreError::Message("invalid domain".into()))?;
-        self.conn.execute(
-            "INSERT OR IGNORE INTO blocklist_domains (domain) VALUES (?1)",
-            params![domain],
-        )?;
-        Ok(self.conn.last_insert_rowid())
+        self.add_domain_to("blocklist_domains", domain)
     }
 
     pub fn remove_blocklist(&self, id: i64) -> Result<(), StoreError> {
-        self.conn.execute("DELETE FROM blocklist_domains WHERE id = ?1", params![id])?;
-        Ok(())
+        self.remove_domain_from("blocklist_domains", id)
     }
 
     pub fn list_whitelist(&self) -> Result<Vec<DomainEntry>, StoreError> {
-        let mut stmt = self
-            .conn
-            .prepare("SELECT id, domain FROM whitelist_domains ORDER BY domain")?;
-        let rows = stmt.query_map([], |row| {
-            Ok(DomainEntry {
-                id: row.get(0)?,
-                domain: row.get(1)?,
-            })
-        })?;
-        Ok(rows.collect::<Result<_, _>>()?)
+        self.list_domains_in("whitelist_domains")
     }
 
     pub fn add_whitelist(&self, domain: &str) -> Result<i64, StoreError> {
-        let domain = normalize_domain(domain).ok_or_else(|| StoreError::Message("invalid domain".into()))?;
-        self.conn.execute(
-            "INSERT OR IGNORE INTO whitelist_domains (domain) VALUES (?1)",
-            params![domain],
-        )?;
-        Ok(self.conn.last_insert_rowid())
+        self.add_domain_to("whitelist_domains", domain)
     }
 
     pub fn remove_whitelist(&self, id: i64) -> Result<(), StoreError> {
-        self.conn.execute("DELETE FROM whitelist_domains WHERE id = ?1", params![id])?;
-        Ok(())
+        self.remove_domain_from("whitelist_domains", id)
     }
 
     pub fn blocklist_domains(&self) -> Result<Vec<String>, StoreError> {
@@ -415,6 +420,51 @@ mod tests {
         // Unknown key with no declared default reads as false.
         let unknown = store.get_setting_bool("no_such_setting").expect("read ok");
         assert!(!unknown);
+    }
+
+    #[test]
+    fn domain_lists_behave_identically_for_both_kinds() {
+        let store = memory_store();
+
+        let first_block = store.add_blocklist("YouTube.com").expect("add");
+        let first_white = store.add_whitelist("mail.com").expect("add");
+        assert!(first_block > 0);
+        assert!(first_white > 0);
+
+        // Duplicate inserts are ignored (no error, no second row).
+        let dup = store.add_blocklist("youtube.com").expect("dup add ok");
+        assert_eq!(store.list_blocklist().expect("list").len(), 1);
+        let _ = dup;
+
+        // Invalid domains are loud.
+        assert!(store.add_blocklist("not a domain!!").is_err());
+        assert!(store.add_whitelist("").is_err());
+
+        // Sort order is by normalized domain.
+        store.add_blocklist("aaa.com").expect("add");
+        let blocklist = store.list_blocklist().expect("list");
+        let domains: Vec<&str> = blocklist.iter().map(|d| d.domain.as_str()).collect();
+        assert_eq!(domains, vec!["aaa.com", "youtube.com"]);
+
+        // Removal works per list and leaves the other untouched.
+        let youtube_id = blocklist
+            .iter()
+            .find(|d| d.domain == "youtube.com")
+            .expect("entry")
+            .id;
+        store.remove_blocklist(youtube_id).expect("remove");
+        assert_eq!(store.list_blocklist().expect("list").len(), 1);
+        assert_eq!(store.list_whitelist().expect("list").len(), 1);
+
+        // Domain snapshots follow their tables.
+        assert_eq!(
+            store.blocklist_domains().expect("domains"),
+            vec!["aaa.com".to_string()]
+        );
+        assert_eq!(
+            store.whitelist_domains().expect("domains"),
+            vec!["mail.com".to_string()]
+        );
     }
 
     #[test]
