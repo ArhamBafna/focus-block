@@ -86,69 +86,46 @@ function SettingRow({
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.getSettings().then(setSettings).catch(console.error);
   }, []);
 
-  const toggleOsAllowlist = async () => {
+  // One generic saver keyed by setting name. Only one save runs at a time;
+  // failures surface inline instead of a browser-native dialog.
+  const saveSetting = async <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => {
     if (!settings || saving) return;
-    const newVal = !settings.os_allowlist_enabled;
     setSaving(true);
+    setError(null);
     try {
-      const updated = { ...settings, os_allowlist_enabled: newVal };
+      const updated = { ...settings, [key]: value } as AppSettings;
       await ipc.updateSettings(updated);
       setSettings(updated);
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setError(
+        "Could not save this setting. " + (e instanceof Error ? e.message : String(e))
+      );
     } finally {
       setSaving(false);
     }
   };
 
-  const changeStopChallenge = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!settings || saving) return;
-    const newChallenge = e.target.value;
-    setSaving(true);
-    try {
-      const updated = { ...settings, stop_challenge: newChallenge };
-      await ipc.updateSettings(updated);
-      setSettings(updated);
-    } catch (e) {
-      alert("Failed to save setting: " + e);
-    } finally {
-      setSaving(false);
-    }
+  const toggleOsAllowlist = () => {
+    if (settings) void saveSetting("os_allowlist_enabled", !settings.os_allowlist_enabled);
   };
 
-  const changeCountdownDuration = async (e: React.ChangeEvent<HTMLSelectElement>) => {
-    if (!settings || saving) return;
-    const newDuration = parseInt(e.target.value, 10);
-    setSaving(true);
-    try {
-      const updated = { ...settings, challenge_countdown_duration: newDuration };
-      await ipc.updateSettings(updated);
-      setSettings(updated);
-    } catch (e) {
-      alert("Failed to save setting: " + e);
-    } finally {
-      setSaving(false);
-    }
+  const changeStopChallenge = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    void saveSetting("stop_challenge", e.target.value);
   };
 
-  const toggleCountdownBreathing = async () => {
-    if (!settings || saving) return;
-    const newVal = !settings.challenge_countdown_breathing;
-    setSaving(true);
-    try {
-      const updated = { ...settings, challenge_countdown_breathing: newVal };
-      await ipc.updateSettings(updated);
-      setSettings(updated);
-    } catch (e) {
-      alert("Failed to save setting: " + e);
-    } finally {
-      setSaving(false);
-    }
+  const changeCountdownDuration = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const duration = parseInt(e.target.value, 10);
+    if (!Number.isNaN(duration)) void saveSetting("challenge_countdown_duration", duration);
+  };
+
+  const toggleCountdownBreathing = () => {
+    if (settings) void saveSetting("challenge_countdown_breathing", !settings.challenge_countdown_breathing);
   };
 
   return (
@@ -167,6 +144,21 @@ export default function Settings() {
         <div style={{ color: "var(--color-neutral-400)", fontSize: "13px" }}>Loading…</div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+          {error && (
+            <div
+              role="alert"
+              style={{
+                padding: "9px 10px",
+                borderRadius: "8px",
+                background: "var(--color-pulse-soft)",
+                color: "var(--color-pulse)",
+                fontSize: "12px",
+                lineHeight: 1.35,
+              }}
+            >
+              {error}
+            </div>
+          )}
           <SettingRow
             title="OS Essentials Allowlist"
             description="Allow essential Windows services even during Lockdown mode."
