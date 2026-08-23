@@ -6,6 +6,7 @@ import Whitelist from "./pages/Whitelist";
 import History from "./pages/History";
 import Schedule from "./pages/Schedule";
 import Settings from "./pages/Settings";
+import Privacy from "./pages/Privacy";
 import "./App.css";
 
 const navItems = [
@@ -136,6 +137,7 @@ function App() {
             <Route path="/schedule" element={<Schedule />} />
             <Route path="/history" element={<History />} />
             <Route path="/settings" element={<Settings />} />
+            <Route path="/privacy" element={<Privacy />} />
           </Routes>
         </main>
       </div>

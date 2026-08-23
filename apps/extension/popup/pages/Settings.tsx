@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Info } from "@phosphor-icons/react";
 import { ipc, AppSettings } from "../lib/ipc";
 
@@ -262,6 +263,18 @@ export default function Settings() {
             <strong style={{ color: "var(--color-neutral-700)" }}>
               Focus Blocker Extension v{chrome.runtime.getManifest().version}
             </strong>
+            <div style={{ marginTop: "4px" }}>
+              <Link
+                to="/privacy"
+                style={{
+                  color: "var(--color-fathom)",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                Privacy
+              </Link>
+            </div>
           </div>
         </div>
       )}

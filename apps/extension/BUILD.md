@@ -77,6 +77,7 @@ npm run dev
 |------|-----------------|
 | Click the extension icon | Popup opens (380px wide) |
 | Navigate the top tabs (Focus / Block / Allow / Schedule / History / Settings) | Views switch correctly |
+| Settings → **Privacy** link | Privacy screen renders, back link returns to Settings |
 | Data persists after closing/reopening popup | Yes (stored in chrome.storage.local) |
 
 ### Blocking test (core feature)
