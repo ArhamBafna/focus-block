@@ -1,0 +1,21 @@
+/*
+ * Self-hosted font faces (latin subsets, variable weight).
+ * Loaded by the popup bundle and by blocked/index.html so both render
+ * correct typography fully offline — zero external font requests.
+ */
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url("./figtree-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "EB Garamond";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("./eb-garamond-latin.woff2") format("woff2");
+}

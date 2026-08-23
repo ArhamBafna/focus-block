@@ -48,5 +48,9 @@ try {
   console.warn("⚠ icons/ not found — run scripts/generate-icons.js or add PNGs manually");
 }
 
+// 4. Copy fonts/ (self-hosted; the popup and blocked page load them locally)
+copyDir(join(root, "fonts"), join(dist, "fonts"));
+console.log("✓ fonts/");
+
 console.log("\n✅ Extension assembled at dist/");
 console.log("   Load dist/ as an unpacked extension in chrome://extensions");

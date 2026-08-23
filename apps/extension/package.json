@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "type": "module",
   "scripts": {
-    "dev": "vite build --config vite.config.ts --watch & vite build --config vite.config.bg.ts --watch",
+    "dev": "node scripts/dev.js",
     "build": "npm run build:popup && npm run build:bg && node scripts/assemble.js",
     "build:popup": "tsc --noEmit && vite build --config vite.config.ts",
     "build:bg": "vite build --config vite.config.bg.ts",
