@@ -89,6 +89,29 @@ describe("background channel arms", () => {
   });
 });
 
+describe("blocklist domain rejection (issue #19)", () => {
+  it("rejects regex metacharacters with a clear message and stores nothing", async () => {
+    await expect(ipc.addBlocklist("*foo(bar")).rejects.toThrow(/Invalid site/);
+    await expect(ipc.addBlocklist("bad(.com")).rejects.toThrow(/Invalid site/);
+
+    expect(mock.data.get("blocklist")).toBeUndefined();
+  });
+
+  it("still accepts valid domains, wildcards, and URLs", async () => {
+    await expect(ipc.addBlocklist("youtube.com")).resolves.toBeGreaterThan(0);
+    await expect(ipc.addBlocklist("*game")).resolves.toBeGreaterThan(0);
+    await expect(ipc.addBlocklist("https://mail.example.com/path")).resolves.toBeGreaterThan(0);
+
+    const list = await ipc.listBlocklist();
+    expect(list.map((d) => d.domain).sort()).toEqual(["*game", "mail.example.com", "youtube.com"]);
+  });
+
+  it("applies the same rejection to the whitelist", async () => {
+    await expect(ipc.addWhitelist("a+plus.com")).rejects.toThrow(/Invalid site/);
+    expect(mock.data.get("whitelist")).toBeUndefined();
+  });
+});
+
 describe("getStatusSafe raw envelope", () => {
   it("returns an ok envelope wrapping the status view when storage works", async () => {
     fakeSendMessage(() => ({ response: { ok: true, result: null } }));

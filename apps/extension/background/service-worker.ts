@@ -141,32 +141,63 @@ export function requestReconcile(): Promise<void> {
   return withLock(async () => {
     while (reconcileRequested) {
       reconcileRequested = false;
-      await applyBlockingState();
+      try {
+        await applyBlockingState();
+      } catch (error) {
+        // A failed pass must never become an unhandled rejection; the next
+        // trigger retries and blocking keeps working for valid entries.
+        console.error("[FocusBlocker] Reconcile pass failed:", error);
+      }
     }
   });
 }
 
 // ── Rule management ──────────────────────────────────────────────────────────
 
-function addDomainRules(
+/**
+ * Same contract as the popup's normalizeDomain validator: only plain domains
+ * and leading-`*` wildcards over a safe charset may reach the rules engine.
+ */
+const SAFE_DOMAIN_CHARS = /^[a-z0-9.-]+$/;
+
+export function isValidStoredDomain(domain: unknown): boolean {
+  if (typeof domain !== "string") return false;
+  const str = domain.toLowerCase();
+
+  if (str.startsWith("*")) {
+    const matchText = str.slice(1);
+    return matchText.length > 0 && SAFE_DOMAIN_CHARS.test(matchText);
+  }
+
+  return str.includes(".") && SAFE_DOMAIN_CHARS.test(str);
+}
+
+/** Escape every regex metacharacter so a stored entry can never corrupt a regexFilter. */
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function addDomainRules(
   rules: chrome.declarativeNetRequest.Rule[],
   domain: string,
   priority: number,
   action: chrome.declarativeNetRequest.RuleAction,
   nextId: number
 ): number {
-  if (!domain) return nextId;
+  if (!isValidStoredDomain(domain)) {
+    if (domain) console.warn(`[FocusBlocker] Skipping invalid stored entry: ${JSON.stringify(domain)}`);
+    return nextId;
+  }
 
   const resourceTypes = [chrome.declarativeNetRequest.ResourceType.MAIN_FRAME];
   if (domain.startsWith("*")) {
     const matchText = domain.slice(1);
-    if (!matchText) return nextId;
 
     let ruleAction = action;
     let condition: chrome.declarativeNetRequest.RuleCondition = { urlFilter: `*${matchText}*`, resourceTypes };
 
     if (action.type === chrome.declarativeNetRequest.RuleActionType.REDIRECT && action.redirect?.url) {
-      const regexStr = `^https?://.*${matchText.replace(/\./g, '\\.')}.*`;
+      const regexStr = `^https?://.*${escapeRegex(matchText)}.*`;
       ruleAction = {
         type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
         redirect: {
@@ -195,7 +226,7 @@ function addDomainRules(
       // match any protocol, optional subdomains matching our urlFilter intent, the domain, and any path.
       const isWww = urlFilter.startsWith('||www.');
       const exactDomain = isWww ? `www.${domain}` : domain;
-      const regexStr = `^https?://([^/]*\\.)?(${exactDomain.replace(/\./g, '\\.')})(/.*)?$`;
+      const regexStr = `^https?://([^/]*\\.)?(${escapeRegex(exactDomain)})(/.*)?$`;
 
       ruleAction = {
         type: chrome.declarativeNetRequest.RuleActionType.REDIRECT,
@@ -217,7 +248,7 @@ function addDomainRules(
 }
 
 /** Build blocklist rules. Allowlist entries use higher priority than blocks. */
-function buildRules(
+export function buildRules(
   blocklist: string[],
   whitelist: string[],
   temporaryAllows: string[],
@@ -247,7 +278,7 @@ function buildRules(
  * Given a whitelist, generate rules for lockdown mode.
  * Blocks EVERYTHING (priority 1) except whitelisted domains and extension pages (priority 2).
  */
-function buildLockdownRules(
+export function buildLockdownRules(
   whitelist: string[],
   temporaryAllows: string[],
   extensionId: string

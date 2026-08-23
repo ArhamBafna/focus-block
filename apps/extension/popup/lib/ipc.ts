@@ -133,7 +133,27 @@ function validateSchedule(
   return { days, endsOn };
 }
 
-// ── Domain normalization (verbatim from desktop ipc.ts) ─────────────────────
+// ── Domain normalization (extension-hardened variant of the desktop copy) ───
+//
+// The extension turns every accepted entry into a DNR regexFilter/urlFilter.
+// Regex metacharacters that reach a regexFilter make updateDynamicRules throw,
+// which silently stops all blocking updates, so anything outside the safe
+// charset is rejected here before it is ever stored.
+
+/** Characters allowed inside a stored domain or wildcard match text. */
+const SAFE_DOMAIN_CHARS = /^[a-z0-9.-]+$/;
+
+export function isValidStoredDomain(domain: unknown): boolean {
+  if (typeof domain !== "string") return false;
+  const str = domain.toLowerCase();
+
+  if (str.startsWith("*")) {
+    const matchText = str.slice(1);
+    return matchText.length > 0 && SAFE_DOMAIN_CHARS.test(matchText);
+  }
+
+  return str.includes(".") && SAFE_DOMAIN_CHARS.test(str);
+}
 
 export function normalizeDomain(input: string): string | null {
   let str = input.trim().toLowerCase();
@@ -141,7 +161,7 @@ export function normalizeDomain(input: string): string | null {
 
   if (str.startsWith("*")) {
     const matchText = str.slice(1).trim();
-    if (!matchText || matchText.includes("*") || matchText.includes(" ") || matchText.includes("|") || matchText.includes("^")) {
+    if (!isValidStoredDomain(`*${matchText}`)) {
       return null;
     }
     return `*${matchText}`;
@@ -167,7 +187,7 @@ export function normalizeDomain(input: string): string | null {
 
   if (str.startsWith("www.")) str = str.slice(4);
 
-  if (!str || str.includes(" ") || !str.includes(".")) return null;
+  if (!isValidStoredDomain(str)) return null;
 
   return str;
 }
@@ -290,7 +310,7 @@ export const ipc = {
 
   addBlocklist: async (domain: string): Promise<number> => {
     const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
+    if (!norm) throw new Error("Invalid site. Use letters, numbers, dots, hyphens, or a leading * wildcard (for example, *game).");
 
     const list = await storageGet("blocklist");
     if (list.some((d) => d.domain === norm)) {
@@ -315,7 +335,7 @@ export const ipc = {
 
   addWhitelist: async (domain: string): Promise<number> => {
     const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Invalid site or wildcard format (for example, *game)");
+    if (!norm) throw new Error("Invalid site. Use letters, numbers, dots, hyphens, or a leading * wildcard (for example, *game).");
 
     const list = await storageGet("whitelist");
     if (list.some((d) => d.domain === norm)) {
@@ -352,8 +372,7 @@ export const ipc = {
 
   addTemporaryAllow: async (domain: string, durationMinutes: number): Promise<TemporaryAllowEntry> => {
     const norm = normalizeDomain(domain);
-    if (!norm) throw new Error("Enter a valid site or wildcard such as *game");
-    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
+    if (!norm) throw new Error("Enter a valid site or wildcard such as *game");    if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) {
       throw new Error("Choose a valid duration");
     }
 
