@@ -8,7 +8,7 @@
  */
 
 export type SessionMode = "blocklist" | "lockdown";
-export type SessionStatus = "active" | "completed" | "stopped";
+export type SessionStatus = "active" | "completed" | "stopped" | "cancelled";
 
 export interface DomainListEntry {
   id: number;
@@ -36,8 +36,8 @@ export interface ActiveSessionRecord extends SessionBase {
   ended_at: null;
 }
 
-/** Why an archived session finished. Expire completes; stop/supersede stop. */
-export type ArchivedOutcome = "completed" | "stopped";
+/** Why an archived session finished. Expire completes; stop/supersede stop; schedule deletion cancels. */
+export type ArchivedOutcome = "completed" | "stopped" | "cancelled";
 
 /** A finished session, as stored in history. `ended_at` always recorded. */
 export interface ArchivedSessionRecord extends SessionBase {

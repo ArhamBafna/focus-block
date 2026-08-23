@@ -30,8 +30,8 @@ export interface ActiveSessionRecord extends SessionBase {
   ended_at: null;
 }
 
-/** Why an archived session finished. Expire completes; stop/supersede stop. */
-type ArchivedOutcome = "completed" | "stopped";
+/** Why an archived session finished. Expire completes; stop/supersede stop; schedule deletion cancels. */
+type ArchivedOutcome = "completed" | "stopped" | "cancelled";
 
 /** A finished session, as stored in history. */
 export interface ArchivedSessionRecord extends SessionBase {
@@ -39,7 +39,7 @@ export interface ArchivedSessionRecord extends SessionBase {
   ended_at: string;
 }
 
-interface Schedule {
+export interface Schedule {
   id: string;
   start_time: string;
   end_time: string;
@@ -373,7 +373,7 @@ async function scheduleTemporaryAllowExpiry(entries: { expires_at: number }[]): 
 
 // ── Recurring schedule helpers ──────────────────────────────────────────────
 
-function timeToMinutes(value: string): number | null {
+export function timeToMinutes(value: string): number | null {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
   const [hours, minutes] = value.split(":").map(Number);
   return hours * 60 + minutes;
@@ -386,7 +386,7 @@ function localDateKey(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-function scheduleDays(schedule: Schedule): number[] {
+export function scheduleDays(schedule: Schedule): number[] {
   const days = Array.isArray(schedule.days_of_week)
     ? [...new Set(schedule.days_of_week.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))]
     : [];
@@ -394,12 +394,12 @@ function scheduleDays(schedule: Schedule): number[] {
   return days.length > 0 ? days : [0, 1, 2, 3, 4, 5, 6];
 }
 
-function scheduleRunsOn(schedule: Schedule, day: Date): boolean {
+export function scheduleRunsOn(schedule: Schedule, day: Date): boolean {
   const endsOn = typeof schedule.ends_on === "string" ? schedule.ends_on : null;
   return scheduleDays(schedule).includes(day.getDay()) && (endsOn === null || localDateKey(day) <= endsOn);
 }
 
-function getCurrentSchedule(schedules: Schedule[], now = new Date()): Schedule | null {
+export function getCurrentSchedule(schedules: Schedule[], now = new Date()): Schedule | null {
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
   return schedules.find((schedule) => {
     const start = timeToMinutes(schedule.start_time);
@@ -408,12 +408,40 @@ function getCurrentSchedule(schedules: Schedule[], now = new Date()): Schedule |
   }) ?? null;
 }
 
-function getScheduleBoundary(schedule: Schedule, key: "start_time" | "end_time", day: Date): Date | null {
+export function getScheduleBoundary(schedule: Schedule, key: "start_time" | "end_time", day: Date): Date | null {
   const minutes = timeToMinutes(schedule[key]);
   if (minutes === null) return null;
   const boundary = new Date(day);
   boundary.setHours(Math.floor(minutes / 60), minutes % 60, 0, 0);
   return boundary;
+}
+
+/**
+ * Epoch ms until which schedules stay off after a manual stop of a scheduled
+ * session. Wall-clock based (setHours), so the result tracks the local end
+ * time across DST transitions instead of drifting by the offset change.
+ * Falls back to the session's remaining duration when the end boundary is
+ * missing or already past.
+ */
+export function computeScheduleSuppression(
+  endMinutes: number | null,
+  plannedDurationSec: number,
+  now: Date
+): number {
+  if (endMinutes === null) return now.getTime() + plannedDurationSec * 1000;
+  const scheduledEnd = new Date(now);
+  scheduledEnd.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
+
+  // Spring-forward gap: the requested wall time does not exist that day and
+  // the engine maps it past the jump. Clamp to the instant the clock resumes.
+  const wallMinutes = scheduledEnd.getHours() * 60 + scheduledEnd.getMinutes();
+  if (wallMinutes !== endMinutes) {
+    scheduledEnd.setHours(Math.floor(endMinutes / 60) + 1, 0, 0, 0);
+  }
+
+  return scheduledEnd.getTime() > now.getTime()
+    ? scheduledEnd.getTime()
+    : now.getTime() + plannedDurationSec * 1000;
 }
 
 async function scheduleNextBoundaryAlarm(schedules: Schedule[]): Promise<void> {
@@ -569,11 +597,24 @@ export async function expireSession(): Promise<void> {
     if (elapsed < session.planned_duration_sec) return;
   }
 
-  await finalizeActiveSession("completed");
+  // A scheduled session whose schedule was deleted mid-session is cancelled,
+  // not completed (issue #25).
+  const outcome = await scheduledSessionOutcome(session.scheduled_schedule_id ?? null);
+  await finalizeActiveSession(outcome);
 
   await clearAllRules();
   await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
   console.log("[FocusBlocker] Session expired, blocking rules cleared.");
+}
+
+/**
+ * A scheduled session that is no longer inside its window either ran to its
+ * end boundary (completed) or lost its schedule to deletion (cancelled).
+ */
+async function scheduledSessionOutcome(scheduledId: string | null): Promise<ArchivedOutcome> {
+  if (!scheduledId) return "completed";
+  const schedules = (await storageGet("schedules")) ?? [];
+  return schedules.some((schedule) => schedule.id === scheduledId) ? "completed" : "cancelled";
 }
 
 // ── Core: apply state ────────────────────────────────────────────────────────
@@ -611,7 +652,12 @@ export async function applyBlockingState(): Promise<void> {
       // alarm below is recomputed from live time without rewriting storage.
     }
   } else if (session?.scheduled_schedule_id) {
-    await expireSession();
+    // The window is over or the schedule was deleted; the label must tell
+    // those two apart (issue #25).
+    const outcome = await scheduledSessionOutcome(session.scheduled_schedule_id);
+    await finalizeActiveSession(outcome);
+    await clearAllRules();
+    await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
     return;
   }
 
@@ -708,23 +754,17 @@ export async function startSessionLocked(
 
 export async function stopSessionLocked(): Promise<null> {
   return withLock(async () => {
-    const active = await storageGet("active_session");
-    if (active) {
-      if (active.scheduled_schedule_id) {
-        const schedules = (await storageGet("schedules")) ?? [];
-        const schedule = schedules.find((item) => item.id === active.scheduled_schedule_id);
-        const endMinutes = schedule ? timeToMinutes(schedule.end_time) : null;
-        const scheduledEnd = endMinutes === null ? null : new Date();
-        if (scheduledEnd && endMinutes !== null) {
-          scheduledEnd.setHours(Math.floor(endMinutes / 60), endMinutes % 60, 0, 0);
-        }
-        await setIfChanged(
-          "schedule_suppressed_until",
-          scheduledEnd && scheduledEnd.getTime() > Date.now()
-            ? scheduledEnd.getTime()
-            : Date.now() + active.planned_duration_sec * 1000
-        );
-      }
+  const active = await storageGet("active_session");
+  if (active) {
+    if (active.scheduled_schedule_id) {
+      const schedules = (await storageGet("schedules")) ?? [];
+      const schedule = schedules.find((item) => item.id === active.scheduled_schedule_id);
+      const endMinutes = schedule ? timeToMinutes(schedule.end_time) : null;
+      await setIfChanged(
+        "schedule_suppressed_until",
+        computeScheduleSuppression(endMinutes, active.planned_duration_sec, new Date())
+      );
+    }
 
       // The one shared finalize transition; expiry uses it with "completed".
       await finalizeActiveSession("stopped");
