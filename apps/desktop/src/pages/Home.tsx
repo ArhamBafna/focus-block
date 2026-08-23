@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ipc, ServiceStatus } from "../lib/ipc";
 import { Play, Stop, ShieldCheck } from "@phosphor-icons/react";
 
@@ -27,6 +27,13 @@ export default function Home() {
   // Last-known-good status. Kept during transient failures so an active
   // session keeps rendering instead of snapping to a fake idle state.
   const [status, setStatus] = useState<ServiceStatus | null>(null);
+  // The poll effect mounts once, so its closures must read the latest status
+  // through a ref instead of the render-scoped state variable.
+  const statusRef = useRef<ServiceStatus | null>(null);
+  const recordStatus = (next: ServiceStatus | null) => {
+    statusRef.current = next;
+    setStatus(next);
+  };
   const [phase, setPhase] = useState<HomePhase>("loading");
   const [degraded, setDegraded] = useState(false);
   const [durationInput, setDurationInput] = useState("25");
@@ -35,13 +42,13 @@ export default function Home() {
   const fetchStatus = async () => {
     const envelope = await ipc.getStatusSafe();
     if (envelope.ok) {
-      setStatus(envelope.data);
+      recordStatus(envelope.data);
       setDegraded(false);
       setPhase("ready");
       return;
     }
     if (envelope.kind === "unavailable") {
-      if (status?.active_session) {
+      if (statusRef.current?.active_session) {
         // Mid-session transport loss: keep the session view, warn quietly.
         setDegraded(true);
         setPhase("ready");
@@ -52,7 +59,7 @@ export default function Home() {
     }
     // Application error: data channel works, but this poll failed.
     console.error("[service]", envelope.message);
-    if (!status) setPhase("unreachable");
+    if (!statusRef.current) setPhase("unreachable");
     else setDegraded(true);
   };
 

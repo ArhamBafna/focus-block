@@ -14,6 +14,12 @@
     "noEmit": true,
     "jsx": "react-jsx",
 
+    /* Cross-app test imports */
+    "baseUrl": ".",
+    "paths": {
+      "@extension-ipc": ["../../apps/extension/popup/lib/ipc.ts"]
+    },
+
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
