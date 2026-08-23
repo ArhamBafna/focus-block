@@ -145,6 +145,37 @@ This is a **Rust + Node.js monorepo**. Changes to code should be scoped:
   npm run build
   ```
 
+### Unit Tests
+
+Both frontend apps ship a vitest suite runnable locally and in CI:
+
+```bash
+cd apps/desktop   # or apps/extension
+npm test
+```
+
+## Continuous Integration
+
+`.github/workflows/ci.yml` runs on every push and pull request. A change is green only when all three jobs pass:
+
+1. **Rust workspace tests** — `cargo test --workspace`
+2. **Desktop build** — `npm ci`, `npm test`, `npm run build` in `apps/desktop`
+3. **Extension build** — `npm ci`, `npm test`, `npm run build` in `apps/extension`
+
+A failing test or build marks the commit red.
+
+### Requiring green CI before merge (one-time, owner only)
+
+Branch protection cannot be enabled from CI itself; do this once in GitHub:
+
+**Settings → Branches → Add branch protection rule →**
+
+- Branch name pattern: `main`
+- Check **Require a pull request before merging** (optional) and **Require status checks to pass before merging**
+- Under status checks, search for and select: `Rust workspace tests`, `Desktop build`, `Extension build`
+
+After that, merges to `main` are impossible while any job is red.
+
 ## License
 
 [Apache-2.0 License](LICENSE)
