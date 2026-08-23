@@ -14,7 +14,6 @@ import {
   storageSet,
   ScheduleRecord,
   SessionRecord,
-  PresetRecord,
   TemporaryAllowRecord,
   SettingsRecord,
 } from "./storage";
@@ -28,7 +27,6 @@ export type SessionMode = "blocklist" | "lockdown";
 export type SessionStatus = "active" | "completed" | "stopped";
 
 export type Session = SessionRecord;
-export type Preset = PresetRecord;
 export type TemporaryAllowEntry = TemporaryAllowRecord;
 export type AppSettings = SettingsRecord;
 export interface Schedule extends ScheduleRecord {}
@@ -354,7 +352,7 @@ export const ipc = {
     return null;
   },
 
-  // Temporary allowlist â€” persists locally until its expiry timestamp.
+  // Temporary allowlist - persists locally until its expiry timestamp.
   listTemporaryAllows: async (): Promise<TemporaryAllowEntry[]> => {
     const entries = await storageGet("temporary_allowlist");
     const now = Date.now();

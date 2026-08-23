@@ -59,15 +59,6 @@ interface SessionBase {
 /** Any session record, live or archived. */
 export type SessionRecord = ActiveSessionRecord | ArchivedSessionRecord;
 
-export interface PresetRecord {
-  id: string;
-  name: string;
-  mode: SessionMode;
-  duration_minutes: number;
-  blocklist: string[];
-  whitelist: string[];
-}
-
 export interface TemporaryAllowRecord {
   id: string;
   domain: string;
@@ -80,7 +71,6 @@ export interface ChallengeRecord {
 }
 
 export interface SettingsRecord {
-  os_allowlist_enabled: boolean;
   stop_challenge: string;
   challenge_countdown_duration: number;
   challenge_countdown_breathing: boolean;
@@ -111,7 +101,6 @@ export interface StorageData {
   blocklist: DomainListEntry[];
   whitelist: DomainListEntry[];
   temporary_allowlist: TemporaryAllowRecord[];
-  presets: PresetRecord[];
   schedules: ScheduleRecord[];
   active_session: ActiveSessionRecord | null;
   history: ArchivedSessionRecord[];
@@ -124,14 +113,12 @@ const DEFAULTS: StorageData = {
   blocklist: [],
   whitelist: [],
   temporary_allowlist: [],
-  presets: [],
   schedules: [],
   active_session: null,
   history: [],
   schedule_suppressed_until: null,
   active_challenge: null,
   settings: {
-    os_allowlist_enabled: false,
     stop_challenge: "none",
     challenge_countdown_duration: 30,
     challenge_countdown_breathing: false,

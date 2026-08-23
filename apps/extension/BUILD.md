@@ -1,10 +1,10 @@
-# FocusBlock Chrome Extension — Build & Testing Guide
+# Focus Blocker Chrome Extension — Build & Testing Guide
 
 ## Prerequisites
 
 - Node.js 18+
 - npm 9+
-- Google Chrome (any recent version)
+- Google Chrome 116+ (`minimum_chrome_version` in the manifest)
 
 ---
 
@@ -30,17 +30,31 @@ npm run build
 
 This runs three steps in sequence:
 
-| Step | Command | Output |
-|------|---------|--------|
-| 1. Popup build | `vite build --config vite.config.ts` | `dist/popup/` |
-| 2. Service worker build | `vite build --config vite.config.bg.ts` | `dist/background/service-worker.js` |
-| 3. Assemble | `node scripts/assemble.js` | Copies `manifest.json`, `blocked/`, `icons/` into `dist/` |
+| Step | Script | Command | Output |
+|------|--------|---------|--------|
+| 1. Popup build | `build:popup` | `tsc --noEmit` + `vite build --config vite.config.ts` | `dist/popup/` |
+| 2. Service worker build | `build:bg` | `vite build --config vite.config.bg.ts` | `dist/background/service-worker.js` |
+| 3. Assemble | `assemble` | `node scripts/assemble.js` | Copies `manifest.json`, `blocked/`, `icons/` into `dist/` |
 
 Final output: **`apps/extension/dist/`** — this folder is a complete Chrome extension.
 
-> Before loading, you need icons. Either:
-> - **Option A (recommended):** Place your own `icon16.png`, `icon48.png`, `icon128.png` in `apps/extension/icons/`
-> - **Option B:** Create them programmatically — `npm install canvas` then `node scripts/generate-icons.js`
+Icons live in `apps/extension/icons/` and ship with the repo. To regenerate them
+programmatically: `npm install canvas`, then `node scripts/generate-icons.js`.
+
+### 4. Run the unit tests
+
+```powershell
+npm test
+```
+
+Vitest suites cover the background session brain, DNR rule building, and the
+popup ipc/storage layers. CI (`.github/workflows/ci.yml`) runs this on every push.
+
+For a rebuild-on-save loop:
+
+```powershell
+npm run dev
+```
 
 ---
 
@@ -50,8 +64,8 @@ Final output: **`apps/extension/dist/`** — this folder is a complete Chrome ex
 2. Enable **Developer mode** (top-right toggle)
 3. Click **Load unpacked**
 4. Select the `apps/extension/dist/` folder
-5. The Focus Blocker extension appears in your extensions list
-6. Click the puzzle icon in Chrome toolbar → pin Focus Blocker for easy access
+5. Focus Blocker appears in your extensions list
+6. Click the puzzle icon in the Chrome toolbar and pin Focus Blocker
 
 ---
 
@@ -62,24 +76,37 @@ Final output: **`apps/extension/dist/`** — this folder is a complete Chrome ex
 | Step | Expected result |
 |------|-----------------|
 | Click the extension icon | Popup opens (380px wide) |
-| Navigate between tabs (Focus/Block/Allow/Presets/History/Settings) | Views switch correctly |
+| Navigate the top tabs (Focus / Block / Allow / Schedule / History / Settings) | Views switch correctly |
 | Data persists after closing/reopening popup | Yes (stored in chrome.storage.local) |
 
 ### Blocking test (core feature)
 
-1. Open popup → click **Block** tab
-2. Add `reddit.com` to the blocklist
-3. Click **Focus** tab → click **Start 25m Focus**
+1. Open popup → **Block** tab
+2. Add `reddit.com` to the blocklist (malformed entries like `*foo(bar` are rejected inline)
+3. Go to **Focus** tab → click **focus** → enter minutes → **Start**
 4. Navigate to `https://reddit.com` in any Chrome tab
-5. **Expected:** See the "Site Blocked" page instead of Reddit
+5. **Expected:** See the blocked page instead of Reddit
 6. Try `https://www.reddit.com` — also blocked
 7. Navigate to any non-blocked site → loads normally
 8. Return to popup → click **Stop Session**
 9. Navigate to `reddit.com` again → loads normally
 
+### Lockdown test
+
+Same as above but start with the **lockdown** button: every site redirects except
+domains on the **Allow** list and extension pages.
+
+### Schedule test
+
+1. Open popup → **Schedule** tab
+2. Create a schedule covering the current time window on today's weekday
+3. The service worker activates a scheduled session at the next boundary alarm;
+   blocking applies until the end time
+4. Delete the schedule mid-session → blocking clears at the next reconcile
+
 ### Persistence test
 
-1. Add several domains, create a preset, start a session
+1. Add several domains, start a session
 2. Close Chrome entirely and reopen it
 3. Open popup — all data is still there
 4. If a session was active: service worker re-reads state and reapplies rules on startup
@@ -120,9 +147,13 @@ chrome.declarativeNetRequest.getDynamicRules(rules => console.log(rules))
 Popup (React UI)
   writes to chrome.storage.local via ipc.ts
     chrome.storage.onChanged fires in service worker
-      service worker calls chrome.declarativeNetRequest.updateDynamicRules
-        Chrome blocks matching requests at network level
+      service worker reconciles state under its mutation lock
+        chrome.declarativeNetRequest.updateDynamicRules
+          Chrome blocks matching requests at network level
 ```
+
+Session lifecycle mutations (start/stop/expire) travel as runtime messages so
+they serialize inside the worker's mutation lock instead of racing storage.
 
 ### Storage keys (chrome.storage.local)
 
@@ -130,10 +161,13 @@ Popup (React UI)
 |-----|------|-------------|
 | `blocklist` | `{id, domain}[]` | User's block list |
 | `whitelist` | `{id, domain}[]` | User's allow list |
-| `presets` | `Preset[]` | Saved session configs |
-| `active_session` | `Session or null` | Currently running session |
-| `history` | `Session[]` | Past sessions |
-| `settings` | `{os_allowlist_enabled}` | App settings |
+| `temporary_allowlist` | `{id, domain, expires_at}[]` | Time-boxed allow entries |
+| `schedules` | `Schedule[]` | Recurring blocking windows |
+| `active_session` | `ActiveSessionRecord \| null` | Currently running session |
+| `history` | `ArchivedSessionRecord[]` | Past sessions |
+| `schedule_suppressed_until` | `number \| null` | Timestamp until schedules stay off after an early stop |
+| `active_challenge` | `{type, status} \| null` | Stop-challenge gate in progress |
+| `settings` | `{stop_challenge, challenge_countdown_duration, challenge_countdown_breathing}` | App settings |
 
 ---
 

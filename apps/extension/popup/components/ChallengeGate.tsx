@@ -119,7 +119,7 @@ function CountdownChallenge({ settings, onSuccess }: { settings: AppSettings, on
 }
 
 function TypingChallenge({ onSuccess }: { onSuccess: () => void }) {
-  const textToType = "I'm stopping this focus session early because I'm letting a quick urge get the better of me. I know I set up this block when I was thinking clearly, to help me get things done. By turning it off now, I'm choosing to waste my time on cheap distractions instead of doing the actual work I promised myself I would do. I know I'll regret this choice as soon as I close this screen, but I'm still doing it. I, now, therefore, succumb to my urge and let go of the countless oppurtunites that will occur if I resume this session.";
+  const textToType = "I'm stopping this focus session early because I'm letting a quick urge get the better of me. I know I set up this block when I was thinking clearly, to help me get things done. By turning it off now, I'm choosing to waste my time on cheap distractions instead of doing the actual work I promised myself I would do. I know I'll regret this choice as soon as I close this screen, but I'm still doing it. I, now, therefore, succumb to my urge and let go of the countless opportunities that will occur if I resume this session.";
   const [input, setInput] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 

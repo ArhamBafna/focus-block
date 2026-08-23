@@ -111,10 +111,6 @@ export default function Settings() {
     }
   };
 
-  const toggleOsAllowlist = () => {
-    if (settings) void saveSetting("os_allowlist_enabled", !settings.os_allowlist_enabled);
-  };
-
   const changeStopChallenge = (e: React.ChangeEvent<HTMLSelectElement>) => {
     void saveSetting("stop_challenge", e.target.value);
   };
@@ -159,17 +155,6 @@ export default function Settings() {
               {error}
             </div>
           )}
-          <SettingRow
-            title="OS Essentials Allowlist"
-            description="Allow essential Windows services even during Lockdown mode."
-            control={
-              <Toggle
-                checked={settings.os_allowlist_enabled}
-                onChange={toggleOsAllowlist}
-              />
-            }
-          />
-
           <SettingRow
             layout="vertical"
             title={
@@ -274,7 +259,9 @@ export default function Settings() {
               lineHeight: 1.6,
             }}
           >
-            <strong style={{ color: "var(--color-neutral-700)" }}>Focus Blocker Extension v0.1.0</strong>
+            <strong style={{ color: "var(--color-neutral-700)" }}>
+              Focus Blocker Extension v{chrome.runtime.getManifest().version}
+            </strong>
           </div>
         </div>
       )}

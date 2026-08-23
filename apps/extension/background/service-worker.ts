@@ -48,15 +48,6 @@ interface Schedule {
   ends_on?: string | null;
 }
 
-interface Preset {
-  id: string;
-  name: string;
-  mode: "blocklist" | "lockdown";
-  duration_minutes: number;
-  blocklist: string[];
-  whitelist: string[];
-}
-
 interface ActiveChallenge {
   type: string;
   status: "pending" | "passed";
@@ -66,13 +57,11 @@ interface StorageData {
   blocklist: { id: number; domain: string }[];
   whitelist: { id: number; domain: string }[];
   temporary_allowlist: { id: string; domain: string; expires_at: number }[];
-  presets: Preset[];
   schedules: Schedule[];
   active_session: ActiveSessionRecord | null;
   history: ArchivedSessionRecord[];
   schedule_suppressed_until: number | null;
   active_challenge: ActiveChallenge | null;
-  settings: { os_allowlist_enabled: boolean };
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
