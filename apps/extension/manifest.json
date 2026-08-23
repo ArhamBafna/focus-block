@@ -1,8 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Focus Blocker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Block distracting websites and stay in focus. A browser extension mirroring the Focus Blocker desktop app.",
+  "author": "Arham Bafna",
+  "homepage_url": "https://github.com/ArhamBafna/focus-block",
+  "minimum_chrome_version": "116",
 
   "icons": {
     "16": "icons/icon16.png",
@@ -28,7 +31,6 @@
   "permissions": [
     "declarativeNetRequest",
     "storage",
-    "tabs",
     "alarms"
   ],
 

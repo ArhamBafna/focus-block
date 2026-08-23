@@ -267,7 +267,7 @@ export const ipc = {
 
   getHealth: async (): Promise<ServiceHealth> => ({
     running: true,
-    version: "0.1.0-ext",
+    version: chrome.runtime.getManifest().version,
   }),
 
   getStatus: async (): Promise<ServiceStatus> => {
@@ -279,7 +279,7 @@ export const ipc = {
     const activeChallenge = await storageGet("active_challenge");
 
     return {
-      health: { running: true, version: "0.1.0-ext" },
+      health: { running: true, version: chrome.runtime.getManifest().version },
       active_session:
         activeSession && activeSession.status === "active"
           ? {

@@ -65,6 +65,7 @@ export function installChromeMock(): ChromeMockHandles {
     runtime: {
       id: "test-extension-id",
       lastError: undefined as { message?: string } | undefined,
+      getManifest: () => ({ version: "0.2.0" }) as { version: string },
       onMessage: { addListener: () => {} },
       onInstalled: { addListener: () => {} },
       onStartup: { addListener: () => {} },

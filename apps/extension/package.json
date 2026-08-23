@@ -1,7 +1,7 @@
 {
   "name": "focus-blocker-extension",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite build --config vite.config.ts --watch & vite build --config vite.config.bg.ts --watch",
@@ -29,3 +29,4 @@
     "vitest": "^4.1.11"
   }
 }
+
