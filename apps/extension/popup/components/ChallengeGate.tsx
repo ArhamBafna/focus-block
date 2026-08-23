@@ -61,10 +61,11 @@ function CountdownChallenge({ settings, onSuccess }: { settings: AppSettings, on
   const [breathePhase, setBreathePhase] = useState("Breathe In");
 
   useEffect(() => {
-    if (timeLeft <= 0) return;
-    const t = setInterval(() => setTimeLeft(l => l - 1), 1000);
+    // One interval for the whole lifetime of the component; never recreated
+    // per tick (issue #21).
+    const t = setInterval(() => setTimeLeft((l) => (l > 0 ? l - 1 : 0)), 1000);
     return () => clearInterval(t);
-  }, [timeLeft]);
+  }, []);
 
   useEffect(() => {
     if (!settings.challenge_countdown_breathing) return;
@@ -187,6 +188,19 @@ function PatternChallenge({ onSuccess }: { onSuccess: () => void }) {
   const [errorBlock, setErrorBlock] = useState<number | null>(null);
   const [levelSuccess, setLevelSuccess] = useState(false);
   const clickTimeoutRef = useRef<number | null>(null);
+  // Async sequence playback and level-up timeouts must not touch state after
+  // the gate unmounts (issue #21).
+  const aliveRef = useRef(true);
+  const levelUpTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      if (clickTimeoutRef.current) clearTimeout(clickTimeoutRef.current);
+      if (levelUpTimeoutRef.current) clearTimeout(levelUpTimeoutRef.current);
+    };
+  }, []);
 
   const startLevel = (lvl: number, forceReset = false) => {
     setSequence(prev => {
@@ -214,11 +228,14 @@ function PatternChallenge({ onSuccess }: { onSuccess: () => void }) {
     setPlaying(true);
     await new Promise(r => setTimeout(r, 600));
     for (let i = 0; i < seq.length; i++) {
+      if (!aliveRef.current) return;
       setActiveBlock(seq[i]);
       await new Promise(r => setTimeout(r, 400));
+      if (!aliveRef.current) return;
       setActiveBlock(null);
       await new Promise(r => setTimeout(r, 200));
     }
+    if (!aliveRef.current) return;
     setPlaying(false);
   };
 
@@ -248,7 +265,8 @@ function PatternChallenge({ onSuccess }: { onSuccess: () => void }) {
         onSuccess();
       } else {
         setLevelSuccess(true);
-        setTimeout(() => {
+        levelUpTimeoutRef.current = window.setTimeout(() => {
+          if (!aliveRef.current) return;
           setLevelSuccess(false);
           startLevel(level + 1);
         }, 500);
@@ -304,6 +322,14 @@ function MathChallenge({ onSuccess }: { onSuccess: () => void }) {
   const [input, setInput] = useState("");
   const [shake, setShake] = useState(false);
   const [showError, setShowError] = useState(false);
+  // Wrong-answer reset timer must not fire after unmount (issue #21).
+  const resetTimeoutRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (resetTimeoutRef.current) clearTimeout(resetTimeoutRef.current);
+    };
+  }, []);
 
   const generateQ = () => {
     const type = Math.random();
@@ -335,7 +361,7 @@ function MathChallenge({ onSuccess }: { onSuccess: () => void }) {
     } else {
       setShake(true);
       setShowError(true);
-      setTimeout(() => {
+      resetTimeoutRef.current = window.setTimeout(() => {
         setShake(false);
         setShowError(false);
         setQuestionsSolved(0);

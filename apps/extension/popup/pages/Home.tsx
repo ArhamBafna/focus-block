@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ipc, ServiceStatus, AppSettings } from "../lib/ipc";
-import { Play, Stop, ShieldCheck } from "@phosphor-icons/react";
+import { Play, Stop, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { ChallengeGate } from "../components/ChallengeGate";
 
 function formatTime(sec: number) {
@@ -9,42 +9,107 @@ function formatTime(sec: number) {
   return `${m}:${s}`;
 }
 
+/** One honest status for the page; no phase fakes readiness (issue #21). */
+type HomePhase = "loading" | "unreachable" | "ready";
+
+const warningBannerStyle: React.CSSProperties = {
+  marginBottom: "16px",
+  padding: "10px 14px",
+  background: "#fff8e0",
+  border: "1px solid #f0d070",
+  borderRadius: "10px",
+  fontSize: "12px",
+  color: "#7a5c00",
+  width: "100%",
+};
+
 export default function Home() {
+  // Last-known-good status. Kept during transient failures so an active
+  // session keeps rendering instead of snapping to a fake idle state.
   const [status, setStatus] = useState<ServiceStatus | null>(null);
+  // The mount effect runs once, so its closures read the latest status
+  // through a ref instead of the render-scoped state variable.
+  const statusRef = useRef<ServiceStatus | null>(null);
+  const recordStatus = (next: ServiceStatus | null) => {
+    statusRef.current = next;
+    setStatus(next);
+  };
+  const [phase, setPhase] = useState<HomePhase>("loading");
+  const [degraded, setDegraded] = useState(false);
   const [settings, setSettings] = useState<AppSettings | null>(null);
-  const [loading, setLoading] = useState(true);
   const [sessionInputMode, setSessionInputMode] = useState<"blocklist" | "lockdown" | null>(null);
   const [minutesStr, setMinutesStr] = useState("25");
   const [hoveredSessionMode, setHoveredSessionMode] = useState<"blocklist" | "lockdown" | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  // Display-only clock: re-renders the countdown locally without sending any
+  // message to the service worker.
+  const [, setTick] = useState(0);
 
   const fetchStatus = async () => {
-    try {
-      setStatus(await ipc.getStatus());
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
+    const envelope = await ipc.getStatusSafe();
+    if (envelope.ok) {
+      recordStatus(envelope.data);
+      setDegraded(false);
+      setPhase("ready");
+      return;
     }
+    if (envelope.kind === "unavailable") {
+      if (statusRef.current?.active_session) {
+        // Mid-session transport loss: keep the session view, warn quietly.
+        setDegraded(true);
+        setPhase("ready");
+      } else {
+        setPhase("unreachable");
+      }
+      return;
+    }
+    // Application error: data channel works, but this probe failed.
+    console.error("[FocusBlocker popup]", envelope.message);
+    if (!statusRef.current) setPhase("unreachable");
+    else setDegraded(true);
   };
 
   useEffect(() => {
     void fetchStatus();
     void ipc.getSettings().then(setSettings).catch(console.error);
-    const interval = setInterval(fetchStatus, 1000);
-    return () => clearInterval(interval);
+
+    // Event-driven refresh: the service worker's storage writes are the source
+    // of truth. No per-second getStatus/expire messages while the popup is open.
+    const onStorageChanged = (
+      changes: Record<string, unknown>,
+      area: chrome.storage.AreaName
+    ) => {
+      if (area !== "local") return;
+      if ("active_session" in changes || "active_challenge" in changes) {
+        void fetchStatus();
+      }
+    };
+    chrome.storage.onChanged.addListener(onStorageChanged);
+
+    const displayClock = setInterval(() => setTick((t) => t + 1), 1000);
+
+    return () => {
+      clearInterval(displayClock);
+      chrome.storage.onChanged.removeListener(onStorageChanged);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startConfiguredSession = async () => {
     if (!sessionInputMode) return;
     const minutes = Number.parseInt(minutesStr, 10);
-    if (!Number.isFinite(minutes) || minutes <= 0) return;
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      setActionError("Enter a valid number of minutes.");
+      return;
+    }
 
+    setActionError(null);
     try {
       await ipc.startSession(sessionInputMode, minutes);
       setSessionInputMode(null);
       void fetchStatus();
     } catch (error) {
-      console.error(error);
+      setActionError(error instanceof Error ? error.message : String(error));
     }
   };
 
@@ -59,20 +124,21 @@ export default function Home() {
         await ipc.startChallenge(challengeToStart);
         void fetchStatus();
       } catch (error) {
-        console.error(error);
+        setActionError(error instanceof Error ? error.message : String(error));
       }
       return;
     }
 
+    setActionError(null);
     try {
       await ipc.stopSession();
       void fetchStatus();
     } catch (error) {
-      console.error(error);
+      setActionError(error instanceof Error ? error.message : String(error));
     }
   };
 
-  if (loading) {
+  if (phase === "loading") {
     return (
       <div
         style={{
@@ -89,8 +155,57 @@ export default function Home() {
     );
   }
 
+  if (phase === "unreachable") {
+    return (
+      <div
+        style={{
+          height: "440px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "24px 32px",
+          textAlign: "center",
+          gap: "18px",
+        }}
+      >
+        <Warning size={40} weight="fill" color="#b98a00" />
+        <h1 style={{ fontSize: "20px", fontWeight: 700, color: "var(--color-vast)", margin: 0 }}>
+          Background Unavailable
+        </h1>
+        <p style={{ fontSize: "13px", color: "var(--color-neutral-500)", margin: 0, maxWidth: "300px" }}>
+          The Focus Blocker background service is not responding. Sessions cannot be started or
+          stopped until it recovers.
+        </p>
+        <button
+          onClick={() => { setPhase("loading"); void fetchStatus(); }}
+          style={{
+            padding: "10px 26px",
+            fontSize: "14px",
+            fontWeight: 600,
+            fontFamily: "var(--font-sans)",
+            background: "var(--color-vast)",
+            color: "var(--color-lumen)",
+            border: "none",
+            borderRadius: "100px",
+            cursor: "pointer",
+          }}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   const active = status?.active_session;
   const challenge = status?.active_challenge;
+
+  // Live countdown computed from the session start time; no service-worker round trip.
+  let remainingSec: number | null = null;
+  if (active) {
+    const elapsed = Math.floor((Date.now() - new Date(active.session.started_at).getTime()) / 1000);
+    remainingSec = Math.max(0, active.session.planned_duration_sec - elapsed);
+  }
 
   if (challenge && challenge.status === "pending" && settings) {
     return (
@@ -98,11 +213,15 @@ export default function Home() {
         challengeType={challenge.type}
         settings={settings}
         onSuccess={async () => {
-          await ipc.stopSession();
+          await ipc.stopSession().catch((error: unknown) => {
+            setActionError(error instanceof Error ? error.message : String(error));
+          });
           void fetchStatus();
         }}
         onCancel={async () => {
-          await ipc.cancelChallenge();
+          await ipc.cancelChallenge().catch((error: unknown) => {
+            setActionError(error instanceof Error ? error.message : String(error));
+          });
           void fetchStatus();
         }}
       />
@@ -121,6 +240,13 @@ export default function Home() {
         textAlign: "center",
       }}
     >
+      {/* Transient failure while showing last-known-good data */}
+      {degraded && (
+        <div style={warningBannerStyle}>
+          ⚠ Lost contact with the background service. Showing the last known state — retrying.
+        </div>
+      )}
+
       <div
         style={{
           width: "72px",
@@ -163,6 +289,12 @@ export default function Home() {
         )}
       </h1>
 
+      {actionError && !active && (
+        <div role="alert" style={{ marginBottom: "8px", fontSize: "12px", color: "#b02020" }}>
+          {actionError}
+        </div>
+      )}
+
       {active ? (
         <>
           <div
@@ -176,12 +308,19 @@ export default function Home() {
               fontFamily: "var(--font-sans)",
             }}
           >
-            {active.remaining_sec !== null ? formatTime(active.remaining_sec) : "∞"}
+            {remainingSec !== null ? formatTime(remainingSec) : "∞"}
           </div>
           <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", marginBottom: "24px" }}>
             {active.session.blocklist_snapshot.length} site
             {active.session.blocklist_snapshot.length !== 1 ? "s" : ""} blocked
           </div>
+
+          {actionError && (
+            <div role="alert" style={{ marginBottom: "12px", fontSize: "12px", color: "#b02020" }}>
+              {actionError}
+            </div>
+          )}
+
           <button
             onClick={stopSession}
             style={{
@@ -223,7 +362,7 @@ export default function Home() {
             <input
               type="number"
               value={minutesStr}
-              onChange={(event) => setMinutesStr(event.target.value)}
+              onChange={(event) => { setMinutesStr(event.target.value); setActionError(null); }}
               style={{
                 width: "50px",
                 border: "none",
@@ -239,9 +378,16 @@ export default function Home() {
             />
             <span style={{ fontSize: "14px", color: "var(--color-vast)", fontWeight: 600 }}>minutes</span>
           </div>
+
+          {actionError && (
+            <div role="alert" style={{ fontSize: "12px", color: "#b02020" }}>
+              {actionError}
+            </div>
+          )}
+
           <div style={{ display: "flex", gap: "8px" }}>
             <button
-              onClick={() => setSessionInputMode(null)}
+              onClick={() => { setSessionInputMode(null); setActionError(null); }}
               style={{
                 padding: "10px 20px",
                 fontSize: "14px",
