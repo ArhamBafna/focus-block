@@ -9,6 +9,7 @@
     "build:popup": "tsc --noEmit && vite build --config vite.config.ts",
     "build:bg": "vite build --config vite.config.bg.ts",
     "assemble": "node scripts/assemble.js",
+    "icons": "node scripts/generate-icons.js",
     "test": "vitest run"
   },
   "dependencies": {
@@ -24,9 +25,12 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "canvas": "^3.2.3",
     "typescript": "~5.8.3",
     "vite": "^7.0.4",
     "vitest": "^4.1.11"
+  },
+  "allowScripts": {
+    "canvas@3.2.3": true
   }
 }
-
