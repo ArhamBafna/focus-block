@@ -25,7 +25,7 @@ interface SessionBase {
 }
 
 /** A live session occupying the active slot. */
-interface ActiveSessionRecord extends SessionBase {
+export interface ActiveSessionRecord extends SessionBase {
   status: "active";
   ended_at: null;
 }
@@ -34,7 +34,7 @@ interface ActiveSessionRecord extends SessionBase {
 type ArchivedOutcome = "completed" | "stopped";
 
 /** A finished session, as stored in history. */
-interface ArchivedSessionRecord extends SessionBase {
+export interface ArchivedSessionRecord extends SessionBase {
   status: ArchivedOutcome;
   ended_at: string;
 }
@@ -125,7 +125,7 @@ async function setIfChanged<K extends keyof StorageData>(key: K, value: StorageD
 
 let mutationTail: Promise<unknown> = Promise.resolve();
 
-function withLock<T>(task: () => Promise<T>): Promise<T> {
+export function withLock<T>(task: () => Promise<T>): Promise<T> {
   const run = mutationTail.then(task, task);
   mutationTail = run.then(
     () => undefined,
@@ -136,7 +136,7 @@ function withLock<T>(task: () => Promise<T>): Promise<T> {
 
 let reconcileRequested = false;
 
-function requestReconcile(): Promise<void> {
+export function requestReconcile(): Promise<void> {
   reconcileRequested = true;
   return withLock(async () => {
     while (reconcileRequested) {
@@ -457,6 +457,7 @@ function isActiveSessionShape(value: unknown): value is ActiveSessionRecord {
   const v = value as Record<string, unknown>;
   return (
     typeof v.id === "string" &&
+    v.status === "active" &&
     (v.mode === "blocklist" || v.mode === "lockdown") &&
     typeof v.started_at === "string" &&
     typeof v.planned_duration_sec === "number" &&
@@ -465,7 +466,7 @@ function isActiveSessionShape(value: unknown): value is ActiveSessionRecord {
   );
 }
 
-async function migrateStrayActiveSession(): Promise<ActiveSessionRecord | null> {
+export async function migrateStrayActiveSession(): Promise<ActiveSessionRecord | null> {
   const value = await storageGetRaw("active_session");
   if (value === undefined || value === null) return null;
 
@@ -537,7 +538,7 @@ async function activateScheduledSession(schedule: Schedule, now: Date): Promise<
 
 // ── Session expiry ───────────────────────────────────────────────────────────
 
-async function expireSession(): Promise<void> {
+export async function expireSession(): Promise<void> {
   const session = await storageGet("active_session");
   if (!session) return;
 
@@ -561,7 +562,7 @@ async function expireSession(): Promise<void> {
  * Read current storage state and apply blocking rules accordingly.
  * Called on startup, on storage changes, and on alarm.
  */
-async function applyBlockingState(): Promise<void> {
+export async function applyBlockingState(): Promise<void> {
   const schedules = (await storageGet("schedules")) ?? [];
   await scheduleNextBoundaryAlarm(schedules);
   const temporaryAllows = await getActiveTemporaryAllows();
@@ -653,7 +654,7 @@ async function applyBlockingState(): Promise<void> {
 // runs inside the mutation lock here, so rapid clicks and expiry alarms
 // serialize instead of racing read-modify-write updates.
 
-async function startSessionLocked(
+export async function startSessionLocked(
   mode: ActiveSessionRecord["mode"],
   duration_minutes: number,
   preset_id?: string
@@ -685,7 +686,7 @@ async function startSessionLocked(
   });
 }
 
-async function stopSessionLocked(): Promise<null> {
+export async function stopSessionLocked(): Promise<null> {
   return withLock(async () => {
     const active = await storageGet("active_session");
     if (active) {

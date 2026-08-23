@@ -8,7 +8,8 @@
     "build": "npm run build:popup && npm run build:bg && node scripts/assemble.js",
     "build:popup": "tsc --noEmit && vite build --config vite.config.ts",
     "build:bg": "vite build --config vite.config.bg.ts",
-    "assemble": "node scripts/assemble.js"
+    "assemble": "node scripts/assemble.js",
+    "test": "vitest run"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -24,6 +25,7 @@
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^4.1.11"
   }
 }
