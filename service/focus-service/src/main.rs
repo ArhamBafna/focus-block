@@ -1,3 +1,4 @@
+mod app_enforcement;
 mod service;
 mod session_manager;
 

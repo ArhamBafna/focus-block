@@ -35,6 +35,20 @@ export interface DomainEntry {
   domain: string;
 }
 
+export type AppBlockTarget =
+  | { kind: "executable"; path: string }
+  | { kind: "folder"; path: string }
+  | { kind: "package"; package_family_name: string };
+
+export interface AppBlockEntry {
+  id: number;
+  target: AppBlockTarget;
+}
+
+interface AppBlockTargetList {
+  targets: AppBlockEntry[];
+}
+
 export interface ServiceHealth {
   running: boolean;
   version: string;
@@ -344,6 +358,10 @@ export const ipc = {
     return request<number>("AddBlocklist", { domain: norm }).then(unwrap);
   },
   removeBlocklist: (id: number) => request<null>("RemoveBlocklist", { id }).then(unwrap),
+
+  listAppBlockTargets: async () => (await request<AppBlockTargetList>("ListAppBlockTargets").then(unwrap)),
+  addAppBlockTarget: (target: AppBlockTarget) => request<number>("AddAppBlockTarget", { target }).then(unwrap),
+  removeAppBlockTarget: (id: number) => request<null>("RemoveAppBlockTarget", { id }).then(unwrap),
 
   listWhitelist: () => request<DomainEntry[]>("ListWhitelist").then(unwrap),
   addWhitelist: (domain: string) => {

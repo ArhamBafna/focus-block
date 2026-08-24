@@ -3,7 +3,9 @@ use crate::error::StoreError;
 use crate::migrations::{SCHEMA, SEED_PRESETS};
 use chrono::{DateTime, Utc};
 use focus_core::protocol::DomainEntry;
-use focus_core::{normalize_domain, Preset, Session, SessionMode};
+use focus_core::{
+    normalize_domain, AppBlockEntry, AppBlockTarget, Preset, Session, SessionMode,
+};
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
@@ -44,6 +46,7 @@ impl FocusStore {
 
     fn migrate(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(SCHEMA)?;
+        self.add_sessions_app_target_snapshot_column()?;
 
         let count: i64 = self
             .conn
@@ -160,6 +163,55 @@ impl FocusStore {
         self.remove_domain_from("blocklist_domains", id)
     }
 
+    pub fn list_app_block_targets(&self) -> Result<Vec<AppBlockEntry>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, target_kind, target_value FROM app_block_targets ORDER BY id",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let id: i64 = row.get(0)?;
+            let kind: String = row.get(1)?;
+            let value: String = row.get(2)?;
+            let target = AppBlockTarget::from_storage(&kind, value).map_err(|message| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    1,
+                    rusqlite::types::Type::Text,
+                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, message)),
+                )
+            })?;
+            Ok(AppBlockEntry { id, target })
+        })?;
+        Ok(rows.collect::<Result<_, _>>()?)
+    }
+
+    pub fn app_block_targets(&self) -> Result<Vec<AppBlockTarget>, StoreError> {
+        Ok(self
+            .list_app_block_targets()?
+            .into_iter()
+            .map(|entry| entry.target)
+            .collect())
+    }
+
+    pub fn add_app_block_target(&self, target: &AppBlockTarget) -> Result<i64, StoreError> {
+        let target = target.normalized().map_err(StoreError::Message)?;
+        let (kind, value) = target.storage_parts();
+        self.conn.execute(
+            "INSERT OR IGNORE INTO app_block_targets (target_kind, target_value) VALUES (?1, ?2)",
+            params![kind, value],
+        )?;
+
+        self.conn.query_row(
+            "SELECT id FROM app_block_targets WHERE target_kind = ?1 AND target_value = ?2",
+            params![kind, value],
+            |row| row.get(0),
+        ).map_err(StoreError::from)
+    }
+
+    pub fn remove_app_block_target(&self, id: i64) -> Result<(), StoreError> {
+        self.conn
+            .execute("DELETE FROM app_block_targets WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
     pub fn list_whitelist(&self) -> Result<Vec<DomainEntry>, StoreError> {
         self.list_domains_in("whitelist_domains")
     }
@@ -267,7 +319,7 @@ impl FocusStore {
         let mode_str = codec::encode_mode(session.mode);
         let status_str = codec::encode_status(session.status);
         self.conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 session.id.to_string(),
                 session.preset_id.map(|id| id.to_string()),
@@ -276,8 +328,9 @@ impl FocusStore {
                 session.ended_at.map(|t| t.to_rfc3339()),
                 session.planned_duration_sec,
                 status_str,
-                codec::encode_domain_list(&session.blocklist_snapshot),
-                codec::encode_domain_list(&session.whitelist_snapshot),
+                serde_json::to_string(&session.blocklist_snapshot)?,
+                serde_json::to_string(&session.whitelist_snapshot)?,
+                serde_json::to_string(&session.app_block_targets_snapshot)?,
             ],
         )?;
         Ok(())
@@ -285,7 +338,7 @@ impl FocusStore {
 
     pub fn get_active_session(&self) -> Result<Option<Session>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
         )?;
         let mut rows = stmt.query([])?;
         while let Some(row) = rows.next()? {
@@ -303,7 +356,7 @@ impl FocusStore {
 
     pub fn list_history(&self, limit: u32) -> Result<Vec<Session>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT ?1",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT ?1",
         )?;
         let mut rows = stmt.query(params![limit])?;
         let mut sessions = Vec::new();
@@ -326,6 +379,23 @@ impl FocusStore {
         Ok(())
     }
 
+    /// Existing installations predate app blocking. SQLite's `CREATE TABLE IF
+    /// NOT EXISTS` does not add new columns, so make that upgrade explicit and
+    /// idempotent before any session is read or written.
+    fn add_sessions_app_target_snapshot_column(&self) -> Result<(), StoreError> {
+        let mut stmt = self.conn.prepare("PRAGMA table_info(sessions)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !columns.iter().any(|column| column == "app_block_targets_snapshot") {
+            self.conn.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN app_block_targets_snapshot TEXT NOT NULL DEFAULT '[]';",
+            )?;
+        }
+        Ok(())
+    }
+
 }
 
 /// Ok(session) for a good row; Err(CorruptRow) marks a row that should be
@@ -335,8 +405,14 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
     let status = codec::parse_status(&row.get::<_, String>(6)?);
     let started_at: String = row.get(3)?;
     let ended_at: Option<String> = row.get(4)?;
-    let blocklist = codec::parse_domain_list(&row.get::<_, String>(7)?);
-    let whitelist = codec::parse_domain_list(&row.get::<_, String>(8)?);
+
+    let blocklist: Vec<String> = serde_json::from_str(&row.get::<_, String>(7)?)
+        .map_err(|e| StoreError::CorruptRow(format!("blocklist JSON parse error: {e}")))?;
+    let whitelist: Vec<String> = serde_json::from_str(&row.get::<_, String>(8)?)
+        .map_err(|e| StoreError::CorruptRow(format!("whitelist JSON parse error: {e}")))?;
+    let app_block_targets: Vec<AppBlockTarget> = serde_json::from_str(&row.get::<_, String>(9)?)
+        .map_err(|e| StoreError::CorruptRow(format!("app_block_targets JSON parse error: {e}")))?;
+
     let id = codec::parse_id(&row.get::<_, String>(0)?)
         .map_err(|e| StoreError::CorruptRow(e.to_string()))?;
     let preset_id = match row.get::<_, Option<String>>(1)? {
@@ -350,6 +426,7 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
         },
         None => None,
     };
+
     Ok(Session {
         id,
         preset_id,
@@ -366,13 +443,14 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
         status,
         blocklist_snapshot: blocklist,
         whitelist_snapshot: whitelist,
+        app_block_targets_snapshot: app_block_targets,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use focus_core::{SessionEndReason, SessionMode};
+    use focus_core::{SessionMode, SessionStatus};
 
     fn memory_store() -> FocusStore {
         FocusStore::open(":memory:").expect("in-memory store opens")
@@ -413,8 +491,9 @@ mod tests {
     #[test]
     fn corrupt_history_row_is_skipped_others_still_load() {
         let store = memory_store();
-        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], None);
-        session.end(SessionEndReason::Stopped);
+        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], vec![], None);
+        session.status = SessionStatus::Stopped;
+        session.ended_at = Some(chrono::Utc::now());
         store.save_session(&session).expect("save");
         store
             .conn
@@ -529,9 +608,10 @@ mod tests {
     fn end_transition_persists_through_store() {
         use focus_core::SessionStatus;
         let store = memory_store();
-        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], None);
+        let mut session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], vec![], None);
         store.save_session(&session).expect("save active");
-        session.end(SessionEndReason::Stopped);
+        session.status = SessionStatus::Stopped;
+        session.ended_at = Some(chrono::Utc::now());
         store.save_session(&session).expect("save stopped");
         let history = store.list_history(10).expect("history");
         assert_eq!(history.len(), 1);

@@ -1,0 +1,9 @@
+{
+  "name": "com.focusblock.bridge",
+  "description": "FocusBlock Chrome policy bridge",
+  "path": "__FOCUSBLOCK_NATIVE_HOST_PATH__",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://__FOCUSBLOCK_EXTENSION_ID__/"
+  ]
+}

@@ -99,7 +99,7 @@ export default function Home() {
     return (
       <div
         style={{
-          height: "100%",
+          minHeight: "440px",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -159,12 +159,12 @@ export default function Home() {
   return (
     <div
       style={{
-        height: "100%",
+        minHeight: "440px",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        padding: "40px",
+        padding: "24px 32px",
         textAlign: "center",
       }}
     >
@@ -178,82 +178,73 @@ export default function Home() {
       {/* Status icon */}
       <div
         style={{
-          width: "80px",
-          height: "80px",
+          width: "72px",
+          height: "72px",
           borderRadius: "50%",
           background: active ? "var(--color-fathom)" : "var(--color-lumen-dark)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          marginBottom: "24px",
+          marginBottom: "20px",
           transition: "background 0.3s ease",
         }}
       >
         <ShieldCheck
-          size={36}
+          size={32}
           weight="fill"
           color={active ? "var(--color-lumen)" : "var(--color-neutral-400)"}
         />
       </div>
 
-      {/* Main heading */}
       <h1
         style={{
-          fontSize: "28px",
+          fontSize: "22px",
           fontWeight: 700,
-          letterSpacing: "-0.6px",
+          letterSpacing: "-0.5px",
           color: "var(--color-vast)",
-          margin: "0 0 8px",
+          margin: "0 0 6px",
         }}
       >
         {active ? (
           active.session.mode === "lockdown" ? (
             <span>
-              <span style={{ color: "#d93025" }}>Lockdown</span> Mode Active
+              <span style={{ color: "var(--color-pulse)" }}>Lockdown</span> Mode Active
             </span>
           ) : (
             "Focus Mode Active"
           )
         ) : (
-          "Ready to Focus"
+          "ready to focus?"
         )}
       </h1>
 
-      {/* Timer or subtitle */}
       {active ? (
         <>
           <div
             style={{
-              fontSize: "56px",
+              fontSize: "52px",
               fontWeight: 700,
               letterSpacing: "-2px",
               fontVariantNumeric: "tabular-nums",
               color: "var(--color-fathom)",
-              margin: "12px 0 28px",
+              margin: "10px 0 20px",
               fontFamily: "var(--font-sans)",
             }}
           >
             {active.remaining_sec !== null ? formatTime(active.remaining_sec) : "∞"}
           </div>
-
-          <div
-            style={{
-              fontSize: "13px",
-              color: "var(--color-neutral-500)",
-              marginBottom: "28px",
-            }}
-          >
+          <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", marginBottom: "24px" }}>
             {active.session.blocklist_snapshot.length} site
             {active.session.blocklist_snapshot.length !== 1 ? "s" : ""} blocked
           </div>
-
           <button
+            type="button"
             onClick={stopSession}
             style={{
               display: "inline-flex",
               alignItems: "center",
               gap: "8px",
-              padding: "12px 28px",
+              padding: "11px 28px",
               fontSize: "15px",
               fontWeight: 600,
               fontFamily: "var(--font-sans)",
@@ -265,25 +256,18 @@ export default function Home() {
               transition: "opacity 0.15s",
               boxShadow: "0 2px 12px rgba(26,26,26,0.15)",
             }}
-            onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.85")}
-            onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
+            onMouseEnter={(event) => { event.currentTarget.style.opacity = "0.85"; }}
+            onMouseLeave={(event) => { event.currentTarget.style.opacity = "1"; }}
           >
-            <Stop weight="fill" size={18} />
+            <Stop weight="fill" size={17} />
             Stop Session
           </button>
         </>
       ) : (
         <>
-          <p
-            style={{
-              fontSize: "15px",
-              color: "var(--color-neutral-500)",
-              margin: "0 0 20px",
-              maxWidth: "300px",
-            }}
-          >
+          <div style={{ fontSize: "15px", color: "var(--color-neutral-500)", margin: "0 0 20px", maxWidth: "300px" }}>
             Start a focus session to block distracting sites.
-          </p>
+          </div>
 
           {/* Inline duration picker (no native dialogs) */}
           <label
@@ -331,13 +315,14 @@ export default function Home() {
 
           <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
             <button
+              type="button"
               onClick={() => handleStartSession("blocklist")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "14px 36px",
-                fontSize: "16px",
+                padding: "13px 24px",
+                fontSize: "15px",
                 fontWeight: 700,
                 fontFamily: "var(--font-sans)",
                 background: "var(--color-fathom)",
@@ -348,48 +333,48 @@ export default function Home() {
                 transition: "opacity 0.15s, transform 0.15s",
                 boxShadow: "0 4px 20px rgba(3,79,70,0.3)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+              onMouseEnter={(event) => {
+                event.currentTarget.style.opacity = "0.9";
+                event.currentTarget.style.transform = "translateY(-1px)";
               }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              onMouseLeave={(event) => {
+                event.currentTarget.style.opacity = "1";
+                event.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              <Play weight="fill" size={18} />
-              Focus
+              <Play weight="fill" size={17} />
+              focus
             </button>
-
             <button
+              type="button"
               onClick={() => handleStartSession("lockdown")}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: "8px",
-                padding: "14px 36px",
-                fontSize: "16px",
+                padding: "13px 24px",
+                fontSize: "15px",
                 fontWeight: 700,
                 fontFamily: "var(--font-sans)",
-                background: "#d93025",
+                background: "var(--color-pulse)",
                 color: "var(--color-lumen)",
                 border: "none",
                 borderRadius: "100px",
                 cursor: "pointer",
                 transition: "opacity 0.15s, transform 0.15s",
-                boxShadow: "0 4px 20px rgba(217, 48, 37, 0.3)",
+                boxShadow: "0 4px 20px rgba(127, 28, 52, 0.3)",
               }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "0.9";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(-1px)";
+              onMouseEnter={(event) => {
+                event.currentTarget.style.opacity = "0.9";
+                event.currentTarget.style.transform = "translateY(-1px)";
               }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLElement).style.opacity = "1";
-                (e.currentTarget as HTMLElement).style.transform = "translateY(0)";
+              onMouseLeave={(event) => {
+                event.currentTarget.style.opacity = "1";
+                event.currentTarget.style.transform = "translateY(0)";
               }}
             >
-              <ShieldCheck weight="fill" size={18} />
-              Locked Down
+              <ShieldCheck weight="fill" size={17} />
+              lockdown
             </button>
           </div>
         </>

@@ -7,6 +7,10 @@ edition.workspace = true
 name = "focus-service"
 path = "src/main.rs"
 
+[[bin]]
+name = "focus-native-host"
+path = "src/native_host.rs"
+
 [dependencies]
 focus-core = { workspace = true }
 focus-store = { workspace = true }
@@ -22,3 +26,14 @@ thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_NetworkManagement_WindowsFilteringPlatform",
+    "Win32_Security",
+    "Win32_Security_Isolation",
+    "Win32_Storage_Packaging_Appx",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_Rpc",
+    "Win32_System_Services",
+    "Win32_System_Threading",
+] }

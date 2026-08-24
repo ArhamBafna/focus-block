@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use crate::AppBlockTarget;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -38,6 +39,8 @@ pub struct Session {
     pub status: SessionStatus,
     pub blocklist_snapshot: Vec<String>,
     pub whitelist_snapshot: Vec<String>,
+    #[serde(default)]
+    pub app_block_targets_snapshot: Vec<AppBlockTarget>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -63,6 +66,7 @@ impl Session {
         planned_duration_sec: u64,
         blocklist: Vec<String>,
         whitelist: Vec<String>,
+        app_block_targets: Vec<AppBlockTarget>,
         preset_id: Option<Uuid>,
     ) -> Self {
         Self {
@@ -75,6 +79,7 @@ impl Session {
             status: SessionStatus::Active,
             blocklist_snapshot: blocklist,
             whitelist_snapshot: whitelist,
+            app_block_targets_snapshot: app_block_targets,
         }
     }
 
@@ -122,6 +127,7 @@ mod tests {
             60,
             vec!["example.com".to_string()],
             vec![],
+            vec![],
             None,
         )
     }
@@ -162,7 +168,8 @@ mod tests {
             "planned_duration_sec": 60,
             "status": "active",
             "blocklist_snapshot": [],
-            "whitelist_snapshot": []
+            "whitelist_snapshot": [],
+            "app_block_targets_snapshot": []
         }"#;
         let mut session: Session = serde_json::from_str(json).expect("legacy row must load");
         assert_eq!(session.status, SessionStatus::Active);

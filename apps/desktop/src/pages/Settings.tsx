@@ -51,24 +51,24 @@ function SettingRow({
     <div
       style={{
         display: "flex",
-        alignItems: "center",
+        alignItems: "flex-start",
         justifyContent: "space-between",
-        gap: "24px",
-        padding: "18px 20px",
+        gap: "12px",
+        padding: "12px 14px",
         background: "var(--color-surface)",
         border: "1px solid var(--color-lumen-dark)",
-        borderRadius: "12px",
+        borderRadius: "10px",
       }}
     >
-      <div>
-        <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-vast)", marginBottom: "3px" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-vast)", marginBottom: "3px" }}>
           {title}
         </div>
-        <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", lineHeight: 1.5 }}>
+        <div style={{ fontSize: "11px", color: "var(--color-neutral-500)", lineHeight: 1.5 }}>
           {description}
         </div>
       </div>
-      {control}
+      <div style={{ flexShrink: 0, paddingTop: "1px" }}>{control}</div>
     </div>
   );
 }
@@ -76,6 +76,7 @@ function SettingRow({
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.getSettings().then(setSettings).catch(console.error);
@@ -85,35 +86,36 @@ export default function Settings() {
     if (!settings || saving) return;
     const newVal = !settings.os_allowlist_enabled;
     setSaving(true);
+    setSaveError(null);
     try {
       await ipc.updateSettings(newVal);
       setSettings({ ...settings, os_allowlist_enabled: newVal });
     } catch (e) {
-      alert("Failed to save setting: " + e);
+      setSaveError(e instanceof Error ? e.message : "Could not save setting.");
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: "720px" }}>
+    <div style={{ padding: "20px", maxWidth: "380px" }}>
       {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <h1 style={{ fontSize: "24px", fontWeight: 700, color: "var(--color-vast)", margin: 0, letterSpacing: "-0.4px" }}>
+      <div style={{ marginBottom: "16px" }}>
+        <h1 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-vast)", margin: 0, letterSpacing: "-0.3px" }}>
           Settings
         </h1>
-        <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
+        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-neutral-500)" }}>
           Configure how Focus Blocker behaves.
         </p>
       </div>
 
       {settings === null ? (
-        <div style={{ color: "var(--color-neutral-400)", fontSize: "14px" }}>Loading settings…</div>
+        <div style={{ color: "var(--color-neutral-400)", fontSize: "13px" }}>Loading…</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           <SettingRow
             title="OS Essentials Allowlist"
-            description="Allow essential Windows services (Windows Update, NTP, Microsoft connectivity tests) even during Lockdown mode."
+            description="Allow essential Windows services even during Lockdown mode."
             control={
               <Toggle
                 checked={settings.os_allowlist_enabled}
@@ -121,6 +123,11 @@ export default function Settings() {
               />
             }
           />
+          {saveError && (
+            <div role="alert" style={{ padding: "8px 12px", background: "#fff0f0", border: "1px solid #f8d0d0", borderRadius: "8px", fontSize: "12px", color: "var(--color-pulse)" }}>
+              {saveError}
+            </div>
+          )}
         </div>
       )}
     </div>

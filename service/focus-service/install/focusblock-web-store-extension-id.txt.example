@@ -1,0 +1,4 @@
+# Release packaging: copy this file to focusblock-web-store-extension-id.txt and
+# replace this line with the permanent Chrome Web Store extension ID.
+# End users must receive the populated file and never need to enter an ID.
+replace-with-32-character-chrome-web-store-extension-id

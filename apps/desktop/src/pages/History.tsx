@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
-import { ipc, Session } from "../lib/ipc";
+import { useEffect, useState } from "react";
 import { ClockCounterClockwise } from "@phosphor-icons/react";
+import { ipc, Session } from "../lib/ipc";
 
 function formatDuration(sec: number) {
   if (sec < 3600) return `${Math.round(sec / 60)}m`;
@@ -25,7 +25,7 @@ export default function History() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
-    ipc.listHistory(20).then(setSessions).catch(console.error);
+    void ipc.listHistory(20).then(setSessions).catch(console.error);
   }, []);
 
   async function handleClearHistory() {
@@ -41,19 +41,10 @@ export default function History() {
   }
 
   return (
-    <div style={{ padding: "32px 40px", maxWidth: "720px" }}>
-      {/* Header */}
-      <div style={{ marginBottom: "28px" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-          <h1
-          style={{
-            fontSize: "24px",
-            fontWeight: 700,
-            color: "var(--color-vast)",
-            margin: 0,
-            letterSpacing: "-0.4px",
-          }}
-          >
+    <div style={{ padding: "20px", maxWidth: "380px" }}>
+      <div style={{ marginBottom: "16px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          <h1 style={{ fontSize: "18px", fontWeight: 700, color: "var(--color-vast)", margin: 0, letterSpacing: "-0.3px" }}>
             History
           </h1>
           <button
@@ -61,126 +52,91 @@ export default function History() {
             onClick={() => setShowClearConfirm(true)}
             onMouseEnter={(event) => {
               if (!event.currentTarget.disabled) {
-                event.currentTarget.style.background = "#f8e4e4";
-                event.currentTarget.style.color = "#7f1c34";
-                event.currentTarget.style.borderColor = "#7f1c34";
+                event.currentTarget.style.background = "var(--color-pulse-soft)";
+                event.currentTarget.style.color = "var(--color-pulse)";
+                event.currentTarget.style.borderColor = "var(--color-pulse)";
               }
             }}
             onMouseLeave={(event) => {
               event.currentTarget.style.background = "transparent";
-              event.currentTarget.style.color = sessions.length === 0 ? "var(--color-neutral-300)" : "#7f1c34";
-              event.currentTarget.style.borderColor = sessions.length === 0 ? "var(--color-lumen-dark)" : "#7f1c34";
+              event.currentTarget.style.color = sessions.length === 0 ? "var(--color-text-disabled)" : "var(--color-pulse)";
+              event.currentTarget.style.borderColor = sessions.length === 0 ? "var(--color-lumen-dark)" : "var(--color-pulse)";
             }}
             disabled={isClearing || sessions.length === 0}
             style={{
-              border: "1px solid #7f1c34",
+              border: "1px solid var(--color-pulse)",
               background: "transparent",
-              color: sessions.length === 0 ? "var(--color-neutral-300)" : "#7f1c34",
-              borderRadius: "8px",
-              padding: "7px 12px",
-              fontSize: "12px",
+              color: sessions.length === 0 ? "var(--color-text-disabled)" : "var(--color-pulse)",
+              borderRadius: "7px",
+              padding: "5px 9px",
+              fontSize: "11px",
               fontWeight: 600,
               cursor: sessions.length === 0 ? "not-allowed" : "pointer",
               transition: "background 0.15s ease, color 0.15s ease, border-color 0.15s ease",
             }}
           >
-            {isClearing ? "Clearing…" : "Clear"}
+            {isClearing ? "Clearing..." : "Clear"}
           </button>
         </div>
-        <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
+        <p style={{ margin: "4px 0 0", fontSize: "12px", color: "var(--color-neutral-500)" }}>
           Your past focus sessions.
         </p>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        {sessions.map((s) => (
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "420px", overflowY: "auto" }}>
+        {sessions.map((session) => (
           <div
-            key={s.id}
+            key={session.id}
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              padding: "14px 16px",
+              padding: "10px 12px",
               background: "var(--color-surface)",
               border: "1px solid var(--color-lumen-dark)",
-              borderRadius: "10px",
+              borderRadius: "8px",
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <div
-                style={{
-                  width: "36px",
-                  height: "36px",
-                  borderRadius: "8px",
-                  background: statusBg(s.status),
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <ClockCounterClockwise size={16} color={statusColor(s.status)} />
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: "30px", height: "30px", borderRadius: "7px", background: statusBg(session.status), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <ClockCounterClockwise size={14} color={statusColor(session.status)} />
               </div>
               <div>
-                <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--color-vast)", textTransform: "capitalize" }}>
-                  {s.mode} Session
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--color-vast)", textTransform: "capitalize" }}>
+                  {session.mode} Session
                 </div>
-                <div style={{ fontSize: "12px", color: "var(--color-neutral-500)", marginTop: "2px" }}>
-                  {new Date(s.started_at).toLocaleString(undefined, {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
+                <div style={{ fontSize: "11px", color: "var(--color-neutral-500)", marginTop: "2px" }}>
+                  {new Date(session.started_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
                 </div>
               </div>
             </div>
 
             <div style={{ textAlign: "right" }}>
-              <span
-                style={{
-                  display: "inline-block",
-                  padding: "3px 10px",
-                  borderRadius: "100px",
-                  fontSize: "12px",
-                  fontWeight: 600,
-                  color: statusColor(s.status),
-                  background: statusBg(s.status),
-                  textTransform: "capitalize",
-                  marginBottom: "4px",
-                }}
-              >
-                {s.status}
+              <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: "100px", fontSize: "11px", fontWeight: 600, color: statusColor(session.status), background: statusBg(session.status), textTransform: "capitalize", marginBottom: "3px" }}>
+                {session.status}
               </span>
-              <div style={{ fontSize: "12px", color: "var(--color-neutral-400)" }}>
-                {formatDuration(s.planned_duration_sec)} planned
+              <div style={{ fontSize: "11px", color: "var(--color-neutral-400)" }}>
+                {formatDuration(session.planned_duration_sec)} planned
               </div>
             </div>
           </div>
         ))}
 
         {sessions.length === 0 && (
-          <div
-            style={{
-              textAlign: "center",
-              padding: "56px 0",
-              color: "var(--color-neutral-400)",
-              fontSize: "14px",
-            }}
-          >
+          <div style={{ textAlign: "center", padding: "48px 0", color: "var(--color-neutral-400)", fontSize: "13px" }}>
             No sessions yet. Start your first focus session.
           </div>
         )}
       </div>
 
       {showClearConfirm && (
-        <div role="presentation" onClick={() => setShowClearConfirm(false)} style={{ position: "fixed", inset: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", background: "rgba(26, 26, 26, 0.32)" }}>
-          <div role="dialog" aria-modal="true" aria-labelledby="clear-history-title" onClick={(event) => event.stopPropagation()} style={{ width: "min(100%, 380px)", padding: "24px", background: "var(--color-lumen)", border: "1px solid var(--color-lumen-dark)", borderRadius: "14px", boxShadow: "0 18px 50px rgba(26, 26, 26, 0.18)" }}>
-            <h2 id="clear-history-title" style={{ margin: 0, color: "var(--color-vast)", fontSize: "18px" }}>Clear session history?</h2>
-            <p style={{ margin: "8px 0 20px", color: "var(--color-neutral-500)", fontSize: "14px", lineHeight: 1.5 }}>This deletes all saved past sessions. Active session stays safe.</p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px" }}>
-              <button type="button" onClick={() => setShowClearConfirm(false)} style={{ border: "1px solid var(--color-lumen-dark)", background: "transparent", color: "var(--color-vast)", borderRadius: "8px", padding: "9px 14px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
-              <button type="button" onClick={() => { setShowClearConfirm(false); void handleClearHistory(); }} style={{ border: "1px solid #7f1c34", background: "#7f1c34", color: "#ffffff", borderRadius: "8px", padding: "9px 14px", fontWeight: 600, cursor: "pointer" }}>Clear history</button>
+        <div className="confirm-backdrop" role="presentation" onClick={() => setShowClearConfirm(false)} style={{ position: "fixed", inset: 0, zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", padding: "20px", background: "rgba(26, 26, 26, 0.32)" }}>
+          <div className="confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="clear-history-title" onClick={(event) => event.stopPropagation()} style={{ width: "min(100%, 320px)", padding: "20px", background: "var(--color-lumen)", border: "none", borderRadius: "12px", boxShadow: "0 18px 50px rgba(26, 26, 26, 0.18)" }}>
+            <h2 id="clear-history-title" style={{ margin: 0, color: "var(--color-vast)", fontSize: "16px" }}>Clear session history?</h2>
+            <p style={{ margin: "8px 0 18px", color: "var(--color-neutral-500)", fontSize: "12px", lineHeight: 1.5 }}>This deletes all saved past sessions. Active session stays safe.</p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "7px" }}>
+              <button type="button" onClick={() => setShowClearConfirm(false)} style={{ border: "1px solid var(--color-lumen-dark)", background: "transparent", color: "var(--color-vast)", borderRadius: "7px", padding: "7px 11px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+              <button type="button" onClick={() => { setShowClearConfirm(false); void handleClearHistory(); }} style={{ border: "1px solid var(--color-pulse)", background: "var(--color-pulse)", color: "#ffffff", borderRadius: "7px", padding: "7px 11px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Clear history</button>
             </div>
           </div>
         </div>
