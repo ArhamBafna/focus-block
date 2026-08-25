@@ -68,6 +68,14 @@ mod tests {
     }
 
     #[test]
+    fn rejects_invalid_input() {
+        assert_eq!(normalize_domain(""), None);
+        assert_eq!(normalize_domain("   "), None);
+        assert_eq!(normalize_domain("no-dot"), None);
+        assert_eq!(normalize_domain("has space.com"), None);
+    }
+
+    #[test]
     fn matches_subdomains() {
         assert!(domain_matches("m.youtube.com", "youtube.com"));
         assert!(domain_matches("www.reddit.com", "reddit.com"));
