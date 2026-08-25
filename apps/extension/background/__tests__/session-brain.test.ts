@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Session-brain regression tests (issues #3, #14, #17).
  *
  * Runs the real service-worker module against a fake chrome.* environment:
@@ -195,5 +195,61 @@ describe("blocking-rule updates", () => {
     await sw.stopSessionLocked();
 
     expect(mock.dnrRules).toHaveLength(0);
+  });
+});
+
+describe("reconcile failure handling", () => {
+  it("a failed DNR pass resolves without rejecting and the next pass recovers", async () => {
+    seedDomainList("blocklist", ["news.com"]);
+    await sw.startSessionLocked("blocklist", 30);
+    const updatesAfterStart = mock.stats.dnrUpdateCalls;
+    expect(updatesAfterStart).toBeGreaterThan(0);
+
+    // Replace updateDynamicRules so the next call fails like a transient
+    // chrome.* API error would; later calls delegate to the real mock.
+    const originalUpdate = chrome.declarativeNetRequest.updateDynamicRules.bind(
+      chrome.declarativeNetRequest
+    );
+    type UpdateOptions = Parameters<typeof originalUpdate>[0];
+    let failNext = true;
+    const failingUpdate = async (options: UpdateOptions): Promise<void> => {
+      if (failNext) {
+        failNext = false;
+        throw new Error("Simulated transient DNR failure");
+      }
+      await originalUpdate(options);
+    };
+    (
+      chrome.declarativeNetRequest as { updateDynamicRules: typeof failingUpdate }
+    ).updateDynamicRules = failingUpdate;
+
+    // A live change makes the pending pass a real (non-no-op) rules update,
+    // so the failure lands inside the requestReconcile catch branch.
+    rawSet("temporary_allowlist", [
+      { id: "temp-1", domain: "mail.com", expires_at: Date.now() + 5 * 60 * 1000 },
+    ]);
+
+    const hasMailAllow = (rule: chrome.declarativeNetRequest.Rule) =>
+      rule.priority === 3 && rule.condition?.urlFilter === "||mail.com^";
+
+    await expect(sw.requestReconcile()).resolves.toBeUndefined();
+    expect(failNext).toBe(false);
+    expect(mock.stats.dnrUpdateCalls).toBe(updatesAfterStart);
+    expect(mock.dnrRules.some(hasMailAllow)).toBe(false);
+
+    // Restore the API; the retry pass applies rules and the loop stays healthy.
+    (
+      chrome.declarativeNetRequest as { updateDynamicRules: typeof originalUpdate }
+    ).updateDynamicRules = originalUpdate;
+
+    await expect(sw.requestReconcile()).resolves.toBeUndefined();
+
+    expect(mock.stats.dnrUpdateCalls).toBe(updatesAfterStart + 1);
+    expect(
+      mock.dnrRules.filter((rule) => hasMailAllow(rule) || rule.condition?.urlFilter === "||www.mail.com^")
+    ).toHaveLength(2);
+    expect(
+      mock.dnrRules.some((rule) => rule.condition?.regexFilter?.includes("news"))
+    ).toBe(true);
   });
 });
