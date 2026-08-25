@@ -179,6 +179,38 @@ mod tests {
     }
 
     #[test]
+    fn expired_session_reports_zero_remaining() {
+        let mut session = sample_session();
+        session.started_at = Utc::now() - chrono::Duration::seconds(120);
+        assert_eq!(session.remaining_sec(), Some(0));
+        assert!(session.is_expired());
+    }
+
+    #[test]
+    fn fresh_session_has_positive_remaining_within_planned() {
+        let session = sample_session();
+        let remaining = session.remaining_sec().expect("planned > 0 must yield remaining");
+        assert!(remaining > 0 && remaining <= 60);
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn zero_planned_duration_never_expires_and_has_no_remaining() {
+        let mut session = Session::new(SessionMode::Blocklist, 0, vec![], vec![], vec![], None);
+        session.started_at = Utc::now() - chrono::Duration::seconds(120);
+        assert_eq!(session.remaining_sec(), None);
+        assert!(!session.is_expired());
+    }
+
+    #[test]
+    fn future_started_at_clamps_elapsed_to_zero() {
+        let mut session = sample_session();
+        session.started_at = Utc::now() + chrono::Duration::seconds(60);
+        assert_eq!(session.remaining_sec(), Some(60));
+        assert!(!session.is_expired());
+    }
+
+    #[test]
     fn ended_session_serializes_to_stable_wire_shape() {
         let mut session = sample_session();
         session.end(SessionEndReason::Stopped);
