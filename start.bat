@@ -68,22 +68,24 @@ if (Test-Path "$extensionDist\manifest.json") {
 # 4. Start FocusBlock Service
 Write-Host "`n[4/5] Starting FocusBlock Service..." -ForegroundColor Yellow
 $serviceProcess = $null
+if (Get-Process -Name focus-service -ErrorAction SilentlyContinue) {
+    Write-Host "Refreshing background service..." -ForegroundColor Gray
+    Stop-Process -Name focus-service -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 300
+}
+
+Write-Host "Launching FocusBlock Service in background..." -ForegroundColor Gray
+$serviceProcess = Start-Process -FilePath "cargo" -ArgumentList "run --bin focus-service -- --console" -WorkingDirectory $root -WindowStyle Minimized -PassThru
+
+$retries = 0
+while (-not (Test-Path '\\.\pipe\focusblock') -and $retries -lt 30) {
+    Start-Sleep -Milliseconds 500
+    $retries++
+}
 if (Test-Path '\\.\pipe\focusblock') {
-    Write-Host "FocusBlock Service is already running." -ForegroundColor Green
+    Write-Host "FocusBlock Service ready." -ForegroundColor Green
 } else {
-    Write-Host "Launching FocusBlock Service in background..." -ForegroundColor Gray
-    $serviceProcess = Start-Process -FilePath "cargo" -ArgumentList "run --bin focus-service -- --console" -WorkingDirectory $root -WindowStyle Minimized -PassThru
-    
-    $retries = 0
-    while (-not (Test-Path '\\.\pipe\focusblock') -and $retries -lt 30) {
-        Start-Sleep -Milliseconds 500
-        $retries++
-    }
-    if (Test-Path '\\.\pipe\focusblock') {
-        Write-Host "FocusBlock Service ready." -ForegroundColor Green
-    } else {
-        Write-Host "FocusBlock Service starting (compiling in background)..." -ForegroundColor Yellow
-    }
+    Write-Host "FocusBlock Service starting (compiling in background)..." -ForegroundColor Yellow
 }
 
 # 5. Launch Tauri Desktop App
