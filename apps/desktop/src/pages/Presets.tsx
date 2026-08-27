@@ -19,9 +19,11 @@ export default function Presets() {
 
   const fetchPresets = async () => {
     try {
-      setPresets(await ipc.listPresets());
+      const list = await ipc.listPresets();
+      setPresets(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
+      setPresets([]);
     }
   };
 

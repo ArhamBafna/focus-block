@@ -45,9 +45,11 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
 
   const fetchDomains = async () => {
     try {
-      setDomains(await copy.list());
+      const list = await copy.list();
+      setDomains(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
+      setDomains([]);
     }
   };
 

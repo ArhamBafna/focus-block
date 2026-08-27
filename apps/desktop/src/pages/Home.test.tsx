@@ -124,9 +124,9 @@ describe("Home phases", () => {
     polls[0].resolve(okIdle());
     await flush();
 
-    expect(screen.getByText("Ready to Focus")).toBeTruthy();
+    expect(screen.getByText(/ready to focus/i)).toBeTruthy();
     expect(screen.getByRole("button", { name: /Focus/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Locked Down/i })).toBeTruthy();
+    expect(screen.getByRole("button", { name: /lockdown/i })).toBeTruthy();
   });
 
   it("renders unreachable without any Start buttons while the daemon is down", async () => {
@@ -139,7 +139,7 @@ describe("Home phases", () => {
     expect(screen.getByText(/Service Unreachable/i)).toBeTruthy();
     expect(screen.getByText(/FocusBlock service is not running/i)).toBeTruthy();
     expect(screen.queryByRole("button", { name: /Focus/i })).toBeNull();
-    expect(screen.queryByRole("button", { name: /Locked Down/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /lockdown/i })).toBeNull();
   });
 
   it("recovers to ready automatically on the next poll", async () => {
@@ -158,7 +158,7 @@ describe("Home phases", () => {
     polls[1].resolve(okIdle());
     await flush();
 
-    expect(screen.getByText("Ready to Focus")).toBeTruthy();
+    expect(screen.getByText(/ready to focus/i)).toBeTruthy();
     expect(screen.queryByText(/Service Unreachable/i)).toBeNull();
   });
 
@@ -182,7 +182,7 @@ describe("Home phases", () => {
       expect(screen.getByText(/Focus Mode Active/i)).toBeTruthy();
       expect(screen.getByRole("button", { name: /Stop Session/i })).toBeTruthy();
       expect(screen.getByText(/Connection to the service was lost/i)).toBeTruthy();
-      expect(screen.queryByText("Ready to Focus")).toBeNull();
+      expect(screen.queryByText(/ready to focus/i)).toBeNull();
     } finally {
       errorSpy.mockRestore();
     }

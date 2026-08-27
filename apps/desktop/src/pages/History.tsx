@@ -25,7 +25,13 @@ export default function History() {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   useEffect(() => {
-    void ipc.listHistory(20).then(setSessions).catch(console.error);
+    void ipc
+      .listHistory(20)
+      .then((res) => setSessions(Array.isArray(res) ? res : []))
+      .catch((err) => {
+        console.error(err);
+        setSessions([]);
+      });
   }, []);
 
   async function handleClearHistory() {

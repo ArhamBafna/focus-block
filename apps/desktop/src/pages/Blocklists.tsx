@@ -34,18 +34,22 @@ export default function Blocklists() {
 
   const fetchDomains = async () => {
     try {
-      setDomains(await ipc.listBlocklist());
+      const list = await ipc.listBlocklist();
+      setDomains(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
+      setDomains([]);
     }
   };
 
   const fetchAppTargets = async () => {
     setAppsLoading(true);
     try {
-      setAppTargets((await ipc.listAppBlockTargets()).targets);
+      const res = await ipc.listAppBlockTargets();
+      setAppTargets(Array.isArray(res?.targets) ? res.targets : []);
     } catch (e: any) {
       setAppNotice({ tone: "error", text: e?.message || "Could not load app targets." });
+      setAppTargets([]);
     } finally {
       setAppsLoading(false);
     }

@@ -25,3 +25,13 @@ Issues live in GitHub Issues (`ArhamBafna/focus-block`) via the `gh` CLI. See `d
 ### Domain docs
 
 Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+
+## Test Map
+
+- Extension: `cd apps/extension && npm test`
+  - Background: `apps/extension/background/__tests__/` (`rules`, `schedule`, `scheduled-stop-suppression`, `session-brain`)
+  - Popup: `apps/extension/popup/lib/__tests__/` (`ipc`, `schedule-crud`, `storage`)
+- Desktop UI: `cd apps/desktop && npm test`
+  - `apps/desktop/src/pages/Home.test.tsx`, `apps/desktop/src/lib/ipc.*.test.ts`
+- Rust Backend: `cargo test --workspace`
+  - `crates/focus-core/src/`, `crates/focus-store/src/`, `apps/desktop/src-tauri/src/lib.rs`

@@ -12,7 +12,15 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 function installExtensionStorage(getBehavior: "ok" | "reject"): void {
   (globalThis as unknown as { chrome?: unknown }).chrome = {
-    runtime: { id: "parity-test", lastError: undefined },
+    runtime: {
+      id: "parity-test",
+      lastError: undefined,
+      // getStatus() pings the background (session:expire) before reading.
+      sendMessage: (_message: unknown, callback: (response?: unknown) => void) => {
+        callback({ ok: true, result: null });
+      },
+      getManifest: () => ({ version: "0.0.0" }),
+    },
     storage: {
       local: {
         get: getBehavior === "ok" ? async () => ({}) : (() => Promise.reject(new Error("storage dead"))),

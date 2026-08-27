@@ -43,8 +43,8 @@ pub enum IpcRequest {
     GetActivePolicy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "status", content = "data")]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "status")]
 pub enum IpcResponse {
     Ok { data: ResponseData },
     Err { message: String },
@@ -54,7 +54,7 @@ pub enum IpcResponse {
 // shape. A previous ActiveSession(Option<ActiveSessionView>) variant was
 // removed: its None arm serialized to `null`, byte-identical to Unit(()),
 // which would have silently mis-decoded had it ever been used.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum ResponseData {
     Unit(()),
@@ -160,7 +160,7 @@ pub struct AppSettings {
 
 /// Exact persisted policy for Chrome and other service consumers. The desktop UI
 /// is never the enforcement authority.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BlockingPolicySnapshot {
     pub active: bool,
     pub mode: Option<SessionMode>,
@@ -259,5 +259,39 @@ mod tests {
         // No other variant may produce null.
         let id = serde_json::to_value(ResponseData::Id(1)).unwrap();
         assert_ne!(id, serde_json::Value::Null);
+    }
+
+    #[test]
+    fn ipc_response_ok_and_err_serialize_to_expected_wire_shape() {
+        let ok = IpcResponse::Ok {
+            data: ResponseData::Domains(vec![DomainEntry {
+                id: 1,
+                domain: "youtube.com".into(),
+            }]),
+        };
+        let ok_val = serde_json::to_value(&ok).expect("serialize ok");
+        assert_eq!(
+            ok_val,
+            serde_json::json!({
+                "status": "Ok",
+                "data": [{ "id": 1, "domain": "youtube.com" }]
+            })
+        );
+        let ok_roundtrip: IpcResponse = serde_json::from_value(ok_val).expect("deserialize ok");
+        assert_eq!(ok_roundtrip, ok);
+
+        let err = IpcResponse::Err {
+            message: "something went wrong".into(),
+        };
+        let err_val = serde_json::to_value(&err).expect("serialize err");
+        assert_eq!(
+            err_val,
+            serde_json::json!({
+                "status": "Err",
+                "message": "something went wrong"
+            })
+        );
+        let err_roundtrip: IpcResponse = serde_json::from_value(err_val).expect("deserialize err");
+        assert_eq!(err_roundtrip, err);
     }
 }
