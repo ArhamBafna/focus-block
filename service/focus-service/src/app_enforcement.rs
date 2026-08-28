@@ -271,12 +271,26 @@ mod windows {
 
             let image_path = query_process_image_path(process);
             let package_family_name = query_package_family_name(process);
-            if self
+            let is_match = self
                 .matchers
-                .matches(image_path.as_deref(), package_family_name.as_deref())
-                && TerminateProcess(process, 1) == 0
-            {
-                warn!(process_id, "matched blocked process could not be terminated");
+                .matches(image_path.as_deref(), package_family_name.as_deref());
+
+            if is_match {
+                if TerminateProcess(process, 1) == 0 {
+                    warn!(process_id, "matched blocked process could not be terminated");
+                } else {
+                    let app_name = image_path
+                        .as_deref()
+                        .and_then(|p| std::path::Path::new(p).file_name())
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| "An application".to_string());
+
+                    let _ = winrt_notification::Toast::new(winrt_notification::Toast::POWERSHELL_APP_ID)
+                        .title("Focus Block")
+                        .text1(&format!("Blocked {}", app_name))
+                        .text2("This application is blocked during your focus session.")
+                        .show();
+                }
             }
             let _ = CloseHandle(process);
         }

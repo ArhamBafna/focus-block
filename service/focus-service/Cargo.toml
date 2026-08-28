@@ -23,6 +23,7 @@ tracing-subscriber = { workspace = true }
 chrono = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
+winrt-notification = "0.5.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-service = "0.8"
