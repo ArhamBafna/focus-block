@@ -44,7 +44,7 @@ mod imp {
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(connected, handler).await {
-                        if e.raw_os_error() == Some(232) {
+                        if e.raw_os_error() == Some(232) || e.kind() == std::io::ErrorKind::UnexpectedEof {
                             tracing::debug!("client closed ipc connection early: {e}");
                         } else {
                             error!("ipc connection error: {e}");

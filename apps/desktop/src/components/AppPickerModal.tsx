@@ -1,15 +1,13 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { MagnifyingGlass, X } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
+import { getAppIcon } from "../lib/app-picker";
+import type { AppBlockEntry, AppBlockTarget } from "../lib/ipc";
 
 export interface DiscoveredApp {
   displayName: string;
-  target: {
-    kind: "executable" | "package";
-    path?: string;
-    package_family_name?: string;
-  };
+  target: AppBlockTarget;
   iconDataUri?: string | null;
   category: string;
 }
@@ -18,7 +16,7 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   onToggleApp: (app: DiscoveredApp) => void;
-  blockedApps: DiscoveredApp[];
+  blockedApps: Array<DiscoveredApp | AppBlockEntry>;
 }
 
 export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Props) {
@@ -44,6 +42,42 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (apps.length === 0) return;
+    const missing = apps.filter((a) => !a.iconDataUri);
+    if (missing.length === 0) return;
+
+    let isMounted = true;
+    (async () => {
+      for (const app of missing) {
+        if (!isMounted) break;
+        try {
+          const iconUri = await getAppIcon(app.target);
+          if (iconUri && isMounted) {
+            setApps((prev) =>
+              prev.map((item) => {
+                const match =
+                  (item.target.kind === "executable" &&
+                    app.target.kind === "executable" &&
+                    item.target.path === app.target.path) ||
+                  (item.target.kind === "package" &&
+                    app.target.kind === "package" &&
+                    item.target.package_family_name === app.target.package_family_name);
+                return match ? { ...item, iconDataUri: iconUri } : item;
+              })
+            );
+          }
+        } catch {
+          // Ignore individual icon extraction failures
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [apps.length]);
+
   if (!isOpen) return null;
 
   const filteredApps = apps.filter((app) =>
@@ -53,12 +87,13 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
   const categories = Array.from(new Set(filteredApps.map((a) => a.category))).sort();
 
   const isBlocked = (app: DiscoveredApp) => {
-    return blockedApps.some((b) => {
-      if (app.target.kind === "executable" && b.target.kind === "executable") {
-        return app.target.path === b.target.path;
+    return blockedApps.some((b: any) => {
+      const bTarget = b.target || b;
+      if (app.target.kind === "executable" && bTarget.kind === "executable") {
+        return app.target.path === bTarget.path;
       }
-      if (app.target.kind === "package" && b.target.kind === "package") {
-        return app.target.package_family_name === b.target.package_family_name;
+      if (app.target.kind === "package" && bTarget.kind === "package") {
+        return app.target.package_family_name === bTarget.package_family_name;
       }
       return false;
     });
@@ -129,9 +164,15 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
                         .filter((a) => a.category === category)
                         .map((app, idx) => {
                           const active = isBlocked(app);
+                          const targetKey =
+                            app.target.kind === "executable"
+                              ? app.target.path
+                              : app.target.kind === "folder"
+                              ? app.target.path
+                              : app.target.package_family_name;
                           return (
                             <div
-                              key={`${app.target.kind}-${app.target.path || app.target.package_family_name}-${idx}`}
+                              key={`${app.target.kind}-${targetKey}-${idx}`}
                               className={`flex items-center justify-between p-4 rounded-xl border transition-all duration-200 cursor-pointer ${
                                 active
                                   ? "bg-[#034f46]/20 border-[#034f46]"

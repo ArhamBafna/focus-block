@@ -39,3 +39,6 @@ yarn-error.log*
 .specstory/
 .tempgraphifyignore
 graphify-out/
+
+# Temp
+.github/

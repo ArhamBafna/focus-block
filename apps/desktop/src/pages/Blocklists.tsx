@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { ipc, AppBlockEntry, AppBlockTarget, DomainEntry } from "../lib/ipc";
-import { File, Folder, Plus, SpinnerGap, Trash, WindowsLogo } from "@phosphor-icons/react";
+import { File, Folder, Plus, SpinnerGap, SquaresFour, Trash, WindowsLogo } from "@phosphor-icons/react";
 import { listStoreApps, pickExecutable, pickFolder, StoreApp } from "../lib/app-picker";
+import { AppPickerModal, DiscoveredApp } from "../components/AppPickerModal";
 
 type Notice = { tone: "success" | "error"; text: string } | null;
 
@@ -31,6 +32,7 @@ export default function Blocklists() {
   const [storePickerOpen, setStorePickerOpen] = useState(false);
   const [selectedPackageFamily, setSelectedPackageFamily] = useState("");
   const [appNotice, setAppNotice] = useState<Notice>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const fetchDomains = async () => {
     try {
@@ -59,6 +61,35 @@ export default function Blocklists() {
     fetchDomains();
     fetchAppTargets();
   }, []);
+
+  const handleToggleApp = async (app: DiscoveredApp) => {
+    const match = appTargets.find((entry) => {
+      if (entry.target.kind === "executable" && app.target.kind === "executable") {
+        return entry.target.path.toLowerCase() === app.target.path.toLowerCase();
+      }
+      if (entry.target.kind === "package" && app.target.kind === "package") {
+        return (
+          entry.target.package_family_name.toLowerCase() ===
+          app.target.package_family_name.toLowerCase()
+        );
+      }
+      return false;
+    });
+
+    try {
+      if (match) {
+        await ipc.removeAppBlockTarget(match.id);
+        setAppNotice({ tone: "success", text: `Removed ${app.displayName} from blocked apps.` });
+      } else {
+        await ipc.addAppBlockTarget(app.target);
+        setAppNotice({ tone: "success", text: `Added ${app.displayName} to blocked apps.` });
+      }
+      const res = await ipc.listAppBlockTargets();
+      setAppTargets(Array.isArray(res?.targets) ? res.targets : []);
+    } catch (e: any) {
+      setAppNotice({ tone: "error", text: e?.message || "Failed to update blocked application." });
+    }
+  };
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -304,14 +335,48 @@ export default function Blocklists() {
         )}
       </div>
 
+      {/* Blocked Applications Section */}
       <section style={{ marginTop: "32px", paddingTop: "24px", borderTop: "1px solid var(--color-lumen-dark)" }}>
-        <div style={{ marginBottom: "18px" }}>
-          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--color-vast)", letterSpacing: "-0.2px" }}>
-            Apps
-          </h2>
-          <p style={{ margin: "5px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
-            Apps blocked by Windows service during focus sessions. Website blocking stays unchanged.
-          </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "18px", gap: "16px", flexWrap: "wrap" }}>
+          <div>
+            <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--color-vast)", letterSpacing: "-0.2px" }}>
+              Blocked Applications
+            </h2>
+            <p style={{ margin: "5px 0 0", fontSize: "13px", color: "var(--color-neutral-500)" }}>
+              Apps and packages blocked by Windows service during focus sessions.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 18px",
+              fontSize: "13px",
+              fontWeight: 600,
+              fontFamily: "var(--font-sans)",
+              background: "#1a1a1a",
+              color: "#f0d7ff",
+              border: "1px solid rgba(240, 215, 255, 0.35)",
+              borderRadius: "10px",
+              cursor: "pointer",
+              boxShadow: "0 0 14px rgba(240, 215, 255, 0.15)",
+              transition: "all 0.2s ease",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "#f0d7ff";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 18px rgba(240, 215, 255, 0.35)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLElement).style.borderColor = "rgba(240, 215, 255, 0.35)";
+              (e.currentTarget as HTMLElement).style.boxShadow = "0 0 14px rgba(240, 215, 255, 0.15)";
+            }}
+          >
+            <SquaresFour size={17} weight="bold" color="#f0d7ff" />
+            Add Apps
+          </button>
         </div>
 
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "14px" }}>
@@ -383,12 +448,20 @@ export default function Blocklists() {
             })}
             {appTargets.length === 0 && (
               <div style={{ textAlign: "center", padding: "30px 0", color: "var(--color-neutral-400)", fontSize: "14px" }}>
-                No app targets added yet. Select an .exe, folder, or Microsoft Store app above.
+                No applications blocked yet. Click "Add Apps" or select an .exe, folder, or Microsoft Store app above.
               </div>
             )}
           </div>
         )}
       </section>
+
+      {/* Wispr Flow App Picker Modal */}
+      <AppPickerModal
+        isOpen={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onToggleApp={handleToggleApp}
+        blockedApps={appTargets}
+      />
     </div>
   );
 }

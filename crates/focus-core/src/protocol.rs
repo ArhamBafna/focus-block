@@ -153,6 +153,15 @@ pub struct AppBlockTargetList {
     pub targets: Vec<AppBlockEntry>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DiscoveredApp {
+    pub display_name: String,
+    pub target: AppBlockTarget,
+    pub icon_data_uri: Option<String>,
+    pub category: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AppSettings {
     pub os_allowlist_enabled: bool,
@@ -293,5 +302,34 @@ mod tests {
         );
         let err_roundtrip: IpcResponse = serde_json::from_value(err_val).expect("deserialize err");
         assert_eq!(err_roundtrip, err);
+    }
+
+    #[test]
+    fn discovered_app_serializes_to_camel_case_json() {
+        let app = DiscoveredApp {
+            display_name: "Discord".into(),
+            target: AppBlockTarget::Executable {
+                path: r"C:\Users\App\Discord.exe".into(),
+            },
+            icon_data_uri: Some("data:image/png;base64,...".into()),
+            category: "Communication".into(),
+        };
+
+        let json = serde_json::to_value(&app).expect("serialize discovered app");
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "displayName": "Discord",
+                "target": {
+                    "kind": "executable",
+                    "path": "C:\\Users\\App\\Discord.exe"
+                },
+                "iconDataUri": "data:image/png;base64,...",
+                "category": "Communication"
+            })
+        );
+
+        let roundtrip: DiscoveredApp = serde_json::from_value(json).expect("deserialize discovered app");
+        assert_eq!(roundtrip, app);
     }
 }
