@@ -6,7 +6,8 @@ exit /b %ERRORLEVEL%
 rem --- PURE POWERSHELL CODE STARTS BELOW ---
 
 $ErrorActionPreference = "Stop"
-$root = (Get-Location).Path
+$root = (Resolve-Path "$PSScriptRoot\..").Path
+if (-not $root) { $root = (Get-Item -Path "$((Get-Location).Path)\..").FullName }
 
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host "    FocusBlock Extension Builder         " -ForegroundColor Cyan

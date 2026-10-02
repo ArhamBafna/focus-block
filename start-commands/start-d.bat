@@ -6,13 +6,14 @@ exit /b %ERRORLEVEL%
 rem --- PURE POWERSHELL CODE STARTS BELOW ---
 
 $ErrorActionPreference = "Stop"
-$root = (Get-Location).Path
+$root = (Resolve-Path "$PSScriptRoot\..").Path
+if (-not $root) { $root = (Get-Item -Path "$((Get-Location).Path)\..").FullName }
 
 # Auto-elevate to Administrator if not elevated
 $isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 if (-not $isAdmin) {
     Write-Host "Elevating to Administrator privileges..." -ForegroundColor Yellow
-    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"`"$root\start-d.bat`"`"" -WorkingDirectory $root -Verb RunAs
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"`"$root\start-commands\start-d.bat`"`"" -WorkingDirectory $root -Verb RunAs
     exit 0
 }
 
