@@ -8,6 +8,14 @@ rem --- PURE POWERSHELL CODE STARTS BELOW ---
 $ErrorActionPreference = "Stop"
 $root = (Get-Location).Path
 
+# Auto-elevate to Administrator if not elevated
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if (-not $isAdmin) {
+    Write-Host "Elevating to Administrator privileges..." -ForegroundColor Yellow
+    Start-Process -FilePath "cmd.exe" -ArgumentList "/c `"`"$root\start-d.bat`"`"" -WorkingDirectory $root -Verb RunAs
+    exit 0
+}
+
 Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host "     FocusBlock Desktop Launcher         " -ForegroundColor Cyan
 Write-Host "=========================================" -ForegroundColor Cyan

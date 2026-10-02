@@ -2,7 +2,7 @@ A copy of freedom.to - a distraction blocking service.
 
 The functionality shoud mimic apps like freedom.to +  additional features not in those.
 
-The UI/UX Design should be that of wisprflow.com ...\design-extract-output saves information for that. When creating any visual modifications, that must be used as reference.
+The UI/UX Design should be that of wisprflow.com (design tokens and palettes are implemented in `apps/desktop/src/App.css` and `apps/extension/popup/App.css`). When creating any visual modifications, those must be used as reference.
 
 For Chrome extensions, use following:
 
