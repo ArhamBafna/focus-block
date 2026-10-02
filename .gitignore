@@ -37,7 +37,8 @@ yarn-error.log*
 # System & Cache
 .cache/
 .specstory/
-.tempgraphifyignore
+.agents/
+skills-lock.json
 
 # Graphify local cache, run history, and machine-specific metadata
 graphify-out/cache/
