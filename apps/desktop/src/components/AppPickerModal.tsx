@@ -1,16 +1,10 @@
 import { useState, useEffect } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { MagnifyingGlass, X } from "@phosphor-icons/react";
 import { motion, AnimatePresence } from "framer-motion";
-import { getAppIcon } from "../lib/app-picker";
-import type { AppBlockEntry, AppBlockTarget } from "../lib/ipc";
+import { getAppIcon, listInstalledApps, type DiscoveredApp } from "../lib/app-picker";
+import type { AppBlockEntry } from "../lib/ipc";
 
-export interface DiscoveredApp {
-  displayName: string;
-  target: AppBlockTarget;
-  iconDataUri?: string | null;
-  category: string;
-}
+export type { DiscoveredApp };
 
 interface Props {
   isOpen: boolean;
@@ -29,14 +23,14 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     if (isOpen && apps.length === 0) {
       setLoading(true);
       setError(null);
-      invoke<DiscoveredApp[]>("list_installed_apps")
+      listInstalledApps()
         .then((res) => {
           setApps(res);
           setLoading(false);
         })
         .catch((err) => {
           console.error("Failed to load apps:", err);
-          setError(err as string);
+          setError(err instanceof Error ? err.message : String(err));
           setLoading(false);
         });
     }
