@@ -6,12 +6,12 @@
 - Unclassified: 17 file(s) not represented in the graph (top: (none) 5, .css 3, .bat 3)
 
 ## Summary
-- 1375 nodes · 2128 edges · 107 communities (69 shown, 38 thin omitted)
+- 1375 nodes · 2127 edges · 106 communities (68 shown, 38 thin omitted)
 - Extraction: 96% EXTRACTED · 4% INFERRED · 0% AMBIGUOUS · INFERRED: 93 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `07d71170`
+- Built from commit: `01ee4af8`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -49,7 +49,6 @@
 - compilerOptions
 - ref_react
 - devDependencies
-- DomainListPage.tsx
 - popup/pages/History.tsx
 - MEDIUM
 - startSessionLocked
@@ -128,19 +127,19 @@
 5. `applyBlockingState()` - 20 edges
 6. `AppEnforcer` - 19 edges
 7. `compilerOptions` - 18 edges
-8. `compilerOptions` - 16 edges
-9. `Session` - 16 edges
-10. `SessionManager` - 16 edges
+8. `Session` - 16 edges
+9. `SessionManager` - 16 edges
+10. `compilerOptions` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `Verified-clean areas` --references--> `withLock()`  [INFERRED]
-  docs/audit-report.md → apps/extension/background/service-worker.ts
 - `L8. Extension history grows unbounded toward chrome.storage 10 MB cap` --references--> `pushHistory()`  [INFERRED]
   docs/audit-report.md → apps/extension/background/service-worker.ts
 - `New: `apps/extension/popup/lib/__tests__/schedule-crud.test.ts` (13 assertions-groups)` --references--> `validateSchedule()`  [INFERRED]
   docs/test-debt-report.md → apps/extension/popup/lib/ipc.ts
-- `M2. Popup list mutations bypass background mutation lock; `Date.now()` IDs collide` --references--> `withLock()`  [INFERRED]
+- `Verified-clean areas` --references--> `withLock()`  [INFERRED]
   docs/audit-report.md → apps/extension/background/service-worker.ts
+- `4. Still uncovered, ranked by blast radius` --references--> `handleBackgroundMessage()`  [INFERRED]
+  docs/test-debt-report.md → apps/extension/background/service-worker.ts
 - `L2. No server-side duration validation in `session:start`` --references--> `startSessionLocked()`  [INFERRED]
   docs/audit-report.md → apps/extension/background/service-worker.ts
 
@@ -161,15 +160,15 @@
 - **v1 hybrid blocking engine (DNS proxy primary + WFP IP filters + service loop + kill-switch allowlist)** — docs_firstchat_focus_dns, docs_firstchat_focus_wfp, docs_firstchat_focus_service, docs_firstchat_kill_switch_allowlist [INFERRED]
 - **WisprFlow-Derived Design Language** — agents_md_wisprflow_ui_directive, design_md_color_tokens, design_md_typography_figtree, apps_extension_blocked_index_blocked_site_blocked_page, apps_extension_popup_index_popup_entry_html [INFERRED]
 
-## Communities (107 total, 38 thin omitted)
+## Communities (106 total, 38 thin omitted)
 
 ### Community 0 - "FocusStore"
 Cohesion: 0.08
 Nodes (37): AppBlockEntry, AsRef, Connection, Error, String, StoreError, SCHEMA, SEED_PRESETS (+29 more)
 
 ### Community 1 - "src/lib/ipc.ts"
-Cohesion: 0.18
-Nodes (10): ActiveSessionView, AppBlockTargetList, BridgeEnvelope, BridgeFailure, BridgeFailureKind, errorMessage(), handleMockRequest(), request() (+2 more)
+Cohesion: 0.13
+Nodes (15): ActiveSessionView, AppBlockTargetList, BridgeEnvelope, BridgeFailure, BridgeFailureKind, errorMessage(), handleMockRequest(), Preset (+7 more)
 
 ### Community 2 - "dependencies"
 Cohesion: 0.18
@@ -288,16 +287,12 @@ Cohesion: 0.25
 Nodes (7): compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include
 
 ### Community 31 - "ref_react"
-Cohesion: 0.22
-Nodes (5): App(), ErrorBoundary, App(), ref_react, ref_react_dom
+Cohesion: 0.25
+Nodes (4): ErrorBoundary, App(), ref_react, ref_react_dom
 
 ### Community 32 - "devDependencies"
 Cohesion: 0.17
 Nodes (12): devDependencies, jsdom, @tauri-apps/cli, @testing-library/dom, @testing-library/react, @types/chrome, @types/react, @types/react-dom (+4 more)
-
-### Community 33 - "DomainListPage.tsx"
-Cohesion: 0.33
-Nodes (5): DomainListKind, DomainListPage(), LIST_COPY, DomainEntry, Whitelist()
 
 ### Community 34 - "popup/pages/History.tsx"
 Cohesion: 0.43
@@ -400,8 +395,8 @@ Cohesion: 0.09
 Nodes (21): @phosphor-icons/react, react, react-dom, react-router-dom, tailwindcss, @tailwindcss/vite, @types/chrome, @types/react (+13 more)
 
 ### Community 120 - "src/App.tsx"
-Cohesion: 0.16
-Nodes (9): navItems, AppSettings, ipc, Preset, SessionMode, EMPTY_FORM, NewPresetForm, Presets() (+1 more)
+Cohesion: 0.15
+Nodes (10): App(), navItems, DomainListKind, DomainListPage(), LIST_COPY, AppSettings, DomainEntry, ipc (+2 more)
 
 ### Community 122 - "Chrome Web Store Listing — Focus Blocker"
 Cohesion: 0.13
@@ -444,7 +439,7 @@ Nodes (57): extract_app_icon_native(), get_app_icon(), get_cached_icon(), icon_c
   apps/desktop/public/vite.svg · relation: rationale_for
 
 ## Knowledge Gaps
-- **512 isolated node(s):** `name`, `private`, `version`, `type`, `dev` (+507 more)
+- **512 isolated node(s):** `getStatusSafe`, `listAppBlockTargets`, `addAppBlockTarget`, `startSession`, `stopSession` (+507 more)
   These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 697 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
 - **38 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
@@ -453,15 +448,15 @@ _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `Vite Logo SVG (favicon)` and `Vite Build Tool`?**
   _Edge tagged AMBIGUOUS (relation: rationale_for) - confidence is low._
-- **Why does `start()` connect `package.js` to `ref_vitest`?**
-  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Why does `AppEnforcer` connect `app_enforcement.rs` to `SessionManager`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **Why does `start()` connect `package.js` to `ref_vitest`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
 - **Why does `FocusStore` connect `FocusStore` to `SessionManager`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **What connects `name`, `private`, `version` to the rest of the system?**
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **What connects `getStatusSafe`, `listAppBlockTargets`, `addAppBlockTarget` to the rest of the system?**
   _512 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `FocusStore` be split into smaller, more focused modules?**
   _Cohesion score 0.07663828211773417 - nodes in this community are weakly interconnected._
-- **Should `FocusBlock Application` be split into smaller, more focused modules?**
-  _Cohesion score 0.05128205128205128 - nodes in this community are weakly interconnected._
+- **Should `src/lib/ipc.ts` be split into smaller, more focused modules?**
+  _Cohesion score 0.1286549707602339 - nodes in this community are weakly interconnected._

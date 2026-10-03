@@ -216,6 +216,19 @@
       "source_location": "L295"
     },
     {
+      "id": "apps_desktop_src_lib_ipc_preset",
+      "label": "Preset",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "preset",
+      "source_file": "apps/desktop/src/lib/ipc.ts",
+      "source_location": "L18"
+    },
+    {
       "id": "apps_desktop_src_lib_ipc_servicehealth",
       "label": "ServiceHealth",
       "_callable": true,
@@ -229,6 +242,19 @@
       "source_location": "L52"
     },
     {
+      "id": "apps_desktop_src_lib_ipc_sessionmode",
+      "label": "SessionMode",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "sessionmode",
+      "source_file": "apps/desktop/src/lib/ipc.ts",
+      "source_location": "L3"
+    },
+    {
       "id": "apps_desktop_src_lib_ipc_sessionstatus",
       "label": "SessionStatus",
       "_callable": true,
@@ -240,6 +266,19 @@
       "norm_label": "sessionstatus",
       "source_file": "apps/desktop/src/lib/ipc.ts",
       "source_location": "L4"
+    },
+    {
+      "id": "apps_desktop_src_pages_presets_newpresetform",
+      "label": "NewPresetForm",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "newpresetform",
+      "source_file": "apps/desktop/src/pages/Presets.tsx",
+      "source_location": "L5"
     },
     {
       "id": "apps_extension_popup_lib_storage_activesessionrecord",
@@ -645,6 +684,19 @@
       "source_location": "L11"
     },
     {
+      "id": "apps_desktop_src_components_domainlistpage_domainlistkind",
+      "label": "DomainListKind",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "domainlistkind",
+      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
+      "source_location": "L6"
+    },
+    {
       "id": "apps_desktop_src_lib_ipc_appsettings",
       "label": "AppSettings",
       "_callable": true,
@@ -658,43 +710,17 @@
       "source_location": "L62"
     },
     {
-      "id": "apps_desktop_src_lib_ipc_preset",
-      "label": "Preset",
+      "id": "apps_desktop_src_lib_ipc_domainentry",
+      "label": "DomainEntry",
       "_callable": true,
       "_callable_class": true,
       "_origin": "ast",
       "community": 120,
       "community_name": "src/App.tsx",
       "file_type": "code",
-      "norm_label": "preset",
+      "norm_label": "domainentry",
       "source_file": "apps/desktop/src/lib/ipc.ts",
-      "source_location": "L18"
-    },
-    {
-      "id": "apps_desktop_src_lib_ipc_sessionmode",
-      "label": "SessionMode",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 120,
-      "community_name": "src/App.tsx",
-      "file_type": "code",
-      "norm_label": "sessionmode",
-      "source_file": "apps/desktop/src/lib/ipc.ts",
-      "source_location": "L3"
-    },
-    {
-      "id": "apps_desktop_src_pages_presets_newpresetform",
-      "label": "NewPresetForm",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 120,
-      "community_name": "src/App.tsx",
-      "file_type": "code",
-      "norm_label": "newpresetform",
-      "source_file": "apps/desktop/src/pages/Presets.tsx",
-      "source_location": "L5"
+      "source_location": "L33"
     },
     {
       "id": "apps_extension_popup_lib_ipc_sessionmode",
@@ -1022,32 +1048,6 @@
       "source_location": "L5"
     },
     {
-      "id": "apps_desktop_src_components_domainlistpage_domainlistkind",
-      "label": "DomainListKind",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "domainlistkind",
-      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
-      "source_location": "L6"
-    },
-    {
-      "id": "apps_desktop_src_lib_ipc_domainentry",
-      "label": "DomainEntry",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "domainentry",
-      "source_file": "apps/desktop/src/lib/ipc.ts",
-      "source_location": "L33"
-    },
-    {
       "id": "apps_extension_popup_lib_ipc_session",
       "label": "Session",
       "_callable": true,
@@ -1171,6 +1171,18 @@
       "norm_label": "unwrap()",
       "source_file": "apps/desktop/src/lib/ipc.ts",
       "source_location": "L339"
+    },
+    {
+      "id": "apps_desktop_src_pages_presets_presets",
+      "label": "Presets()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "presets()",
+      "source_file": "apps/desktop/src/pages/Presets.tsx",
+      "source_location": "L13"
     },
     {
       "id": "apps_extension_popup_lib_storage_normalizeschedule",
@@ -1593,6 +1605,18 @@
       "source_location": "L16"
     },
     {
+      "id": "apps_desktop_src_app_app",
+      "label": "App()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "app()",
+      "source_file": "apps/desktop/src/App.tsx",
+      "source_location": "L107"
+    },
+    {
       "id": "apps_desktop_src_app_topbar",
       "label": "Topbar()",
       "_callable": true,
@@ -1605,16 +1629,16 @@
       "source_location": "L20"
     },
     {
-      "id": "apps_desktop_src_pages_presets_presets",
-      "label": "Presets()",
+      "id": "apps_desktop_src_components_domainlistpage_domainlistpage",
+      "label": "DomainListPage()",
       "_callable": true,
       "_origin": "ast",
       "community": 120,
       "community_name": "src/App.tsx",
       "file_type": "code",
-      "norm_label": "presets()",
-      "source_file": "apps/desktop/src/pages/Presets.tsx",
-      "source_location": "L13"
+      "norm_label": "domainlistpage()",
+      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
+      "source_location": "L40"
     },
     {
       "id": "apps_desktop_src_pages_settings_settingrow",
@@ -1651,6 +1675,18 @@
       "norm_label": "toggle()",
       "source_file": "apps/desktop/src/pages/Settings.tsx",
       "source_location": "L4"
+    },
+    {
+      "id": "apps_desktop_src_pages_whitelist_whitelist",
+      "label": "Whitelist()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "whitelist()",
+      "source_file": "apps/desktop/src/pages/Whitelist.tsx",
+      "source_location": "L3"
     },
     {
       "id": "apps_extension_popup_app_topbar",
@@ -2409,18 +2445,6 @@
       "source_location": "L26"
     },
     {
-      "id": "apps_desktop_src_app_app",
-      "label": "App()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 31,
-      "community_name": "ref_react",
-      "file_type": "code",
-      "norm_label": "app()",
-      "source_file": "apps/desktop/src/App.tsx",
-      "source_location": "L107"
-    },
-    {
       "id": "apps_desktop_src_main_errorboundary_constructor",
       "label": ".constructor()",
       "_callable": true,
@@ -2467,30 +2491,6 @@
       "norm_label": "app()",
       "source_file": "apps/extension/popup/App.tsx",
       "source_location": "L109"
-    },
-    {
-      "id": "apps_desktop_src_components_domainlistpage_domainlistpage",
-      "label": "DomainListPage()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "domainlistpage()",
-      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
-      "source_location": "L40"
-    },
-    {
-      "id": "apps_desktop_src_pages_whitelist_whitelist",
-      "label": "Whitelist()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "whitelist()",
-      "source_file": "apps/desktop/src/pages/Whitelist.tsx",
-      "source_location": "L3"
     },
     {
       "id": "apps_extension_popup_pages_history_formatduration",
@@ -3969,6 +3969,28 @@
       "norm_label": "src/lib/ipc.ts",
       "source_file": "apps/desktop/src/lib/ipc.ts",
       "source_location": "L1"
+    },
+    {
+      "id": "apps_desktop_src_pages_presets",
+      "label": "Presets.tsx",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "presets.tsx",
+      "source_file": "apps/desktop/src/pages/Presets.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "apps_desktop_src_pages_presets_empty_form",
+      "label": "EMPTY_FORM",
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "src/lib/ipc.ts",
+      "file_type": "code",
+      "norm_label": "empty_form",
+      "source_file": "apps/desktop/src/pages/Presets.tsx",
+      "source_location": "L11"
     },
     {
       "id": "apps_extension_popup_lib_storage",
@@ -5965,6 +5987,28 @@
       "source_location": "L11"
     },
     {
+      "id": "apps_desktop_src_components_domainlistpage",
+      "label": "DomainListPage.tsx",
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "domainlistpage.tsx",
+      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "apps_desktop_src_components_domainlistpage_list_copy",
+      "label": "LIST_COPY",
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "list_copy",
+      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
+      "source_location": "L8"
+    },
+    {
       "id": "apps_desktop_src_lib_ipc_ipc",
       "label": "ipc",
       "_origin": "ast",
@@ -5976,28 +6020,6 @@
       "source_location": "L346"
     },
     {
-      "id": "apps_desktop_src_pages_presets",
-      "label": "Presets.tsx",
-      "_origin": "ast",
-      "community": 120,
-      "community_name": "src/App.tsx",
-      "file_type": "code",
-      "norm_label": "presets.tsx",
-      "source_file": "apps/desktop/src/pages/Presets.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "apps_desktop_src_pages_presets_empty_form",
-      "label": "EMPTY_FORM",
-      "_origin": "ast",
-      "community": 120,
-      "community_name": "src/App.tsx",
-      "file_type": "code",
-      "norm_label": "empty_form",
-      "source_file": "apps/desktop/src/pages/Presets.tsx",
-      "source_location": "L11"
-    },
-    {
       "id": "apps_desktop_src_pages_settings",
       "label": "src/pages/Settings.tsx",
       "_origin": "ast",
@@ -6006,6 +6028,17 @@
       "file_type": "code",
       "norm_label": "src/pages/settings.tsx",
       "source_file": "apps/desktop/src/pages/Settings.tsx",
+      "source_location": "L1"
+    },
+    {
+      "id": "apps_desktop_src_pages_whitelist",
+      "label": "src/pages/Whitelist.tsx",
+      "_origin": "ast",
+      "community": 120,
+      "community_name": "src/App.tsx",
+      "file_type": "code",
+      "norm_label": "src/pages/whitelist.tsx",
+      "source_file": "apps/desktop/src/pages/Whitelist.tsx",
       "source_location": "L1"
     },
     {
@@ -9968,39 +10001,6 @@
       "norm_label": "vitest",
       "source_file": "apps/desktop/package.json",
       "source_location": "L36"
-    },
-    {
-      "id": "apps_desktop_src_components_domainlistpage",
-      "label": "DomainListPage.tsx",
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "domainlistpage.tsx",
-      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
-      "source_location": "L1"
-    },
-    {
-      "id": "apps_desktop_src_components_domainlistpage_list_copy",
-      "label": "LIST_COPY",
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "list_copy",
-      "source_file": "apps/desktop/src/components/DomainListPage.tsx",
-      "source_location": "L8"
-    },
-    {
-      "id": "apps_desktop_src_pages_whitelist",
-      "label": "src/pages/Whitelist.tsx",
-      "_origin": "ast",
-      "community": 33,
-      "community_name": "DomainListPage.tsx",
-      "file_type": "code",
-      "norm_label": "src/pages/whitelist.tsx",
-      "source_file": "apps/desktop/src/pages/Whitelist.tsx",
-      "source_location": "L1"
     },
     {
       "id": "apps_extension_popup_pages_history",
@@ -16232,6 +16232,7 @@
     {
       "id": "io",
       "label": "io",
+      "_origin": "semantic",
       "community": 0,
       "community_name": "FocusStore",
       "external": true,
@@ -16243,6 +16244,7 @@
     {
       "id": "rusqlite",
       "label": "rusqlite",
+      "_origin": "semantic",
       "community": 0,
       "community_name": "FocusStore",
       "external": true,
@@ -16254,6 +16256,7 @@
     {
       "id": "storeerror",
       "label": "storeerror",
+      "_origin": "semantic",
       "community": 0,
       "community_name": "FocusStore",
       "external": true,
@@ -16265,6 +16268,7 @@
     {
       "id": "super",
       "label": "super",
+      "_origin": "semantic",
       "community": 107,
       "community_name": "focus-store/src/codec.rs",
       "external": true,
@@ -16276,6 +16280,7 @@
     {
       "id": "collections",
       "label": "collections",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16287,6 +16292,7 @@
     {
       "id": "deriveappcontainersidfromappcontainername",
       "label": "deriveappcontainersidfromappcontainername",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16298,6 +16304,7 @@
     {
       "id": "ffi",
       "label": "ffi",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16309,6 +16316,7 @@
     {
       "id": "foundation",
       "label": "foundation",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16320,6 +16328,7 @@
     {
       "id": "fs",
       "label": "fs",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16331,6 +16340,7 @@
     {
       "id": "getpackagefamilyname",
       "label": "getpackagefamilyname",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16342,6 +16352,7 @@
     {
       "id": "osstring",
       "label": "osstring",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16353,6 +16364,7 @@
     {
       "id": "ptr",
       "label": "ptr",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16364,6 +16376,7 @@
     {
       "id": "rpc_c_authn_default",
       "label": "rpc_c_authn_default",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16375,6 +16388,7 @@
     {
       "id": "security",
       "label": "security",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16386,6 +16400,7 @@
     {
       "id": "threading",
       "label": "threading",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16397,6 +16412,7 @@
     {
       "id": "toolhelp",
       "label": "toolhelp",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16408,6 +16424,7 @@
     {
       "id": "uuid",
       "label": "uuid",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16419,6 +16436,7 @@
     {
       "id": "warn",
       "label": "warn",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16430,6 +16448,7 @@
     {
       "id": "windowsfilteringplatform",
       "label": "windowsfilteringplatform",
+      "_origin": "semantic",
       "community": 114,
       "community_name": "app_enforcement.rs",
       "external": true,
@@ -16441,6 +16460,7 @@
     {
       "id": "ref_node_path",
       "label": "ref_node_path",
+      "_origin": "semantic",
       "community": 12,
       "community_name": "ref_vitest",
       "external": true,
@@ -16452,6 +16472,7 @@
     {
       "id": "ref_node_url",
       "label": "ref_node_url",
+      "_origin": "semantic",
       "community": 12,
       "community_name": "ref_vitest",
       "external": true,
@@ -16463,6 +16484,7 @@
     {
       "id": "ref_vitest",
       "label": "ref_vitest",
+      "_origin": "semantic",
       "community": 12,
       "community_name": "ref_vitest",
       "external": true,
@@ -16474,6 +16496,7 @@
     {
       "id": "ref_phosphor_icons_react",
       "label": "ref_phosphor_icons_react",
+      "_origin": "semantic",
       "community": 123,
       "community_name": "popup/App.tsx",
       "external": true,
@@ -16485,6 +16508,7 @@
     {
       "id": "ref_react_router_dom",
       "label": "ref_react_router_dom",
+      "_origin": "semantic",
       "community": 123,
       "community_name": "popup/App.tsx",
       "external": true,
@@ -16496,6 +16520,7 @@
     {
       "id": "os",
       "label": "os",
+      "_origin": "semantic",
       "community": 128,
       "community_name": "Chrome Web Store Submission \u2014 Focus Blocker",
       "external": true,
@@ -16507,6 +16532,7 @@
     {
       "id": "sqlite3",
       "label": "sqlite3",
+      "_origin": "semantic",
       "community": 128,
       "community_name": "Chrome Web Store Submission \u2014 Focus Blocker",
       "external": true,
@@ -16518,6 +16544,7 @@
     {
       "id": "subprocess",
       "label": "subprocess",
+      "_origin": "semantic",
       "community": 128,
       "community_name": "Chrome Web Store Submission \u2014 Focus Blocker",
       "external": true,
@@ -16529,6 +16556,7 @@
     {
       "id": "sys",
       "label": "sys",
+      "_origin": "semantic",
       "community": 128,
       "community_name": "Chrome Web Store Submission \u2014 Focus Blocker",
       "external": true,
@@ -16540,6 +16568,7 @@
     {
       "id": "time",
       "label": "time",
+      "_origin": "semantic",
       "community": 128,
       "community_name": "Chrome Web Store Submission \u2014 Focus Blocker",
       "external": true,
@@ -16551,6 +16580,7 @@
     {
       "id": "ref_child_process",
       "label": "ref_child_process",
+      "_origin": "semantic",
       "community": 132,
       "community_name": "package.js",
       "external": true,
@@ -16562,6 +16592,7 @@
     {
       "id": "ref_fs",
       "label": "ref_fs",
+      "_origin": "semantic",
       "community": 132,
       "community_name": "package.js",
       "external": true,
@@ -16573,6 +16604,7 @@
     {
       "id": "ref_path",
       "label": "ref_path",
+      "_origin": "semantic",
       "community": 132,
       "community_name": "package.js",
       "external": true,
@@ -16584,6 +16616,7 @@
     {
       "id": "ref_url",
       "label": "ref_url",
+      "_origin": "semantic",
       "community": 132,
       "community_name": "package.js",
       "external": true,
@@ -16595,6 +16628,7 @@
     {
       "id": "ref_node_assert",
       "label": "ref_node_assert",
+      "_origin": "semantic",
       "community": 138,
       "community_name": "ipc-response.test.mjs",
       "external": true,
@@ -16606,6 +16640,7 @@
     {
       "id": "ref_node_fs",
       "label": "ref_node_fs",
+      "_origin": "semantic",
       "community": 138,
       "community_name": "ipc-response.test.mjs",
       "external": true,
@@ -16617,6 +16652,7 @@
     {
       "id": "ref_node_test",
       "label": "ref_node_test",
+      "_origin": "semantic",
       "community": 138,
       "community_name": "ipc-response.test.mjs",
       "external": true,
@@ -16628,6 +16664,7 @@
     {
       "id": "ref_typescript",
       "label": "ref_typescript",
+      "_origin": "semantic",
       "community": 138,
       "community_name": "ipc-response.test.mjs",
       "external": true,
@@ -16639,6 +16676,7 @@
     {
       "id": "arc",
       "label": "arc",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16650,6 +16688,7 @@
     {
       "id": "codec",
       "label": "codec",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16661,6 +16700,7 @@
     {
       "id": "focus_core",
       "label": "focus_core",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16672,6 +16712,7 @@
     {
       "id": "focus_ipc",
       "label": "focus_ipc",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16683,6 +16724,7 @@
     {
       "id": "future",
       "label": "future",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16694,6 +16736,7 @@
     {
       "id": "hash",
       "label": "hash",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16705,6 +16748,7 @@
     {
       "id": "imp",
       "label": "imp",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16716,6 +16760,7 @@
     {
       "id": "ipcclient",
       "label": "ipcclient",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16727,6 +16772,7 @@
     {
       "id": "named_pipe",
       "label": "named_pipe",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16738,6 +16784,7 @@
     {
       "id": "pin",
       "label": "pin",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16749,6 +16796,7 @@
     {
       "id": "sessionmanager",
       "label": "sessionmanager",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16760,6 +16808,7 @@
     {
       "id": "storeapp",
       "label": "storeapp",
+      "_origin": "semantic",
       "community": 142,
       "community_name": "src-tauri/src/lib.rs",
       "external": true,
@@ -16771,6 +16820,7 @@
     {
       "id": "domain",
       "label": "domain",
+      "_origin": "semantic",
       "community": 19,
       "community_name": "session.rs",
       "external": true,
@@ -16782,6 +16832,7 @@
     {
       "id": "chrono",
       "label": "chrono",
+      "_origin": "semantic",
       "community": 25,
       "community_name": "SessionManager",
       "external": true,
@@ -16793,6 +16844,7 @@
     {
       "id": "clientoptions",
       "label": "clientoptions",
+      "_origin": "semantic",
       "community": 25,
       "community_name": "SessionManager",
       "external": true,
@@ -16804,6 +16856,7 @@
     {
       "id": "pathbuf",
       "label": "pathbuf",
+      "_origin": "semantic",
       "community": 25,
       "community_name": "SessionManager",
       "external": true,
@@ -16815,6 +16868,7 @@
     {
       "id": "pipe_name",
       "label": "pipe_name",
+      "_origin": "semantic",
       "community": 25,
       "community_name": "SessionManager",
       "external": true,
@@ -16826,6 +16880,7 @@
     {
       "id": "tracing",
       "label": "tracing",
+      "_origin": "semantic",
       "community": 25,
       "community_name": "SessionManager",
       "external": true,
@@ -16837,6 +16892,7 @@
     {
       "id": "ref_react",
       "label": "ref_react",
+      "_origin": "semantic",
       "community": 31,
       "community_name": "ref_react",
       "external": true,
@@ -16848,6 +16904,7 @@
     {
       "id": "ref_react_dom",
       "label": "ref_react_dom",
+      "_origin": "semantic",
       "community": 31,
       "community_name": "ref_react",
       "external": true,
@@ -16859,6 +16916,7 @@
     {
       "id": "crate",
       "label": "crate",
+      "_origin": "semantic",
       "community": 6,
       "community_name": "protocol.rs",
       "external": true,
@@ -16870,6 +16928,7 @@
     {
       "id": "deserialize",
       "label": "deserialize",
+      "_origin": "semantic",
       "community": 6,
       "community_name": "protocol.rs",
       "external": true,
@@ -16881,6 +16940,7 @@
     {
       "id": "serde",
       "label": "serde",
+      "_origin": "semantic",
       "community": 6,
       "community_name": "protocol.rs",
       "external": true,
@@ -16892,6 +16952,7 @@
     {
       "id": "utc",
       "label": "utc",
+      "_origin": "semantic",
       "community": 6,
       "community_name": "protocol.rs",
       "external": true,
@@ -16903,6 +16964,7 @@
     {
       "id": "envfilter",
       "label": "envfilter",
+      "_origin": "semantic",
       "community": 88,
       "community_name": "focus-service/src/main.rs",
       "external": true,
@@ -16914,6 +16976,7 @@
     {
       "id": "ref_tailwindcss_vite",
       "label": "ref_tailwindcss_vite",
+      "_origin": "semantic",
       "community": 98,
       "community_name": "extension/vite.config.ts",
       "external": true,
@@ -16925,6 +16988,7 @@
     {
       "id": "ref_vite",
       "label": "ref_vite",
+      "_origin": "semantic",
       "community": 98,
       "community_name": "extension/vite.config.ts",
       "external": true,
@@ -16936,6 +17000,7 @@
     {
       "id": "ref_vitejs_plugin_react",
       "label": "ref_vitejs_plugin_react",
+      "_origin": "semantic",
       "community": 98,
       "community_name": "extension/vite.config.ts",
       "external": true,
@@ -24027,18 +24092,6 @@
       "context": "import",
       "source_file": "apps/desktop/src/pages/Blocklists.tsx",
       "source_location": "L5",
-      "weight": 1.0
-    },
-    {
-      "source": "apps_desktop_src_pages_desktopflow_e2e_test",
-      "target": "apps_desktop_src_app_app",
-      "relation": "imports",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "context": "import",
-      "source_file": "apps/desktop/src/pages/DesktopFlow.e2e.test.tsx",
-      "source_location": "L10",
       "weight": 1.0
     },
     {
@@ -41634,5 +41687,5 @@
       ]
     }
   ],
-  "built_at_commit": "07d71170d442d32dfe6026fbde41a519afda9670"
+  "built_at_commit": "01ee4af8f24df6d87b8dbaddeb9c4ba57589766f"
 }
