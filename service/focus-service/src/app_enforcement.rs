@@ -55,6 +55,7 @@ mod windows {
     #[derive(Default)]
     struct ProcessMatchers {
         executable_paths: HashSet<String>,
+        executable_names: HashSet<String>,
         folder_prefixes: Vec<String>,
         package_families: HashSet<String>,
     }
@@ -65,7 +66,19 @@ mod windows {
             for target in targets {
                 match target {
                     AppBlockTarget::Executable { path } => {
-                        matchers.executable_paths.insert(normalize_path(Path::new(path)));
+                        let path_obj = Path::new(path);
+                        matchers.executable_paths.insert(normalize_path(path_obj));
+                        
+                        if let Some(file_name) = path_obj.file_name() {
+                            matchers.executable_names.insert(file_name.to_string_lossy().to_ascii_lowercase());
+                        }
+                        if let Some(parent) = path_obj.parent() {
+                            if let Some(parent_name) = parent.file_name() {
+                                let mut inferred_exe = parent_name.to_string_lossy().to_ascii_lowercase();
+                                inferred_exe.push_str(".exe");
+                                matchers.executable_names.insert(inferred_exe);
+                            }
+                        }
                     }
                     AppBlockTarget::Folder { path } => {
                         let mut prefix = normalize_path(Path::new(path));
@@ -97,12 +110,19 @@ mod windows {
             let Some(image_path) = image_path else {
                 return false;
             };
-            let image_path = normalize_path(image_path);
-            self.executable_paths.contains(&image_path)
+            
+            if let Some(file_name) = image_path.file_name() {
+                if self.executable_names.contains(&file_name.to_string_lossy().to_ascii_lowercase()) {
+                    return true;
+                }
+            }
+
+            let image_path_norm = normalize_path(image_path);
+            self.executable_paths.contains(&image_path_norm)
                 || self
                     .folder_prefixes
                     .iter()
-                    .any(|prefix| image_path.starts_with(prefix))
+                    .any(|prefix| image_path_norm.starts_with(prefix))
         }
     }
 
@@ -711,6 +731,40 @@ mod windows {
             Err(format!("{operation} failed (0x{status:08X})"))
         }
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use focus_core::AppBlockTarget;
+        use std::path::Path;
+
+        #[test]
+        fn test_process_matchers_launcher_binary_names() {
+            let targets = vec![
+                AppBlockTarget::Executable {
+                    path: r"C:\Users\User\AppData\Local\Discord\Update.exe".to_string(),
+                },
+                AppBlockTarget::Executable {
+                    path: r"C:\Program Files\SpecificApp\launcher.exe".to_string(),
+                },
+            ];
+
+            let matchers = ProcessMatchers::from_targets(&targets);
+
+            // Should match exact full paths
+            assert!(matchers.matches(Some(Path::new(r"C:\Users\User\AppData\Local\Discord\Update.exe")), None));
+
+            // Should match the launcher's own filename in any folder
+            assert!(matchers.matches(Some(Path::new(r"C:\AnyFolder\update.exe")), None));
+            
+            // Should match the parent directory name as a .exe (Discord.exe, SpecificApp.exe)
+            assert!(matchers.matches(Some(Path::new(r"C:\Users\User\AppData\Local\Discord\app-1.0.9013\Discord.exe")), None));
+            assert!(matchers.matches(Some(Path::new(r"C:\Some\Other\Path\SpecificApp.exe")), None));
+
+            // Should not match random things
+            assert!(!matchers.matches(Some(Path::new(r"C:\AnyFolder\random.exe")), None));
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -734,7 +788,6 @@ impl AppEnforcer {
         Ok(())
     }
 
-    pub fn clear(&mut self) -> Result<(), String> {
-        Ok(())
-    }
 }
+
+
