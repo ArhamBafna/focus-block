@@ -11,7 +11,7 @@ mod windows {
     use std::path::{Path, PathBuf};
     use std::ptr;
     use std::time::{Duration, Instant};
-    use tracing::warn;
+    use tracing::{info, warn};
     use uuid::Uuid;
     use windows_sys::core::GUID;
     use windows_sys::Win32::Foundation::{
@@ -279,17 +279,12 @@ mod windows {
                 if TerminateProcess(process, 1) == 0 {
                     warn!(process_id, "matched blocked process could not be terminated");
                 } else {
-                    let app_name = image_path
-                        .as_deref()
-                        .and_then(|p| std::path::Path::new(p).file_name())
-                        .map(|s| s.to_string_lossy().into_owned())
-                        .unwrap_or_else(|| "An application".to_string());
-
-                    let _ = winrt_notification::Toast::new(winrt_notification::Toast::POWERSHELL_APP_ID)
-                        .title("Focus Block")
-                        .text1(&format!("Blocked {}", app_name))
-                        .text2("This application is blocked during your focus session.")
-                        .show();
+                    info!(
+                        process_id,
+                        image_path = ?image_path,
+                        package_family_name = ?package_family_name,
+                        "terminated blocked process"
+                    );
                 }
             }
             let _ = CloseHandle(process);
