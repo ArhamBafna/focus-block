@@ -15,7 +15,7 @@ mod windows {
     use uuid::Uuid;
     use windows_sys::core::GUID;
     use windows_sys::Win32::Foundation::{
-        CloseHandle, APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, HANDLE,
+        CloseHandle, GetLastError, APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, HANDLE,
         INVALID_HANDLE_VALUE,
     };
     use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::{
@@ -394,12 +394,25 @@ mod windows {
     }
 
     unsafe fn query_process_image_path(process: HANDLE) -> Option<PathBuf> {
-        let mut buffer = vec![0u16; 32_768];
-        let mut length = buffer.len() as u32;
-        if QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) == 0 {
-            return None;
+        let mut capacity = 1024;
+        let mut buffer = vec![0u16; capacity];
+        
+        loop {
+            let mut length = buffer.len() as u32;
+            if QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) != 0 {
+                return Some(PathBuf::from(OsString::from_wide(&buffer[..length as usize])));
+            }
+            
+            if GetLastError() != ERROR_INSUFFICIENT_BUFFER {
+                return None;
+            }
+            
+            capacity *= 2;
+            if capacity > 32_768 {
+                return None;
+            }
+            buffer.resize(capacity, 0);
         }
-        Some(PathBuf::from(OsString::from_wide(&buffer[..length as usize])))
     }
 
     unsafe fn query_package_family_name(process: HANDLE) -> Option<String> {
@@ -763,6 +776,23 @@ mod windows {
 
             // Should not match random things
             assert!(!matchers.matches(Some(Path::new(r"C:\AnyFolder\random.exe")), None));
+        }
+        #[test]
+        fn test_process_matchers_long_paths() {
+            // > 1024 character path
+            let long_folder = r"C:\".to_string() + &"very_long_folder_name_that_takes_up_space\\".repeat(50);
+            let long_path = long_folder.clone() + "app.exe";
+            
+            let targets = vec![
+                AppBlockTarget::Folder {
+                    path: long_folder,
+                },
+            ];
+
+            let matchers = ProcessMatchers::from_targets(&targets);
+            
+            // It should match an executable inside this very long folder
+            assert!(matchers.matches(Some(Path::new(&long_path)), None));
         }
     }
 }
