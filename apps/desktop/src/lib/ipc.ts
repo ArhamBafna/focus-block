@@ -176,6 +176,25 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
       return null as unknown as T;
     }
 
+    case "ListAppBlockTargets":
+      return { targets: getStorage<AppBlockEntry[]>("app_block_targets", []) } as unknown as T;
+
+    case "AddAppBlockTarget": {
+      const list = getStorage<AppBlockEntry[]>("app_block_targets", []);
+      const id = Date.now();
+      // Simple duplicate check could be done here, but ignoring for mock
+      list.push({ id, target: data.target });
+      setStorage("app_block_targets", list);
+      return id as unknown as T;
+    }
+
+    case "RemoveAppBlockTarget": {
+      let list = getStorage<AppBlockEntry[]>("app_block_targets", []);
+      list = list.filter(t => t.id !== data.id);
+      setStorage("app_block_targets", list);
+      return null as unknown as T;
+    }
+
     case "ListWhitelist":
       return getStorage<DomainEntry[]>("whitelist", []) as unknown as T;
 
