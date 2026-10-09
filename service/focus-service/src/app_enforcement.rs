@@ -143,8 +143,9 @@ mod windows {
                     {
                         return Err("executable target must resolve to an existing .exe file".into());
                     }
+                    let path_str = path.to_string_lossy();
                     Ok(AppBlockTarget::Executable {
-                        path: path.to_string_lossy().into_owned(),
+                        path: strip_verbatim_prefix(&path_str),
                     })
                 }
                 AppBlockTarget::Folder { path } => {
@@ -153,8 +154,9 @@ mod windows {
                     if !path.is_dir() {
                         return Err("folder target must resolve to an existing directory".into());
                     }
+                    let path_str = path.to_string_lossy();
                     Ok(AppBlockTarget::Folder {
-                        path: path.to_string_lossy().into_owned(),
+                        path: strip_verbatim_prefix(&path_str),
                     })
                 }
                 AppBlockTarget::Package { package_family_name } => {
@@ -292,11 +294,24 @@ mod windows {
     }
 
     fn normalize_path(path: &Path) -> String {
-        fs::canonicalize(path)
+        let path_str = fs::canonicalize(path)
             .unwrap_or_else(|_| path.to_path_buf())
             .to_string_lossy()
             .replace('/', "\\")
-            .to_ascii_lowercase()
+            .to_ascii_lowercase();
+        strip_verbatim_prefix(&path_str)
+    }
+
+    fn strip_verbatim_prefix(path: &str) -> String {
+        if let Some(stripped) = path.strip_prefix(r"\\?\unc\") {
+            format!(r"\\{}", stripped)
+        } else if let Some(stripped) = path.strip_prefix(r"\\?\UNC\") {
+            format!(r"\\{}", stripped)
+        } else if let Some(stripped) = path.strip_prefix(r"\\?\") {
+            stripped.to_string()
+        } else {
+            path.to_string()
+        }
     }
 
     fn network_identities(targets: &[AppBlockTarget]) -> Result<BTreeSet<String>, String> {
