@@ -818,6 +818,9 @@ impl AppEnforcer {
         Ok(())
     }
 
+    pub fn clear(&mut self) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 
