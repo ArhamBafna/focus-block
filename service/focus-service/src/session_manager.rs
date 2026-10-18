@@ -31,8 +31,7 @@ impl SessionManager {
 
         match active_session {
             Some(session) if session.is_expired() => {
-                // Do not mark complete until FocusBlock filters are actually gone.
-                // This fails closed if the BFE/WFP service is temporarily unavailable.
+                // Do not mark complete until app enforcement is cleared.
                 mgr.app_enforcer.clear()?;
                 let mut completed = session;
                 completed.status = SessionStatus::Completed;
@@ -40,7 +39,7 @@ impl SessionManager {
                 mgr.store.save_session(&completed)?;
             }
             Some(session) => {
-                // Keep state even when WFP is temporarily unavailable; the 250 ms
+                // Keep state if enforcement restore fails; the 250 ms
                 // service tick will retry and process termination remains enabled.
                 mgr.active_session = Some(session.clone());
                 if let Err(error) = mgr.app_enforcer.apply(&session.app_block_targets_snapshot) {
@@ -253,8 +252,8 @@ impl SessionManager {
         Ok(())
     }
 
-    /// A Windows service stop/restart must preserve active policy. Persistent WFP
-    /// filters and the active session snapshot are rehydrated on next start.
+    /// A Windows service stop/restart must preserve active policy. Active session
+    /// snapshot and enforcement targets are rehydrated on next start.
     pub async fn shutdown(&mut self) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         Ok(())
     }
@@ -320,7 +319,7 @@ impl SessionManager {
             preset_id,
         );
 
-        // Persist policy before creating persistent WFP rules. A crash in the
+        // Persist policy before applying app enforcement. A crash in the
         // narrow gap is recovered by service startup, never by the desktop UI.
         if let Err(error) = self.store.save_session(&session) {
             return store_error(error);
@@ -396,8 +395,8 @@ impl SessionManager {
         let mut candidate_session = previous_session.clone();
         candidate_session.app_block_targets_snapshot = targets;
 
-        // Commit WFP first. If persistence then fails, restore previous policy so
-        // disk snapshot and persistent filters never diverge across a restart.
+        // Apply app enforcement first. If persistence then fails, restore previous policy so
+        // disk snapshot and active enforcement never diverge across a restart.
         self.app_enforcer
             .apply(&candidate_session.app_block_targets_snapshot)?;
         if let Err(error) = self.store.save_session(&candidate_session) {

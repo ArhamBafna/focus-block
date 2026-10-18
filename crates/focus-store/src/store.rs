@@ -190,7 +190,6 @@ impl FocusStore {
             .list_app_block_targets()?
             .into_iter()
             .map(|entry| entry.target)
-            .filter(|target| !matches!(target, AppBlockTarget::Folder { .. }))
             .collect())
     }
 

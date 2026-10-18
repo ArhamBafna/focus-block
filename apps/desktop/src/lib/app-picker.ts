@@ -22,11 +22,6 @@ export async function pickExecutable(): Promise<string | null> {
   return typeof result === "string" ? result : null;
 }
 
-export async function pickFolder(): Promise<string | null> {
-  const result = await open({ directory: true, multiple: false });
-  return typeof result === "string" ? result : null;
-}
-
 export function listInstalledApps(): Promise<DiscoveredApp[]> {
   const isTauri =
     typeof window !== "undefined" &&

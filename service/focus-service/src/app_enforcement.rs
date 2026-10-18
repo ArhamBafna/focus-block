@@ -35,69 +35,15 @@ mod windows {
         CloseHandle, GetLastError, APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, HANDLE,
         INVALID_HANDLE_VALUE,
     };
-    use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::{
-        FwpmEngineClose0, FwpmEngineOpen0, FwpmFilterCreateEnumHandle0,
-        FwpmFilterDeleteById0, FwpmFilterDestroyEnumHandle0, FwpmFilterEnum0,
-        FwpmFreeMemory0, FwpmProviderDeleteByKey0, FwpmSubLayerDeleteByKey0,
-        FWPM_FILTER0, FWPM_FILTER_ENUM_TEMPLATE0,
-    };
-    use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
-    use windows_sys::Win32::Security::{FreeSid, PSID};
     use windows_sys::Win32::Storage::Packaging::Appx::GetPackageFamilyName;
     use windows_sys::Win32::System::Diagnostics::ToolHelp::{
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
     };
-    use windows_sys::Win32::System::Rpc::RPC_C_AUTHN_DEFAULT;
     use windows_sys::Win32::System::Threading::{
         GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
         PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
     };
-
-    const PROVIDER_KEY: windows_sys::core::GUID =
-        windows_sys::core::GUID::from_u128(0x6e7f52de_6b17_4454_9397_ae2a09d96001);
-    const SUBLAYER_KEY: windows_sys::core::GUID =
-        windows_sys::core::GUID::from_u128(0x6e7f52de_6b17_4454_9397_ae2a09d96002);
-
-    fn cleanup_legacy_wfp() {
-        unsafe {
-            let mut handle = ptr::null_mut();
-            let status = FwpmEngineOpen0(
-                ptr::null(),
-                RPC_C_AUTHN_DEFAULT as u32,
-                ptr::null(),
-                ptr::null(),
-                &mut handle,
-            );
-            if status != 0 || handle.is_null() {
-                return;
-            }
-
-            let mut provider_key = PROVIDER_KEY;
-            let mut template = FWPM_FILTER_ENUM_TEMPLATE0::default();
-            template.providerKey = &mut provider_key;
-            let mut enum_handle = ptr::null_mut();
-            if FwpmFilterCreateEnumHandle0(handle, &template, &mut enum_handle) == 0 {
-                let mut entries: *mut *mut FWPM_FILTER0 = ptr::null_mut();
-                let mut count = 0;
-                if FwpmFilterEnum0(handle, enum_handle, 1000, &mut entries, &mut count) == 0 {
-                    if !entries.is_null() {
-                        for filter in std::slice::from_raw_parts(entries, count as usize) {
-                            if !filter.is_null() {
-                                let _ = FwpmFilterDeleteById0(handle, (**filter).filterId);
-                            }
-                        }
-                        FwpmFreeMemory0((&mut entries as *mut *mut *mut FWPM_FILTER0).cast());
-                    }
-                }
-                let _ = FwpmFilterDestroyEnumHandle0(handle, enum_handle);
-            }
-
-            let _ = FwpmSubLayerDeleteByKey0(handle, &SUBLAYER_KEY);
-            let _ = FwpmProviderDeleteByKey0(handle, &PROVIDER_KEY);
-            let _ = FwpmEngineClose0(handle);
-        }
-    }
 
     const FALLBACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 
@@ -155,9 +101,6 @@ mod windows {
                         matchers
                             .package_families
                             .insert(package_family_name.to_ascii_lowercase());
-                    }
-                    AppBlockTarget::Folder { .. } => {
-                        // Legacy folders are no longer matched
                     }
                 }
             }
@@ -446,7 +389,6 @@ mod windows {
 
     impl Default for AppEnforcer {
         fn default() -> Self {
-            cleanup_legacy_wfp();
             Self {
                 targets: Vec::new(),
                 matchers: Arc::new(RwLock::new(ProcessMatchers::default())),
@@ -463,9 +405,6 @@ mod windows {
         pub fn validate_target(target: &AppBlockTarget) -> Result<AppBlockTarget, String> {
             let target = target.normalized()?;
             match target {
-                AppBlockTarget::Folder { .. } => {
-                    Err("folder targets are no longer supported; please add specific applications".into())
-                }
                 AppBlockTarget::Executable { path } => {
                     let path = fs::canonicalize(&path)
                         .map_err(|error| format!("cannot resolve executable target: {error}"))?;
@@ -485,26 +424,6 @@ mod windows {
                     package_family_name,
                 } => {
                     let package_family_name = package_family_name.to_ascii_lowercase();
-                    let package_family_name_wide: Vec<u16> = package_family_name
-                        .encode_utf16()
-                        .chain(std::iter::once(0))
-                        .collect();
-                    let mut sid: PSID = ptr::null_mut();
-                    let status = unsafe {
-                        DeriveAppContainerSidFromAppContainerName(
-                            package_family_name_wide.as_ptr(),
-                            &mut sid,
-                        )
-                    };
-                    if !sid.is_null() {
-                        unsafe { FreeSid(sid) };
-                    }
-                    if status < 0 {
-                        return Err(format!(
-                            "invalid package family name (0x{:08X})",
-                            status as u32
-                        ));
-                    }
                     Ok(AppBlockTarget::Package {
                         package_family_name,
                     })
@@ -518,7 +437,6 @@ mod windows {
 
             let candidate_targets: Vec<AppBlockTarget> = targets
                 .iter()
-                .filter(|t| !matches!(t, AppBlockTarget::Folder { .. }))
                 .map(AppBlockTarget::normalized)
                 .collect::<Result<_, _>>()?;
             let new_matchers = ProcessMatchers::from_targets(&candidate_targets);
@@ -626,7 +544,6 @@ mod windows {
 
         pub fn clear(&mut self) -> Result<(), String> {
             self.stop_watcher();
-            cleanup_legacy_wfp();
             self.targets.clear();
             {
                 let mut matchers_guard = self.matchers.write().unwrap();

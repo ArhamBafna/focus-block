@@ -25,7 +25,6 @@ fn target_cache_key(target: &AppBlockTarget) -> String {
         AppBlockTarget::Package { package_family_name } => {
             format!("pkg_{}", package_family_name.to_lowercase())
         }
-        AppBlockTarget::Folder { path } => format!("folder_{}", path.to_lowercase()),
     };
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     raw.hash(&mut hasher);
@@ -63,7 +62,6 @@ fn extract_app_icon_native(target: &AppBlockTarget) -> Option<String> {
     }
 
     let script = match target {
-        AppBlockTarget::Folder { .. } => return None,
         AppBlockTarget::Executable { path } => {
             format!(
                 r#"

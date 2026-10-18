@@ -11,7 +11,6 @@ fn main() {
                 .add_directive("focus_service=info".parse().unwrap())
                 .add_directive("focus_ipc=info".parse().unwrap())
                 .add_directive("focus_dns=info".parse().unwrap())
-                .add_directive("focus_wfp=info".parse().unwrap())
         )
         .init();
 
