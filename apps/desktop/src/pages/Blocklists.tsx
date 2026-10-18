@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { ipc, AppBlockEntry, AppBlockTarget, DomainEntry } from "../lib/ipc";
-import { File, Folder, Plus, SpinnerGap, SquaresFour, Trash, WindowsLogo } from "@phosphor-icons/react";
-import { listStoreApps, pickExecutable, pickFolder, StoreApp } from "../lib/app-picker";
+import { File, Plus, SpinnerGap, SquaresFour, Trash, WindowsLogo } from "@phosphor-icons/react";
+import { listStoreApps, pickExecutable, StoreApp } from "../lib/app-picker";
 import { AppPickerModal, DiscoveredApp } from "../components/AppPickerModal";
 
 type Notice = { tone: "success" | "error"; text: string } | null;
@@ -9,9 +9,6 @@ type Notice = { tone: "success" | "error"; text: string } | null;
 function appTargetDetails(target: AppBlockTarget) {
   if (target.kind === "executable") {
     return { label: "Executable", value: target.path, icon: <File size={17} /> };
-  }
-  if (target.kind === "folder") {
-    return { label: "Folder", value: target.path, icon: <Folder size={17} /> };
   }
   return {
     label: "Microsoft Store app",
@@ -124,15 +121,6 @@ export default function Blocklists() {
       if (path) await addAppTarget({ kind: "executable", path }, "Executable added to app blocking.");
     } catch (e: any) {
       setAppNotice({ tone: "error", text: e?.message || "Could not open executable picker." });
-    }
-  };
-
-  const chooseFolder = async () => {
-    try {
-      const path = await pickFolder();
-      if (path) await addAppTarget({ kind: "folder", path }, "Folder added to app blocking.");
-    } catch (e: any) {
-      setAppNotice({ tone: "error", text: e?.message || "Could not open folder picker." });
     }
   };
 
@@ -383,9 +371,6 @@ export default function Blocklists() {
           <button type="button" onClick={chooseExecutable} disabled={appActionLoading} style={appButtonStyle}>
             <File size={16} /> Select .exe
           </button>
-          <button type="button" onClick={chooseFolder} disabled={appActionLoading} style={appButtonStyle}>
-            <Folder size={16} /> Select folder
-          </button>
           <button type="button" onClick={openStorePicker} disabled={appActionLoading} style={appButtonStyle}>
             <WindowsLogo size={16} /> Select Store app
           </button>
@@ -448,7 +433,7 @@ export default function Blocklists() {
             })}
             {appTargets.length === 0 && (
               <div style={{ textAlign: "center", padding: "30px 0", color: "var(--color-neutral-400)", fontSize: "14px" }}>
-                No applications blocked yet. Click "Add Apps" or select an .exe, folder, or Microsoft Store app above.
+                No applications blocked yet. Click "Add Apps" or select an .exe or Microsoft Store app above.
               </div>
             )}
           </div>

@@ -37,8 +37,15 @@ export interface DomainEntry {
 
 export type AppBlockTarget =
   | { kind: "executable"; path: string }
-  | { kind: "folder"; path: string }
   | { kind: "package"; package_family_name: string };
+
+export interface BlockedAppEvent {
+  app_name: string;
+  executable_path?: string;
+  package_family_name?: string;
+  timestamp: string;
+  count: number;
+}
 
 export interface AppBlockEntry {
   id: number;
@@ -57,6 +64,7 @@ export interface ServiceHealth {
 export interface ServiceStatus {
   health: ServiceHealth;
   active_session: ActiveSessionView | null;
+  last_blocked_app?: BlockedAppEvent | null;
 }
 
 export interface AppSettings {
@@ -149,9 +157,11 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
           };
         }
       }
+      const lastBlocked = getStorage<BlockedAppEvent | null>("last_blocked_app", null);
       return {
         health: { running: true, version: "0.1.0-mock" },
         active_session: activeView,
+        ...(lastBlocked ? { last_blocked_app: lastBlocked } : {}),
       } as unknown as T;
     }
 
@@ -300,6 +310,11 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
       return null as unknown as T;
     }
 
+    case "ClearLastBlockedApp": {
+      setStorage("last_blocked_app", null);
+      return null as unknown as T;
+    }
+
     default:
       throw new Error(`Unknown command: ${cmd}`);
   }
@@ -407,4 +422,12 @@ export const ipc = {
 
   getSettings: () => request<AppSettings>("GetSettings").then(unwrap),
   updateSettings: (os_allowlist_enabled: boolean) => request<null>("UpdateSettings", { os_allowlist_enabled }).then(unwrap),
+
+  clearLastBlockedApp: () => request<null>("ClearLastBlockedApp").then(unwrap),
 };
+
+export function setMockBlockedApp(event: BlockedAppEvent | null): void {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("mock_last_blocked_app", JSON.stringify(event));
+  }
+}
