@@ -22,10 +22,10 @@ fn icon_cache_dir() -> PathBuf {
 fn target_cache_key(target: &AppBlockTarget) -> String {
     let raw = match target {
         AppBlockTarget::Executable { path } => format!("exe_{}", path.to_lowercase()),
-        AppBlockTarget::Folder { path } => format!("dir_{}", path.to_lowercase()),
         AppBlockTarget::Package { package_family_name } => {
             format!("pkg_{}", package_family_name.to_lowercase())
         }
+        AppBlockTarget::Folder { path } => format!("folder_{}", path.to_lowercase()),
     };
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     raw.hash(&mut hasher);
@@ -63,6 +63,7 @@ fn extract_app_icon_native(target: &AppBlockTarget) -> Option<String> {
     }
 
     let script = match target {
+        AppBlockTarget::Folder { .. } => return None,
         AppBlockTarget::Executable { path } => {
             format!(
                 r#"
@@ -121,7 +122,6 @@ if ($pkg -and $pkg.InstallLocation) {{
                 package_family_name.replace('"', "`\"")
             )
         }
-        AppBlockTarget::Folder { .. } => return None,
     };
 
     let output = std::process::Command::new("powershell.exe")

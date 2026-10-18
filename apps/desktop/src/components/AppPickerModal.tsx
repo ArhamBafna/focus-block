@@ -161,8 +161,6 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
                           const targetKey =
                             app.target.kind === "executable"
                               ? app.target.path
-                              : app.target.kind === "folder"
-                              ? app.target.path
                               : app.target.package_family_name;
                           return (
                             <div

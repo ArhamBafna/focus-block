@@ -25,6 +25,7 @@ vi.mock("../lib/ipc", async (importOriginal) => {
       listHistory: vi.fn(),
       listBlocklist: vi.fn(),
       listWhitelist: vi.fn(),
+      clearLastBlockedApp: vi.fn().mockResolvedValue({ ok: true, data: null }),
     },
   };
 });
@@ -178,5 +179,35 @@ describe("Desktop E2E Flow", () => {
 
     expect(await screen.findByText(/blocklist Session/i)).toBeTruthy();
     expect(await screen.findByText(/stopped/i)).toBeTruthy();
+  });
+
+  it("shows centered blocked app modal when an application launch is intercepted and dismisses via Back to Focus", async () => {
+    getStatusSafe.mockResolvedValue({
+      ok: true,
+      data: {
+        health: { running: true, version: "0.1.0" },
+        active_session: null,
+        last_blocked_app: {
+          app_name: "Slack",
+          executable_path: "C:\\Users\\User\\AppData\\Local\\slack\\slack.exe",
+          timestamp: new Date().toISOString(),
+          count: 2,
+        },
+      },
+    });
+
+    render(<App />);
+
+    // 1. Verify modal appears with intercepted app name and debounced badge
+    expect(await screen.findByText("Slack Blocked")).toBeTruthy();
+    expect(screen.getByText("Blocked 2 launch attempts")).toBeTruthy();
+
+    // 2. Click "Back to Focus" to dismiss
+    const backBtn = screen.getByRole("button", { name: /Back to Focus/i });
+    fireEvent.click(backBtn);
+
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 });

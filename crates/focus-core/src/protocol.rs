@@ -41,6 +41,8 @@ pub enum IpcRequest {
     UpdateSettings { os_allowlist_enabled: bool },
     /// Canonical, service-owned browser policy used by the native-messaging host.
     GetActivePolicy,
+    /// Clear the most recent blocked application notification after user dismisses it.
+    ClearLastBlockedApp,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -77,14 +79,14 @@ pub struct DomainEntry {
 
 /// An application identity selected for service-side blocking.
 ///
-/// `Executable` is an exact Win32 image path, `Folder` covers every `.exe` below
-/// that directory, and `Package` is a Windows package family name (PFN).
+/// `Executable` is an exact Win32 image path, and `Package` is a Windows package family name (PFN).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AppBlockTarget {
     Executable { path: String },
-    Folder { path: String },
     Package { package_family_name: String },
+    #[serde(rename = "folder")]
+    Folder { path: String },
 }
 
 impl AppBlockTarget {
@@ -96,13 +98,6 @@ impl AppBlockTarget {
                     return Err("executable target must be a .exe path".into());
                 }
                 Ok(Self::Executable { path: path.to_string() })
-            }
-            Self::Folder { path } => {
-                let path = path.trim();
-                if path.is_empty() {
-                    return Err("folder target must not be empty".into());
-                }
-                Ok(Self::Folder { path: path.to_string() })
             }
             Self::Package { package_family_name } => {
                 let package_family_name = package_family_name.trim();
@@ -116,14 +111,17 @@ impl AppBlockTarget {
                     package_family_name: package_family_name.to_string(),
                 })
             }
+            Self::Folder { .. } => {
+                Err("folder targets are no longer supported; please add specific applications".into())
+            }
         }
     }
 
     pub fn storage_parts(&self) -> (&'static str, &str) {
         match self {
             Self::Executable { path } => ("executable", path),
-            Self::Folder { path } => ("folder", path),
             Self::Package { package_family_name } => ("package", package_family_name),
+            Self::Folder { path } => ("folder", path),
         }
     }
 
@@ -136,7 +134,7 @@ impl AppBlockTarget {
             },
             _ => return Err(format!("unknown app target kind: {kind}")),
         };
-        target.normalized()
+        Ok(target)
     }
 }
 
@@ -189,10 +187,23 @@ pub struct ServiceHealth {
     pub version: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BlockedAppEvent {
+    pub app_name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub executable_path: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package_family_name: Option<String>,
+    pub timestamp: DateTime<Utc>,
+    pub count: u32,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServiceStatus {
     pub health: ServiceHealth,
     pub active_session: Option<crate::ActiveSessionView>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_blocked_app: Option<BlockedAppEvent>,
 }
 
 #[cfg(test)]
@@ -207,6 +218,7 @@ mod tests {
         let status = ServiceStatus {
             health: health.clone(),
             active_session: None,
+            last_blocked_app: None,
         };
         let domain = DomainEntry { id: 1, domain: "a.com".into() };
         let preset = Preset {

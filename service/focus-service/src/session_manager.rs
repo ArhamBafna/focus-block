@@ -77,6 +77,7 @@ impl SessionManager {
                     data: ResponseData::Status(ServiceStatus {
                         health: self.health(),
                         active_session: session_view,
+                        last_blocked_app: self.app_enforcer.last_blocked_app(),
                     }),
                 }
             }
@@ -232,6 +233,12 @@ impl SessionManager {
                     data: ResponseData::Unit(()),
                 })
                 .unwrap_or_else(store_error),
+            IpcRequest::ClearLastBlockedApp => {
+                self.app_enforcer.clear_last_blocked_app();
+                IpcResponse::Ok {
+                    data: ResponseData::Unit(()),
+                }
+            }
         }
     }
 

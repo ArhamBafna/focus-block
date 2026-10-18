@@ -95,6 +95,16 @@ Check service:
 Get-Service FocusBlockService
 ```
 
+Check Instant App Blocking:
+
+1. In Desktop UI, go to **Blocklists** tab.
+2. Click **+ Add App** and select an installed app (for example, Notepad or Calculator).
+3. Go to **Focus** tab and click **Start Focus Session**.
+4. Try to open the blocked app:
+   - App closes immediately (< 10ms) without showing a window.
+   - Desktop app displays the centered **App Blocked Modal** showing the app name and launch attempt badge.
+   - Click **Back to Focus** to dismiss the modal.
+
 Check Chrome:
 
 1. Open `chrome://extensions`.

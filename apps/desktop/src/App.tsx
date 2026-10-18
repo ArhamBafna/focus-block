@@ -1,4 +1,5 @@
-import { HashRouter as Router, Routes, Route, Link, useLocation } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { Timer, Shield, ListPlus, ClockCounterClockwise, Gear, ListChecks } from "@phosphor-icons/react";
 import Home from "./pages/Home";
 import Blocklists from "./pages/Blocklists";
@@ -6,6 +7,8 @@ import Whitelist from "./pages/Whitelist";
 import Presets from "./pages/Presets";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
+import { AppBlockedModal } from "./components/AppBlockedModal";
+import { ipc, BlockedAppEvent } from "./lib/ipc";
 import "./App.css";
 
 const navItems = [
@@ -104,39 +107,100 @@ function Topbar() {
   );
 }
 
+function AppContent() {
+  const navigate = useNavigate();
+  const [blockedEvent, setBlockedEvent] = useState<BlockedAppEvent | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const checkStatus = async () => {
+      try {
+        const envelope = await ipc.getStatusSafe();
+        if (envelope.ok && envelope.data.last_blocked_app && isMounted) {
+          const next = envelope.data.last_blocked_app;
+          setBlockedEvent(next);
+          setIsModalOpen(true);
+        }
+      } catch {
+        // Quiet poll error
+      }
+    };
+
+    checkStatus();
+    const interval = setInterval(checkStatus, 1000);
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleDismiss = useCallback(() => {
+    setIsModalOpen(false);
+    setBlockedEvent(null);
+    try {
+      ipc.clearLastBlockedApp?.()?.catch?.(() => {});
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleBackToFocus = useCallback(() => {
+    setIsModalOpen(false);
+    setBlockedEvent(null);
+    try {
+      ipc.clearLastBlockedApp?.()?.catch?.(() => {});
+    } catch {
+      // ignore
+    }
+    navigate("/");
+  }, [navigate]);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        overflow: "hidden",
+        background: "var(--color-background)",
+        fontFamily: "var(--font-sans)",
+      }}
+    >
+      <Topbar />
+      <main
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          background: "var(--color-background)",
+          color: "var(--color-foreground)",
+          minWidth: 0,
+        }}
+      >
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/blocklists" element={<Blocklists />} />
+          <Route path="/whitelist" element={<Whitelist />} />
+          <Route path="/presets" element={<Presets />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/settings" element={<Settings />} />
+        </Routes>
+      </main>
+
+      <AppBlockedModal
+        event={blockedEvent}
+        isOpen={isModalOpen}
+        onDismiss={handleDismiss}
+        onBackToFocus={handleBackToFocus}
+      />
+    </div>
+  );
+}
+
 function App() {
   return (
     <Router>
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          minHeight: "100vh",
-          overflow: "hidden",
-          background: "var(--color-background)",
-          fontFamily: "var(--font-sans)",
-        }}
-      >
-        <Topbar />
-        <main
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            background: "var(--color-background)",
-            color: "var(--color-foreground)",
-            minWidth: 0,
-          }}
-        >
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/blocklists" element={<Blocklists />} />
-            <Route path="/whitelist" element={<Whitelist />} />
-            <Route path="/presets" element={<Presets />} />
-            <Route path="/history" element={<History />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
-      </div>
+      <AppContent />
     </Router>
   );
 }
