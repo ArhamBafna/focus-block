@@ -222,7 +222,7 @@ async fn run_async(
 
     let timer_mgr = Arc::clone(&manager);
     let timer_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(std::time::Duration::from_millis(250));
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(1000));
         loop {
             interval.tick().await;
             let mut guard = timer_mgr.lock().await;
