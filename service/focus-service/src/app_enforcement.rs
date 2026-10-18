@@ -311,14 +311,25 @@ mod windows {
                 return Err(err);
             }
 
+            if stop_flag.load(Ordering::Relaxed) {
+                CoUninitialize();
+                return Ok(());
+            }
+
             let locator: IWbemLocator = match CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER) {
                 Ok(loc) => loc,
                 Err(e) => {
                     let err = format!("Failed to create IWbemLocator: {e}");
                     let _ = ready_tx.send(Err(err.clone()));
+                    CoUninitialize();
                     return Err(err);
                 }
             };
+
+            if stop_flag.load(Ordering::Relaxed) {
+                CoUninitialize();
+                return Ok(());
+            }
 
             let namespace = BSTR::from("ROOT\\CIMV2");
             let empty_bstr = BSTR::new();
@@ -335,9 +346,15 @@ mod windows {
                 Err(e) => {
                     let err = format!("Failed to connect to WMI ROOT\\CIMV2: {e}");
                     let _ = ready_tx.send(Err(err.clone()));
+                    CoUninitialize();
                     return Err(err);
                 }
             };
+
+            if stop_flag.load(Ordering::Relaxed) {
+                CoUninitialize();
+                return Ok(());
+            }
 
             let _ = CoSetProxyBlanket(
                 &services,
@@ -625,7 +642,14 @@ mod windows {
                 stop.store(true, Ordering::Relaxed);
             }
             if let Some(handle) = self.watcher_handle.take() {
-                let _ = handle.join();
+                if handle.is_finished() {
+                    let _ = handle.join();
+                } else {
+                    // Avoid unbounded wait while holding service lock; join asynchronously
+                    thread::spawn(move || {
+                        let _ = handle.join();
+                    });
+                }
             }
         }
 
