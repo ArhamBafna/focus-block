@@ -85,6 +85,8 @@ pub struct DomainEntry {
 pub enum AppBlockTarget {
     Executable { path: String },
     Package { package_family_name: String },
+    #[serde(rename = "folder")]
+    Folder { path: String },
 }
 
 impl AppBlockTarget {
@@ -109,6 +111,9 @@ impl AppBlockTarget {
                     package_family_name: package_family_name.to_string(),
                 })
             }
+            Self::Folder { .. } => {
+                Err("folder targets are no longer supported; please add specific applications".into())
+            }
         }
     }
 
@@ -116,21 +121,20 @@ impl AppBlockTarget {
         match self {
             Self::Executable { path } => ("executable", path),
             Self::Package { package_family_name } => ("package", package_family_name),
+            Self::Folder { path } => ("folder", path),
         }
     }
 
     pub fn from_storage(kind: &str, value: String) -> Result<Self, String> {
         let target = match kind {
             "executable" => Self::Executable { path: value },
-            "folder" => {
-                return Err("folder targets are no longer supported; please add specific applications".into())
-            }
+            "folder" => Self::Folder { path: value },
             "package" => Self::Package {
                 package_family_name: value,
             },
             _ => return Err(format!("unknown app target kind: {kind}")),
         };
-        target.normalized()
+        Ok(target)
     }
 }
 

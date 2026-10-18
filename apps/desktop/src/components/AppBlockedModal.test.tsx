@@ -106,4 +106,19 @@ describe("AppBlockedModal", () => {
     fireEvent.click(closeButton);
     expect(handleDismiss).toHaveBeenCalledTimes(1);
   });
+
+  it("calls onDismiss when Escape key is pressed", () => {
+    const handleDismiss = vi.fn();
+    render(
+      <AppBlockedModal
+        event={mockEvent}
+        isOpen={true}
+        onDismiss={handleDismiss}
+        onBackToFocus={vi.fn()}
+      />
+    );
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(handleDismiss).toHaveBeenCalledTimes(1);
+  });
 });

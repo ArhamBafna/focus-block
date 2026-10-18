@@ -119,16 +119,7 @@ function AppContent() {
         const envelope = await ipc.getStatusSafe();
         if (envelope.ok && envelope.data.last_blocked_app && isMounted) {
           const next = envelope.data.last_blocked_app;
-          setBlockedEvent((prev) => {
-            if (prev && prev.app_name === next.app_name) {
-              return {
-                ...prev,
-                count: Math.max(prev.count + 1, next.count),
-                timestamp: next.timestamp,
-              };
-            }
-            return next;
-          });
+          setBlockedEvent(next);
           setIsModalOpen(true);
         }
       } catch {
@@ -146,6 +137,7 @@ function AppContent() {
 
   const handleDismiss = () => {
     setIsModalOpen(false);
+    setBlockedEvent(null);
     try {
       ipc.clearLastBlockedApp?.()?.catch?.(() => {});
     } catch {
@@ -155,6 +147,7 @@ function AppContent() {
 
   const handleBackToFocus = () => {
     setIsModalOpen(false);
+    setBlockedEvent(null);
     try {
       ipc.clearLastBlockedApp?.()?.catch?.(() => {});
     } catch {

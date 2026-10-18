@@ -35,6 +35,12 @@ mod windows {
         CloseHandle, GetLastError, APPMODEL_ERROR_NO_PACKAGE, ERROR_INSUFFICIENT_BUFFER, HANDLE,
         INVALID_HANDLE_VALUE,
     };
+    use windows_sys::Win32::NetworkManagement::WindowsFilteringPlatform::{
+        FwpmEngineClose0, FwpmEngineOpen0, FwpmFilterCreateEnumHandle0,
+        FwpmFilterDeleteById0, FwpmFilterDestroyEnumHandle0, FwpmFilterEnum0,
+        FwpmFreeMemory0, FwpmProviderDeleteByKey0, FwpmSubLayerDeleteByKey0,
+        FWPM_FILTER0, FWPM_FILTER_ENUM_TEMPLATE0,
+    };
     use windows_sys::Win32::Security::Isolation::DeriveAppContainerSidFromAppContainerName;
     use windows_sys::Win32::Security::{FreeSid, PSID};
     use windows_sys::Win32::Storage::Packaging::Appx::GetPackageFamilyName;
@@ -42,10 +48,56 @@ mod windows {
         CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
         TH32CS_SNAPPROCESS,
     };
+    use windows_sys::Win32::System::Rpc::RPC_C_AUTHN_DEFAULT;
     use windows_sys::Win32::System::Threading::{
         GetCurrentProcessId, OpenProcess, QueryFullProcessImageNameW, TerminateProcess,
         PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_TERMINATE,
     };
+
+    const PROVIDER_KEY: windows_sys::core::GUID =
+        windows_sys::core::GUID::from_u128(0x6e7f52de_6b17_4454_9397_ae2a09d96001);
+    const SUBLAYER_KEY: windows_sys::core::GUID =
+        windows_sys::core::GUID::from_u128(0x6e7f52de_6b17_4454_9397_ae2a09d96002);
+
+    fn cleanup_legacy_wfp() {
+        unsafe {
+            let mut handle = ptr::null_mut();
+            let status = FwpmEngineOpen0(
+                ptr::null(),
+                RPC_C_AUTHN_DEFAULT as u32,
+                ptr::null(),
+                ptr::null(),
+                &mut handle,
+            );
+            if status != 0 || handle.is_null() {
+                return;
+            }
+
+            let mut provider_key = PROVIDER_KEY;
+            let mut template = FWPM_FILTER_ENUM_TEMPLATE0::default();
+            template.providerKey = &mut provider_key;
+            let mut enum_handle = ptr::null_mut();
+            if FwpmFilterCreateEnumHandle0(handle, &template, &mut enum_handle) == 0 {
+                let mut entries: *mut *mut FWPM_FILTER0 = ptr::null_mut();
+                let mut count = 0;
+                if FwpmFilterEnum0(handle, enum_handle, 1000, &mut entries, &mut count) == 0 {
+                    if !entries.is_null() {
+                        for filter in std::slice::from_raw_parts(entries, count as usize) {
+                            if !filter.is_null() {
+                                let _ = FwpmFilterDeleteById0(handle, (**filter).filterId);
+                            }
+                        }
+                        FwpmFreeMemory0(entries.cast());
+                    }
+                }
+                let _ = FwpmFilterDestroyEnumHandle0(handle, enum_handle);
+            }
+
+            let _ = FwpmSubLayerDeleteByKey0(handle, &SUBLAYER_KEY);
+            let _ = FwpmProviderDeleteByKey0(handle, &PROVIDER_KEY);
+            let _ = FwpmEngineClose0(handle);
+        }
+    }
 
     const FALLBACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
 
@@ -103,6 +155,9 @@ mod windows {
                         matchers
                             .package_families
                             .insert(package_family_name.to_ascii_lowercase());
+                    }
+                    AppBlockTarget::Folder { .. } => {
+                        // Legacy folders are no longer matched
                     }
                 }
             }
@@ -245,31 +300,44 @@ mod windows {
         matchers: Arc<RwLock<ProcessMatchers>>,
         stop_flag: Arc<AtomicBool>,
         last_blocked: Arc<Mutex<Option<BlockedAppEvent>>>,
+        ready_tx: std::sync::mpsc::Sender<Result<(), String>>,
     ) -> Result<(), String> {
         unsafe {
             let hr = CoInitializeEx(None, COINIT_MULTITHREADED);
             if hr.is_err() && hr.0 != -2147417850 {
                 // RPC_E_CHANGED_MODE is tolerable if initialized on this thread
-                return Err(format!("CoInitializeEx failed: {:?}", hr));
+                let err = format!("CoInitializeEx failed: {:?}", hr);
+                let _ = ready_tx.send(Err(err.clone()));
+                return Err(err);
             }
 
-            let locator: IWbemLocator =
-                CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)
-                    .map_err(|e| format!("Failed to create IWbemLocator: {e}"))?;
+            let locator: IWbemLocator = match CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER) {
+                Ok(loc) => loc,
+                Err(e) => {
+                    let err = format!("Failed to create IWbemLocator: {e}");
+                    let _ = ready_tx.send(Err(err.clone()));
+                    return Err(err);
+                }
+            };
 
             let namespace = BSTR::from("ROOT\\CIMV2");
             let empty_bstr = BSTR::new();
-            let services: IWbemServices = locator
-                .ConnectServer(
-                    &namespace,
-                    &empty_bstr,
-                    &empty_bstr,
-                    &empty_bstr,
-                    0,
-                    &empty_bstr,
-                    None,
-                )
-                .map_err(|e| format!("Failed to connect to WMI ROOT\\CIMV2: {e}"))?;
+            let services: IWbemServices = match locator.ConnectServer(
+                &namespace,
+                &empty_bstr,
+                &empty_bstr,
+                &empty_bstr,
+                0,
+                &empty_bstr,
+                None,
+            ) {
+                Ok(svc) => svc,
+                Err(e) => {
+                    let err = format!("Failed to connect to WMI ROOT\\CIMV2: {e}");
+                    let _ = ready_tx.send(Err(err.clone()));
+                    return Err(err);
+                }
+            };
 
             let _ = CoSetProxyBlanket(
                 &services,
@@ -284,16 +352,23 @@ mod windows {
 
             let query_lang = BSTR::from("WQL");
             let query = BSTR::from("SELECT ProcessId, ProcessName FROM Win32_ProcessStartTrace");
-            let enumerator: IEnumWbemClassObject = services
-                .ExecNotificationQuery(
-                    &query_lang,
-                    &query,
-                    WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                    None,
-                )
-                .map_err(|e| format!("ExecNotificationQuery on Win32_ProcessStartTrace failed: {e}"))?;
+            let enumerator: IEnumWbemClassObject = match services.ExecNotificationQuery(
+                &query_lang,
+                &query,
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                None,
+            ) {
+                Ok(en) => en,
+                Err(e) => {
+                    let err = format!("ExecNotificationQuery on Win32_ProcessStartTrace failed: {e}");
+                    let _ = ready_tx.send(Err(err.clone()));
+                    return Err(err);
+                }
+            };
 
             info!("Kernel event process start watcher successfully registered with ETW/WMI");
+            // Notify startup thread that event subscription is active
+            let _ = ready_tx.send(Ok(()));
 
             let current_pid = GetCurrentProcessId();
 
@@ -354,6 +429,7 @@ mod windows {
 
     impl Default for AppEnforcer {
         fn default() -> Self {
+            cleanup_legacy_wfp();
             Self {
                 targets: Vec::new(),
                 matchers: Arc::new(RwLock::new(ProcessMatchers::default())),
@@ -370,6 +446,9 @@ mod windows {
         pub fn validate_target(target: &AppBlockTarget) -> Result<AppBlockTarget, String> {
             let target = target.normalized()?;
             match target {
+                AppBlockTarget::Folder { .. } => {
+                    Err("folder targets are no longer supported; please add specific applications".into())
+                }
                 AppBlockTarget::Executable { path } => {
                     let path = fs::canonicalize(&path)
                         .map_err(|error| format!("cannot resolve executable target: {error}"))?;
@@ -422,20 +501,14 @@ mod windows {
 
             let candidate_targets: Vec<AppBlockTarget> = targets
                 .iter()
+                .filter(|t| !matches!(t, AppBlockTarget::Folder { .. }))
                 .map(AppBlockTarget::normalized)
                 .collect::<Result<_, _>>()?;
             let new_matchers = ProcessMatchers::from_targets(&candidate_targets);
 
-            // 1. One-time startup sweep: terminate any blocked apps already open
-            let sweep_events = sweep_active_processes(&new_matchers);
-            if let Some(first) = sweep_events.into_iter().next() {
-                let mut guard = self.last_blocked.lock().unwrap();
-                *guard = Some(first);
-            }
-
             {
                 let mut matchers_guard = self.matchers.write().unwrap();
-                *matchers_guard = new_matchers;
+                *matchers_guard = new_matchers.clone();
             }
             self.targets = candidate_targets;
 
@@ -444,23 +517,22 @@ mod windows {
                 return Ok(());
             }
 
-            // 2. Start kernel event watcher thread
+            // 1. Start kernel event watcher thread FIRST
             self.watcher_stop.store(false, Ordering::Relaxed);
             let matchers_clone = Arc::clone(&self.matchers);
             let stop_flag_clone = Arc::clone(&self.watcher_stop);
             let last_blocked_clone = Arc::clone(&self.last_blocked);
 
-            // Attempt event-driven watcher initialization on dedicated thread
             let (init_tx, init_rx) = std::sync::mpsc::channel();
 
             let handle = thread::spawn(move || {
-                match run_process_watcher(matchers_clone, stop_flag_clone, last_blocked_clone) {
-                    Ok(()) => {
-                        let _ = init_tx.send(Ok(()));
-                    }
-                    Err(e) => {
-                        let _ = init_tx.send(Err(e));
-                    }
+                if let Err(e) = run_process_watcher(
+                    matchers_clone,
+                    stop_flag_clone,
+                    last_blocked_clone,
+                    init_tx,
+                ) {
+                    warn!("Kernel process watcher exited with error: {e}");
                 }
             });
 
@@ -478,16 +550,32 @@ mod windows {
                     self.last_fallback_poll = Some(Instant::now());
                 }
                 Err(_) => {
-                    // Thread didn't fail immediately, meaning it is running its event loop!
-                    self.watcher_handle = Some(handle);
-                    self.is_using_fallback = false;
+                    warn!("Kernel event watcher timed out waiting for readiness; enabling polling fallback");
+                    self.is_using_fallback = true;
+                    self.last_fallback_poll = Some(Instant::now());
                 }
+            }
+
+            // 2. Perform process sweep AFTER watcher is registered (or fallback is chosen)
+            // This ensures no window exists where an app launched during initialization escapes detection.
+            let sweep_events = sweep_active_processes(&new_matchers);
+            if let Some(first) = sweep_events.into_iter().next() {
+                let mut guard = self.last_blocked.lock().unwrap();
+                *guard = Some(first);
             }
 
             Ok(())
         }
 
         pub fn tick(&mut self) -> Result<(), String> {
+            if let Some(handle) = &self.watcher_handle {
+                if handle.is_finished() && !self.is_using_fallback {
+                    warn!("Process event watcher thread terminated unexpectedly; switching to polling fallback");
+                    self.is_using_fallback = true;
+                    self.last_fallback_poll = Some(Instant::now());
+                }
+            }
+
             if self.is_using_fallback {
                 let now = Instant::now();
                 if self
@@ -499,7 +587,16 @@ mod windows {
                     let events = sweep_active_processes(&matchers_guard);
                     if let Some(event) = events.into_iter().next() {
                         let mut blocked_guard = self.last_blocked.lock().unwrap();
-                        *blocked_guard = Some(event);
+                        if let Some(existing) = blocked_guard.as_mut() {
+                            if existing.app_name == event.app_name {
+                                existing.count += 1;
+                                existing.timestamp = event.timestamp;
+                            } else {
+                                *existing = event;
+                            }
+                        } else {
+                            *blocked_guard = Some(event);
+                        }
                     }
                 }
             }
@@ -508,6 +605,7 @@ mod windows {
 
         pub fn clear(&mut self) -> Result<(), String> {
             self.stop_watcher();
+            cleanup_legacy_wfp();
             self.targets.clear();
             {
                 let mut matchers_guard = self.matchers.write().unwrap();
@@ -714,7 +812,7 @@ impl AppEnforcer {
         self.last_blocked.clone()
     }
 
-    pub fn clear_last_blocked_app(&self) {
+    pub fn clear_last_blocked_app(&mut self) {
         self.last_blocked = None;
     }
 

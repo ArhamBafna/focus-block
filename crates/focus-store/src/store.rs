@@ -47,6 +47,8 @@ impl FocusStore {
     fn migrate(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(SCHEMA)?;
         self.add_sessions_app_target_snapshot_column()?;
+        // Migrate and purge legacy folder targets so only executable and package remain
+        let _ = self.conn.execute("DELETE FROM app_block_targets WHERE target_kind = 'folder'", []);
 
         let count: i64 = self
             .conn
@@ -188,6 +190,7 @@ impl FocusStore {
             .list_app_block_targets()?
             .into_iter()
             .map(|entry| entry.target)
+            .filter(|target| !matches!(target, AppBlockTarget::Folder { .. }))
             .collect())
     }
 

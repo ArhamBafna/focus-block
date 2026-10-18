@@ -51,6 +51,9 @@ coverage/
 .agents/
 skills-lock.json
 .freebuff/
+.kiro/
+.trae/
+.windsurf/
 
 # Graphify local cache, run history, and machine-specific metadata
 graphify-out/cache/

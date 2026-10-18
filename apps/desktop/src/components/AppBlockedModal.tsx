@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ShieldSlash, X, ArrowLeft } from "@phosphor-icons/react";
 import type { BlockedAppEvent } from "../lib/ipc";
@@ -15,6 +16,59 @@ export function AppBlockedModal({
   onDismiss,
   onBackToFocus,
 }: Props) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const primaryButtonRef = useRef<HTMLButtonElement>(null);
+  const previousActiveElement = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      previousActiveElement.current = document.activeElement as HTMLElement | null;
+      const timer = setTimeout(() => {
+        primaryButtonRef.current?.focus();
+      }, 0);
+
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          onDismiss();
+          return;
+        }
+
+        if (e.key === "Tab") {
+          if (!dialogRef.current) return;
+          const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
+            'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+          );
+          if (focusable.length === 0) return;
+
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+
+          if (e.shiftKey) {
+            if (document.activeElement === first) {
+              e.preventDefault();
+              last.focus();
+            }
+          } else {
+            if (document.activeElement === last) {
+              e.preventDefault();
+              first.focus();
+            }
+          }
+        }
+      };
+
+      document.addEventListener("keydown", handleKeyDown);
+      return () => {
+        clearTimeout(timer);
+        document.removeEventListener("keydown", handleKeyDown);
+        if (previousActiveElement.current && typeof previousActiveElement.current.focus === "function") {
+          previousActiveElement.current.focus();
+        }
+      };
+    }
+  }, [isOpen, onDismiss]);
+
   if (!isOpen || !event) return null;
 
   const appName = event.app_name || "Application";
@@ -24,6 +78,7 @@ export function AppBlockedModal({
     <AnimatePresence>
       {isOpen && (
         <div
+          ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="blocked-modal-title"
@@ -90,6 +145,7 @@ export function AppBlockedModal({
             {/* Actions: Primary "Back to Focus" button */}
             <div className="w-full flex flex-col gap-3">
               <button
+                ref={primaryButtonRef}
                 type="button"
                 onClick={onBackToFocus}
                 className="w-full py-3 px-5 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 cursor-pointer transition-all duration-200"
