@@ -28,6 +28,7 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Test Map
 
+- **All in one**: `.\scripts\test-all.ps1` or `.\start-commands\test.bat` (runs all 3 suites below in sequence)
 - Extension: `cd apps/extension && npm test`
   - Background: `apps/extension/background/__tests__/` (`rules`, `schedule`, `scheduled-stop-suppression`, `session-brain`)
   - Popup: `apps/extension/popup/lib/__tests__/` (`ipc`, `schedule-crud`, `storage`)
