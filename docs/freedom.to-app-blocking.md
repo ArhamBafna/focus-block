@@ -142,9 +142,9 @@ Freedom uses a two-tier approach to resolve the full path of any target process 
 
 ---
 
-## 4. How to Clone This in Our Own App (FocusBlock / Rust Backend)
+## 4. Implementation in FocusBlock (Rust Service)
 
-Currently, FocusBlock checks processes periodically in a polling loop. To achieve the exact same instant, seamless blocking behavior as Freedom.to, we should implement a process start watcher in Rust.
+FocusBlock implements this exact instant event-driven blocking architecture in `service/focus-service` using Windows `Win32_ProcessStartTrace` events.
 
 ### Architecture in Rust / Tauri
 
