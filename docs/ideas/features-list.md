@@ -1,535 +1,461 @@
-## **Focus App Feature Inventory** 
+# Focus App Feature Inventory
 
-Status: `[DONE]` working in current app · `[PARTIAL]` exists in limited form · `[NOT YET]` planned only
+**Status Legend:**
+- `[DONE]` Working in current app (or fully implemented on its exclusive target platform)
+- `[PARTIAL]` Exists in limited form (e.g. built on Extension or Desktop only, or missing sub-features)
+- `[NOT YET]` Planned / exploratory idea only
 
-## **Core Blocking** 
+---
 
-## **Website Blocking** `[DONE]`
+## Core Blocking
 
-Block specific websites across supported devices. 
+### Website Blocking `[DONE]`
+Block specific websites across supported browsers (powered by Declarative Net Request in Chrome extension).
 
-## **App Blocking** `[NOT YET]`
+### App Blocking `[DONE]`
+Block selected desktop applications. Platform-exclusive to Windows Desktop: FocusBlock Windows service subscribes to kernel process creation events (`Win32_ProcessStartTrace`) and terminates blocked Win32 executables (`.exe`) and Microsoft Store packages (PFN) in < 10ms with zero idle CPU overhead. Includes an App Picker modal with hybrid app discovery and icon caching.
 
-Block selected desktop and mobile applications. 
+### Internet Kill Switch `[NOT YET]`
+Disable all network access during a focus session. (Currently out of scope to avoid modifying system DNS, proxy, or firewall state).
 
-## **Internet Kill Switch** `[NOT YET]`
+### Category Blocking `[NOT YET]`
+One-click blocking for entire categories such as Social Media, Video, Gaming, Shopping, News. (Discovered desktop apps have category tags, but category-level bulk blocking is not yet implemented).
 
-Disable all internet access during a focus session. 
+### Custom Blocklists `[DONE]`
+Create and edit personalized lists of blocked websites (in Extension and Desktop) and desktop applications (in Desktop).
 
-## **Category Blocking** `[NOT YET]`
+### Prebuilt Blocklists `[NOT YET]`
+Ready-made presets such as Student Study Mode, TikTok Detox, Exam Week, Deep Work.
 
-Block categories such as Social Media, Video, Gaming, Shopping, News. 
+### Whitelist Mode `[DONE]`
+Allow only approved websites and apps (implemented as Lockdown Mode in both Desktop and Extension).
 
-## **Custom Blocklists** `[DONE]`
+### Temporary Exceptions `[PARTIAL]`
+Permit specific resources temporarily while a block remains active. Implemented in the Chrome Extension Whitelist (allows a domain for 15, 30, or 60 minutes with a live countdown). Desktop does not yet support temporary allows.
 
-Create personalized lists of blocked apps and websites. 
+### Browser Extension Blocking `[DONE]`
+Block websites directly within the browser. Platform-exclusive to the Chrome MV3 extension.
 
-## **Prebuilt Blocklists** `[NOT YET]`
+### Cross-Browser Blocking `[NOT YET]`
+Apply blocks across all installed browsers (Safari, Firefox, etc.). FocusBlock currently targets Chromium browsers via extension and native messaging; no OS-level network proxy is used.
 
-Ready-made presets such as Student Study Mode, TikTok Detox, Exam Week, Deep Work. 
+---
 
-## **Whitelist Mode** `[DONE]`
+## Focus Sessions
 
-Allow only approved websites and apps. 
+### Manual Focus Session `[DONE]`
+Start a focus session instantly from Desktop or Extension popup with customizable duration.
 
-## **Temporary Exceptions** `[NOT YET]`
+### Scheduled Sessions `[PARTIAL]`
+Create future focus sessions. Implemented in Chrome Extension (allows setting start time, end time, and days of the week). Desktop app does not yet have a schedule manager.
 
-Permit specific resources while a block remains active. 
+### Recurring Sessions `[PARTIAL]`
+Automatically repeat focus sessions daily or weekly. Implemented in Chrome Extension with background alarms. Desktop app does not yet support recurring schedules.
 
-## **Browser Extension Blocking** `[DONE]`
+### Deep Work Mode / Exam Mode / Library Mode / Work Mode `[PARTIAL]`
+Specialized focus profiles. Supported via Custom Presets in the Desktop app (custom duration, mode, and target lists), but pre-packaged named modes are not yet built-in.
 
-Block websites directly within browsers. 
+### Session Breaks `[NOT YET]`
+Built-in break periods between focus blocks.
 
-## **Cross-Browser Blocking** `[PARTIAL]`
+### Pomodoro Timer / Custom Pomodoro Rules `[NOT YET]`
+User-defined focus/break intervals (e.g., 25m work / 5m break).
 
-Apply blocks across all installed browsers. 
+---
 
-1 
+## Enforcement
 
-## **Focus Sessions** 
+### Locked Mode `[PARTIAL]`
+Sessions cannot be stopped early without completing an obstacle. Implemented in the Chrome Extension via Stop Challenges. Desktop app currently has an instant "Stop Session" button that bypasses locked mode until challenges are added to Desktop.
 
-## **Manual Focus Session** `[DONE]`
+### Stop Challenges (Lockdown Gates) `[PARTIAL]`
+Five challenge gates are implemented in the Chrome Extension to prevent impulsive quitting:
+1. **Countdown Timer (Delay Override)**: Forces a 15s, 30s, 60s, or 120s waiting period with optional guided breathing animations.
+2. **Typing Challenge**: Requires typing an emotional reflection paragraph character-perfect without copy-paste.
+3. **Pattern Memory Puzzle**: 3x3 memory grid pattern replication that scrambles on mistake.
+4. **Mental Challenge (Math/Logic)**: Sequential arithmetic and logic puzzles that must all pass.
+5. **Reflection Prompt**: Requires typing 80–150 characters explaining why you are ending your focus session early.
+*Note: Desktop app does not yet enforce these challenges before stopping.*
 
-Start a focus session instantly. 
+### Delay Override `[PARTIAL]`
+Require waiting before ending a session. Implemented in Chrome Extension as the Countdown Timer Challenge (15s–120s with breathing exercises). Desktop app does not yet enforce this delay.
 
-## **Scheduled Sessions** `[DONE]`
+### Force Mode `[PARTIAL]`
+Extreme anti-bypass protection. Windows background service automatically keeps enforcement running and restarts enforcer upon system/service restart. User-space anti-tamper (blocking Task Manager or uninstaller) is not implemented per product philosophy (relying on deliberate friction instead of kernel locks).
 
-Create future focus sessions. 
+### Anti-Uninstall Protection `[NOT YET]`
+Prevent uninstallation while a focus session is active.
 
-## **Recurring Sessions** `[DONE]`
+### Anti-Incognito Protection `[NOT YET]`
+Prevent bypass through private browsing.
 
-Automatically repeat sessions daily or weekly. 
+### Anti-Browser-Switch Protection `[NOT YET]`
+Detect and restrict switching to unmanaged secondary browsers.
 
-## **Deep Work Mode** `[NOT YET]`
+### Session Commitment Confirmation `[NOT YET]`
+Pledge or confirm commitment before starting a high-friction session.
 
-Maximum restriction profile. 
+### Emergency Override `[NOT YET]`
+Trusted emergency unlock process for urgent access during a locked session.
 
-## **Exam Mode** `[NOT YET]`
+### Trusted Contact Unlock `[NOT YET]`
+A friend, mentor, or family member can authorize an override.
 
-Student-focused study environment. 
+---
 
-## **Library Mode** `[NOT YET]`
+## Cross-Device System
 
-Focus mode optimized for studying. 
+*Note: FocusBlock v1 is strictly local-first and on-device (no accounts, no cloud dependencies). Cross-device sync is a future exploration.*
 
-## **Work Mode** `[NOT YET]`
+### Device Sync `[NOT YET]`
+Sync blocklists and settings across devices.
 
-Professional productivity configuration. 
+### Cross-Device Blocking `[NOT YET]`
+One session blocks distractions simultaneously across desktop, phone, and tablet.
 
-## **Session Breaks** `[NOT YET]`
+### Universal Focus Button `[NOT YET]`
+Start focus mode on all devices simultaneously.
 
-Built-in break periods between focus blocks. 
+### QR Device Pairing / Code Pairing `[NOT YET]`
+Pair secondary devices via direct QR scan or pairing code.
 
-## **Pomodoro Timer / Custom Pomodoro Rules** `[NOT YET]`
+### Cloud Sync `[NOT YET]`
+Store settings securely across devices. (Concept: Anki-style peer sync — send changes to cloud queue and delete once synced to keep data stored locally).
 
-User-defined focus/break timing. 
+---
 
-## **Enforcement** 
+## Mobile Features
 
-## **Locked Mode** `[PARTIAL]`
+*Note: FocusBlock v1 targets Windows desktop and Chrome extension. Mobile features are planned for future versions.*
 
-Sessions cannot be stopped early. 
+### Mobile App Blocking `[NOT YET]`
+Block distracting mobile apps on iOS and Android.
 
-2 
+### Mobile Website Blocking `[NOT YET]`
+Block websites on mobile browsers (Safari / Chrome mobile).
 
-## **Delay Override** `[NOT YET]`
+### Focus Mode Integration `[NOT YET]`
+Integrate with native iOS Focus / Android Digital Wellbeing modes.
 
-Require waiting before ending a session. 
+### Android Enforcement Layer `[NOT YET]`
+Use Android Accessibility / Device Admin / VPN restriction tools.
 
-## **Force Mode** `[PARTIAL]`
+### iOS Enforcement Layer `[NOT YET]`
+Use Apple Screen Time API / Family Controls.
 
-Extreme anti-bypass protection. 
+### Battery-Efficient Blocking `[NOT YET]`
+Minimize battery drain on mobile devices.
 
-## **Anti-Uninstall Protection** `[NOT YET]`
+### Tablet Support `[NOT YET]`
+Optimized layout and experience for iPads and Android tablets.
 
-Makes bypassing more difficult. 
+---
 
-## **Anti-Incognito Protection** `[NOT YET]`
+## Accountability
 
-Prevent bypass through private browsing. 
+*Note: Social & accountability features are planned for future multi-user versions.*
 
-## **Anti-Browser-Switch Protection** `[NOT YET]`
+### Contact Discovery `[NOT YET]`
+Find friends who have the app via opt-in contacts matching.
 
-## **Session Commitment Confirmation** `[NOT YET]`
+### Accountability Partner `[NOT YET]`
+Pair with an accountability partner.
 
-## **Emergency Override** 
+### Friend Notifications `[NOT YET]`
+Notify friends when a focus session or commitment is broken early.
 
-Trusted emergency unlock process. 
+### Shared Focus Sessions `[NOT YET]`
+Focus together simultaneously with friends or peers.
 
-## **Trusted Contact Unlock** 
+### Public Study Rooms `[NOT YET]`
+Join open virtual study rooms with group accountability (broken session alerts other room members).
 
-Friend or family member can authorize an override. 
+### Accountability History `[NOT YET]`
+Public or partner-facing log of completed and broken commitments.
 
-## **Cross-Device System** 
+---
 
-## **Device Sync** 
+## Student Features
 
-Sync settings across devices. 
+### Student Mode `[NOT YET]`
+Preset configurations and blocklists tailored for study hours.
 
-## **Cross-Device Blocking** 
+### Exam Week Templates `[NOT YET]`
+Prebuilt schedules and aggressive restriction templates for exam periods.
 
-One session blocks distractions everywhere. 
+---
 
-## **Universal Focus Button** 
+## Motivation & Rewards
 
-Start focus mode on all devices simultaneously. 
+### Focus Streaks `[NOT YET]`
+Track consecutive focus days and weekly consistency streaks.
 
-3 
+### Focus Credits `[NOT YET]`
+Earn redeemable credits from completed focus sessions.
 
-## **QR Device Pairing / Code Pairing** 
+### Premium Day Rewards `[NOT YET]`
+Redeem focus credits for free premium days or extended access.
 
-## **Cloud Sync** 
+### Subscription Discounts `[NOT YET]`
+Earn subscription discounts through verified focus consistency.
 
-Store settings securely across devices. (for this it can be like anki- when settings changed on one device, it sends new to cloud. when all other devices have received updated settings, it deleted from cloud to store locally on all devices. 
+### Reward Marketplace `[NOT YET]`
+Exchange focus credits for rewards, perks, or partner discounts.
 
-## **Mobile Features** 
+### Partner Rewards `[NOT YET]`
+Real-world partner offers and productivity tool discounts.
 
-## **Mobile App Blocking** 
+### Focus Achievements `[NOT YET]`
+Milestone badges for hours focused, sessions completed, and streaks.
 
-Block distracting apps. 
+### Progress Milestones `[NOT YET]`
+Celebrate major focus milestones and level-ups.
 
-## **Mobile Website Blocking** 
+### Virtual Growth System `[NOT YET]`
+Visual gamified growth representation of productive hours.
 
-Block websites on mobile browsers. 
+### Tree / Garden Growth `[NOT YET]`
+Forest-style visual trees or gardens that grow during focus and wither if quit early.
 
-## **Focus Mode Integration** 
+### Community Impact Rewards `[NOT YET]`
+Convert completed focus hours into charitable donations or tree planting.
 
-Integrate with native OS focus systems. 
+### Seasonal Challenges `[NOT YET]`
+Time-limited community focus challenges and events.
 
-## **Android Enforcement Layer** 
+---
 
-Use Android-specific restriction tools. 
+## Behavioral Intervention
 
-## **iOS Enforcement Layer** 
+### Before Opening Apps (Mindful Pause) `[NOT YET]`
+Delay opening distracting apps with a short breathing task or mandatory intention prompt ("Why do you want to open this?").
 
-Use iOS restriction tools. 
+### Mindful Unlock Flow `[PARTIAL]`
+Reduce impulsive quits through mindful friction. Implemented in Chrome Extension (breathing countdown timer and written reflection challenge). Not in Desktop yet.
 
-## **Battery-Efficient Blocking** 
+### Journaling Prompts `[PARTIAL]`
+Reflective focus prompts. Implemented in Chrome Extension Reflection Challenge (requires writing 80–150 characters before ending early).
 
-Minimize battery drain. 
+### Goal Setting Before Session `[NOT YET]`
+Declare intended task/goal before a focus session begins.
 
-## **Tablet Support** 
+### Session Reflection `[NOT YET]`
+Review outcomes and productivity notes after a focus session concludes.
 
-Optimized experience for tablets. 
+### Habit Coaching `[NOT YET]`
+Guided advice and tips for improving concentration over time.
 
-## **Accountability - to find friends who have an the app can access contacts (like Snapchat)** 
+### Attention Training Exercises `[NOT YET]`
+Short exercises to build attention span and resist distractions.
 
-## **Accountability Partner** 
+---
 
-Pair with another user. 
+## Analytics
 
-4 
+### Focus Time Tracking `[DONE]`
+Track and display total completed focus time across sessions. Implemented in History views.
 
-## **Friend Notifications** 
+### Session History `[DONE]`
+Review past sessions, including date, duration, mode, and completion status. Implemented in both Desktop and Chrome Extension.
 
-Friends see broken focus commitments. 
+### Time Saved Tracking `[NOT YET]`
+Estimate distraction time prevented based on blocked attempt counts.
 
-## **Shared Focus Sessions** 
+### Daily / Weekly / Monthly Reports `[NOT YET]`
+Aggregated charts and productivity summaries over time.
 
-Focus together simultaneously. 
+### Distraction Analytics `[PARTIAL]`
+Identify most frequent distraction triggers. Desktop service tracks blocked app events (name, timestamp, block count); full analytics UI is not yet built.
 
-## **Public Study Rooms** 
+### Focus Score `[NOT YET]`
+Overall focus performance and attention quality score.
 
-Join open focus sessions. - notification to all when broken. other users in session/room can then blame u by clicking something, causing profile to look bad or something... 
+### Consistency Score `[NOT YET]`
+Measure habit formation and schedule adherence.
 
-## **Accountability History** 
+### Goal Progress Tracking `[NOT YET]`
+Track progress toward weekly or monthly focus goals.
 
-Track completed commitments. 
+### Device / App / Website Usage Reports `[NOT YET]`
+Detailed breakdown of apps and websites blocked during sessions.
 
-## **Student Features** 
+### Productivity Trends `[NOT YET]`
+Long-term focus patterns and peak focus hour insights.
 
-## **Student Mode** 
+---
 
-Preset configuration optimized for students. 
+## Smart Automation
 
-## **Exam Week Templates** 
+### Calendar Integration `[NOT YET]`
+Import schedule and automatically create focus sessions from Google, Outlook, or Apple Calendar.
 
-Prebuilt schedules for exams. 
+### Automatic Session Creation `[NOT YET]`
+Generate sessions automatically based on recurring work patterns.
 
-## **Motivation & Rewards** 
+### Smart Scheduling `[NOT YET]`
+Suggest optimal focus windows based on user energy and distraction trends.
 
-## **Focus Streaks** 
+### Adaptive Scheduling `[NOT YET]`
+Learn user behavior and adapt schedule timing dynamically.
 
-Track consecutive focus days. 
+### AI Focus Recommendations `[NOT YET]`
+Suggest blocklist additions based on observed distraction attempts.
 
-## **Focus Credits** 
+### Distraction Pattern Detection `[NOT YET]`
+Identify high-risk distraction habits and times of day.
 
-Earn credits from completed sessions (like free premium days). 
+### Auto-Block High-Risk Times `[NOT YET]`
+Automatically trigger focus blocks during known habitual distraction hours.
 
-## **Premium Day Rewards** 
+### Location-Based Focus `[NOT YET]`
+Activate focus sessions when arriving at libraries, schools, or offices.
 
-Redeem credits for premium access. 
+### WiFi-Based Focus `[NOT YET]`
+Trigger focus when connected to specific work or school Wi-Fi networks.
 
-## **Subscription Discounts** 
+### Habit Prediction `[NOT YET]`
+Predict and preempt distraction risk before sessions break down.
 
-Earn discounts through consistency. 
+---
 
-5 
+## Focus Environment
 
-## **Reward Marketplace** 
+### Ambient Focus Sounds `[NOT YET]`
+Built-in background sounds (white noise, rain, cafe, binaural beats, lo-fi).
 
-Exchange credits for rewards. 
+### Sound Mixing `[NOT YET]`
+Mix multiple ambient audio channels with individual volume sliders.
 
-## **Partner Rewards** 
+---
 
-Real-world discounts and offers. 
+## Social Features
 
-## **Focus Achievements** 
+### Friend Network `[NOT YET]`
+Add friends and view mutual focus statuses.
 
-Milestone accomplishments. 
+### Focus Challenges `[NOT YET]`
+Compete or collaborate with friends in focus sprints.
 
-## **Progress Milestones** 
+### Leaderboards `[NOT YET]`
+Optional opt-in friend or community productivity rankings.
 
-Celebrate major focus goals. 
+### Community Events `[NOT YET]`
+Scheduled group focus sessions and quiet hours.
 
-## **Virtual Growth System** 
+### Study Marathons `[NOT YET]`
+Long-form group focus events with shared accountability.
 
-Visual representation of progress. 
+### Accountability Communities `[NOT YET]`
+Interest-based focus groups (students, writers, developers, founders).
 
-## **Tree / Garden Growth** 
+---
 
-Forest-style visual rewards. 
+## Customization
 
-## **Community Impact Rewards** 
+### Custom Templates (Presets) `[DONE]`
+Save and reuse session configurations (name, mode, duration, target lists). Implemented as Presets in the Desktop app.
 
-Convert focus into charitable contributions. 
+### Theme Support `[DONE]`
+Curated visual styling. Both Desktop and Extension implement the dark/light design system inspired by Wispr Flow tokens.
 
-## **Seasonal Challenges** 
+### Beginner Mode `[NOT YET]`
+Simplified user interface with minimal settings.
 
-Time-limited focus events. 
+### Advanced Mode `[NOT YET]`
+Power-user controls and advanced network/process configurations.
 
-## **Behavioral Intervention** 
+### One-Tap Setup `[NOT YET]`
+Minimal friction, instant default onboarding.
 
-## **Before opening apps:** 
+### Personal Focus Profiles `[NOT YET]`
+Different block profiles for different contexts (e.g., Coding, Writing, Gaming detox).
 
-Delay opening distracting apps. Short breathing task before access. Ask why user wants access. Require purpose before opening. 
+### Custom Categories `[NOT YET]`
+User-created blocking groupings beyond default tags.
 
-## **Mindful Unlock Flow** 
+### Flexible Rule Builder `[NOT YET]`
+Advanced rule creation (e.g., allow specific subpaths, block only during specific hours).
 
-Reduce impulsive behavior. 
+---
 
-6 
+## Privacy & Security
 
-## **Journaling Prompts** 
+### Local Data Storage `[DONE]`
+All data is stored 100% locally on the device (SQLite via rusqlite on Desktop service, `chrome.storage.local` in Extension).
 
-Short focus reflections. 
+### Privacy-First Analytics `[DONE]`
+Zero third-party analytics, tracking, or telemetry.
 
-## **Goal Setting Before Session** 
+### No Data Selling `[DONE]`
+Explicit privacy commitment; no user data is collected or monetized.
 
-Declare intended work. 
+### Delete Data `[DONE]`
+Full user control over history. Implemented as "Clear History" in both Desktop and Extension.
 
-## **Session Reflection** 
+### Secure Sync `[NOT YET]`
+End-to-end encrypted synchronization if cloud features are added.
 
-Review outcomes after focus. 
+### Export Data `[NOT YET]`
+Download focus history and statistics as JSON or CSV.
 
-## **Habit Coaching** 
+---
 
-Guided focus improvement. 
+## Integrations
 
-## **Attention Training Exercises** 
+### Calendar Integration `[NOT YET]`
+Google Calendar, Outlook, and Apple Calendar integration.
 
-Improve concentration over time. 
+### Task Manager Integration `[NOT YET]`
+Connect task lists with focus sessions.
 
-## **Analytics** 
+### Notion Integration `[NOT YET]`
+Link focus blocks directly to Notion workspace tasks.
 
-## **Focus Time Tracking** 
+### Todoist Integration `[NOT YET]`
+Start focus sessions tied to Todoist tasks.
 
-Track completed focus time. 
+### Project Tracking Integration `[NOT YET]`
+Sync focus time with project management tools (Linear, Jira, GitHub).
 
-## **Time Saved Tracking** 
+---
 
-Estimate distraction time prevented. 
+## Accessibility & Convenience
 
-## **Session History** `[DONE]`
+### Offline Mode `[DONE]`
+Works completely without an internet connection (no account login or cloud ping required).
 
-Review past sessions. 
+### Cross-Platform Support `[PARTIAL]`
+Supports Windows desktop and Chromium-based browsers (Chrome extension). macOS, Linux, and Mobile are not yet supported.
 
-## **Daily / Weekly / Monthly Reports** 
+### Fast Onboarding `[PARTIAL]`
+Quick initial setup. Single-click bundled Windows NSIS installer and Chrome Web Store direct install planned in `product-readiness.md`.
 
-## **Distraction Analytics** 
+### Guided Setup Wizard `[NOT YET]`
+Interactive wizard to configure initial blocklists and permissions.
 
-Identify common distractions. 
+### Import Settings `[NOT YET]`
+Import blocklists from other blocking software or text files.
 
-## **Focus Score** 
+### Export Settings `[NOT YET]`
+Backup and export blocklists and presets.
 
-Overall focus performance metric. 
+---
 
-7 
+## Business & Licensing Plans
 
-## **Consistency Score** 
+*Note: Exploratory licensing models for future commercial distribution.*
 
-Measure habit strength. 
+### Lifetime License Option `[NOT YET]`
+One-time payment for lifetime desktop & extension access.
 
-## **Goal Progress Tracking** 
+### Family Share Subscriptions `[NOT YET]`
+Multi-seat license for households.
 
-Track focus goals. 
+### Student Discounts `[NOT YET]`
+Discounted plans for students with verified school emails.
 
-## **Device / App / Website Usage Reports** 
+### Team Plans `[NOT YET]`
+Organization licenses with team workspaces.
 
-Cross-device behavior insights. 
-
-## **Productivity Trends** 
-
-Long-term focus patterns. 
-
-## **Smart Automation** 
-
-## **Calendar Integration** 
-
-Create focus sessions from calendar events. 
-
-## **Automatic Session Creation** 
-
-Generate sessions automatically. 
-
-## **Smart Scheduling** 
-
-Suggest focus times. 
-
-## **Adaptive Scheduling** 
-
-Learn user behavior. 
-
-## **AI Focus Recommendations** 
-
-Suggest improvements. 
-
-## **Distraction Pattern Detection** 
-
-Identify distraction habits. 
-
-## **Auto-Block High-Risk Times** 
-
-Block during known distraction periods. 
-
-8 
-
-## **Location-Based Focus** 
-
-Activate focus in libraries, schools, offices. 
-
-## **WiFi-Based Focus** 
-
-Trigger focus from network detection. 
-
-## **Habit Prediction** 
-
-Predict future distraction risk. 
-
-## **Focus Environment** 
-
-## **Ambient Different Types of Focus Sounds** 
-
-## **Sound Mixing** 
-
-## **Social Features** 
-
-## **Friend Network** 
-
-Connect with other users. 
-
-## **Focus Challenges** 
-
-Compete or collaborate. 
-
-## **Leaderboards** 
-
-Optional rankings. 
-
-## **Community Events** 
-
-Scheduled group sessions. 
-
-## **Study Marathons** 
-
-Long-form group focus events. 
-
-## **Accountability Communities** 
-
-Interest-based groups. 
-
-9 
-
-## **Customization** 
-
-## **Beginner Mode** 
-
-Simple setup. 
-
-## **Advanced Mode** 
-
-Power-user controls. 
-
-## **One-Tap Setup** 
-
-Minimal onboarding. 
-
-## **Custom Templates** 
-
-Save reusable configurations. 
-
-## **Theme Support** 
-
-Visual customization. 
-
-## **Personal Focus Profiles** 
-
-Different setups for different situations. 
-
-## **Custom Categories** 
-
-User-created blocking groups. 
-
-## **Flexible Rule Builder** 
-
-Advanced rule creation. 
-
-## **Privacy & Security** 
-
-## **Local Data Storage** `[DONE]`
-
-Keep data on device. 
-
-## **Privacy-First Analytics** 
-
-Minimal tracking. 
-
-10 
-
-## **No Data Selling** 
-
-Clear privacy commitment. 
-
-## **Secure Sync** 
-
-Encrypted synchronization. 
-
-## **Export Data** 
-
-Download focus history. 
-
-## **Delete Data** 
-
-Full user control. 
-
-## **Integrations** 
-
-## **Calendar Integration** 
-
-Google, Outlook, Apple Calendar. 
-
-## **Task Manager Integration** 
-
-Connect tasks and focus sessions. 
-
-## **Notion Integration** 
-
-Focus linked to workspaces. 
-
-## **Todoist Integration** 
-
-Task-driven focus. 
-
-## **Project Tracking Integration** 
-
-Connect focus with project progress. 
-
-## **Accessibility & Convenience** 
-
-## **Offline Mode** 
-
-Works without internet. 
-
-11 
-
-## **Cross-Platform Support** 
-
-Desktop and mobile support. 
-
-## **Fast Onboarding** `[PARTIAL]`
-
-Quick setup flow. 
-
-## **Guided Setup Wizard** 
-
-Help configure blocking. 
-
-## **Import Settings** 
-
-Transfer from other blockers. 
-
-## **Export Settings** 
-
-Backup configurations. 
-
-**Family Share subscriptions.** 
-
-**Student Discounts** 
-
-## **Lifetime License Option** 
-
-**Team Plans** 
-
-## **School Plans** 
-
-12 
+### School Plans `[NOT YET]`
+Campus-wide deployments for educational institutions.
