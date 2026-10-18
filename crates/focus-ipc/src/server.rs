@@ -14,6 +14,64 @@ mod imp {
         dyn Fn(IpcRequest) -> Pin<Box<dyn Future<Output = IpcResponse> + Send>> + Send + Sync,
     >;
 
+    struct PipeSecurity {
+        sd: *mut std::ffi::c_void,
+    }
+
+    impl PipeSecurity {
+        fn new() -> io::Result<Self> {
+            // SDDL granting Generic All to Everyone (WD): D:(A;;GA;;;WD)
+            // Allows non-elevated desktop UI and browser native messaging host
+            // to connect to the pipe created by an elevated/system service process.
+            let sddl: Vec<u16> = "D:(A;;GA;;;WD)\0".encode_utf16().collect();
+            let mut sd = std::ptr::null_mut();
+            const SDDL_REVISION_1: u32 = 1;
+            unsafe {
+                let ok = windows_sys::Win32::Security::Authorization::ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                    sddl.as_ptr(),
+                    SDDL_REVISION_1,
+                    &mut sd,
+                    std::ptr::null_mut(),
+                );
+                if ok == 0 {
+                    return Err(io::Error::last_os_error());
+                }
+            }
+            Ok(Self { sd })
+        }
+
+        fn create_pipe(&self, first: bool) -> io::Result<NamedPipeServer> {
+            let mut sa = windows_sys::Win32::Security::SECURITY_ATTRIBUTES {
+                nLength: std::mem::size_of::<windows_sys::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
+                lpSecurityDescriptor: self.sd,
+                bInheritHandle: 0,
+            };
+            let mut options = ServerOptions::new();
+            if first {
+                options.first_pipe_instance(true);
+            }
+            unsafe {
+                options.create_with_security_attributes_raw(
+                    PIPE_NAME,
+                    &mut sa as *mut _ as *mut std::ffi::c_void,
+                )
+            }
+        }
+    }
+
+    impl Drop for PipeSecurity {
+        fn drop(&mut self) {
+            if !self.sd.is_null() {
+                unsafe {
+                    windows_sys::Win32::Foundation::LocalFree(self.sd as _);
+                }
+            }
+        }
+    }
+
+    unsafe impl Send for PipeSecurity {}
+    unsafe impl Sync for PipeSecurity {}
+
     pub struct IpcServer {
         handler: RequestHandler,
     }
@@ -26,10 +84,10 @@ mod imp {
         pub async fn run(&self) -> io::Result<()> {
             info!("IPC server listening on {}", PIPE_NAME);
 
+            let sec = PipeSecurity::new()?;
+
             // Pre-create the first instance so we're ready before the loop.
-            let mut pending = ServerOptions::new()
-                .first_pipe_instance(true)
-                .create(PIPE_NAME)?;
+            let mut pending = sec.create_pipe(true)?;
 
             loop {
                 // Wait for a client to connect to the current pending instance.
@@ -39,7 +97,7 @@ mod imp {
                 // Immediately create the NEXT instance so it's waiting before
                 // we hand off the connected one — eliminates the accept-gap that
                 // caused OS error 231 (all pipe instances busy).
-                pending = ServerOptions::new().create(PIPE_NAME)?;
+                pending = sec.create_pipe(false)?;
 
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {
