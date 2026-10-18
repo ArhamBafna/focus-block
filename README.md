@@ -52,6 +52,40 @@ A distraction-blocking application for maintaining focused work sessions. FocusB
 
 ## Getting Started
 
+### Quick Start Scripts
+
+All core developer commands are consolidated into two scripts in `scripts/`:
+
+#### 1. Start App (`scripts/start.bat`)
+Run from PowerShell or double-click in File Explorer:
+
+```powershell
+.\scripts\start.bat
+```
+
+| Argument | Shorthand | What it does |
+|---|---|---|
+| *(none)* | *(default)* | Starts full system: checks tools, builds extension, starts background `focus-service`, launches desktop app |
+| `-DesktopOnly` | `-d` / `--desktop` | Starts background `focus-service` + launches desktop UI (skips extension build) |
+| `-ExtensionOnly` | `-e` / `--extension` | Builds Chrome extension to `apps/extension/dist` (no admin elevation required) |
+| `-ServiceOnly` | `-s` / `--service` | Starts background `focus-service` only in console mode |
+
+#### 2. Run Tests (`scripts/test.bat`)
+Runs test suites and outputs a color-coded status summary (exits code `0` on pass, `1` on fail):
+
+```powershell
+.\scripts\test.bat
+```
+
+| Argument | Shorthand | What it tests |
+|---|---|---|
+| *(none)* | *(default)* | Runs all 3 test suites in sequence: Rust backend, Chrome extension, Desktop UI |
+| `-RustOnly` | `-r` / `--rust` | Runs Rust workspace unit tests only (`cargo test --workspace`) |
+| `-ExtensionOnly` | `-e` / `--extension` | Runs Chrome extension unit tests only (`apps/extension npm test`) |
+| `-DesktopOnly` | `-d` / `--desktop` | Runs Desktop React UI tests only (`apps/desktop npm test`) |
+
+---
+
 ### Prerequisites
 
 - **Rust**: [Install Rust](https://rustup.rs/) (1.70+)
@@ -59,7 +93,7 @@ A distraction-blocking application for maintaining focused work sessions. FocusB
 - **For Desktop**: Tauri CLI, WebView2 (Windows), or system webview (macOS/Linux)
 - **For Extension**: Chrome/Chromium browser
 
-### Desktop App Development
+### Manual Development & Low-Level Commands
 
 1. **Install dependencies**:
    ```bash
