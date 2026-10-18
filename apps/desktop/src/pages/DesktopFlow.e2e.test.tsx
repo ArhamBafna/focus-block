@@ -1,5 +1,5 @@
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  *
  * Full desktop flow E2E test.
  * Simulates user journey: Blocklists -> Add Apps Modal -> Select App -> Home -> Focus -> Stop -> History.
@@ -7,9 +7,12 @@
 
 import { cleanup, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import App from "../App";
 import { ipc } from "../lib/ipc";
 import * as appPicker from "../lib/app-picker";
+
+MotionGlobalConfig.skipAnimations = true;
 
 vi.mock("../lib/ipc", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../lib/ipc")>();

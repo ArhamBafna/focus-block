@@ -1,12 +1,14 @@
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  */
 
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import { AppBlockedModal } from "./AppBlockedModal";
 import type { BlockedAppEvent } from "../lib/ipc";
 
+MotionGlobalConfig.skipAnimations = true;
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("AppBlockedModal", () => {

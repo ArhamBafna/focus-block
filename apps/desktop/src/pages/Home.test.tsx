@@ -1,5 +1,5 @@
 /**
- * @vitest-environment jsdom
+ * @vitest-environment happy-dom
  *
  * Desktop Home status machine (issue #18): loading → unreachable (no Start
  * buttons) → ready with auto-recovery on the next poll, and mid-session
@@ -8,8 +8,11 @@
 
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MotionGlobalConfig } from "framer-motion";
 import Home from "./Home";
 import type { ServiceStatus } from "../lib/ipc";
+
+MotionGlobalConfig.skipAnimations = true;
 
 vi.mock("../lib/ipc", () => ({
   ipc: {
