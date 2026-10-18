@@ -334,3 +334,44 @@ The question was: when do you want the first real user to be able to download an
 | 9 | System tray icon + minimize-to-tray | Nothing | **Yes** |
 
 Steps 3, 4, and 9 can start immediately. Step 1 requires creating the Google Developer account.
+
+---
+
+## Step 3 Decision Record: Sidecar Bundling & Installer Spec
+
+During planning for Step 3, the following design decisions were vetted and confirmed:
+
+### 1. Bundled Binaries (`bundle.externalBin`)
+- Both background helpers will be packaged into the desktop installer:
+  - `focus-service`: Windows background blocker engine.
+  - `focus-native-host`: Native messaging bridge to Chrome extension.
+- In `tauri.conf.json`:
+  ```json
+  "bundle": {
+    "externalBin": [
+      "binaries/focus-service",
+      "binaries/focus-native-host"
+    ]
+  }
+  ```
+
+### 2. Target Architecture
+- 64-bit Windows: `x86_64-pc-windows-msvc`.
+- Tauri requires sidecars on disk before packaging to match:
+  - `apps/desktop/src-tauri/binaries/focus-service-x86_64-pc-windows-msvc.exe`
+  - `apps/desktop/src-tauri/binaries/focus-native-host-x86_64-pc-windows-msvc.exe`
+
+### 3. Administrator Privilege Model (Option A vs Freedom.to)
+- **Freedom.to benchmark:** Freedom requires Windows Administrator rights to set up network filtering and background blocking. Without elevation, users can easily kill the process in Task Manager or bypass blocks.
+- **Decision:** **Option A (Per-Machine Installer)**.
+  - Set `bundle.windows.nsis.installMode: "perMachine"` in `tauri.conf.json`.
+  - Installer prompts for standard Windows UAC permission once during setup.
+  - Installs to `C:\Program Files\FocusBlock` so the Windows Service can be registered cleanly and removed cleanly on uninstall.
+
+### 4. Build Automation
+- Automate binary staging via an npm script in `apps/desktop/package.json` (e.g. `npm run build:sidecars` or linked into `beforeBuildCommand`).
+- Script runs `cargo build -p focus-service --release` and copies/renames the binaries to `apps/desktop/src-tauri/binaries/` with the required target triple automatically so no manual file copying is required.
+
+### 5. Git Hygiene
+- Add `apps/desktop/src-tauri/binaries/*.exe` to `.gitignore` to avoid committing large binary files to source control.
+
