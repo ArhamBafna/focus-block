@@ -1,33 +1,19 @@
-<#
-.SYNOPSIS
-    Runs all focus-block test suites in one step:
-    1. Rust backend: cargo test --workspace
-    2. Chrome extension: npm test (in apps/extension)
-    3. Desktop UI: npm test (in apps/desktop)
-
-.DESCRIPTION
-    Zero test logic or configuration is modified. This runner calls the exact
-    same commands used individually, collects results, and returns exit code 0
-    on success or exit code 1 if any suite fails.
-
-.EXAMPLE
-    .\scripts\test-all.ps1
-    .\scripts\test-all.ps1 -RustOnly
-    .\scripts\test-all.ps1 -ExtensionOnly
-    .\scripts\test-all.ps1 -DesktopOnly
-#>
-
-[CmdletBinding()]
-param(
-    [string]$RepoRoot = (Resolve-Path "$PSScriptRoot\..").Path,
-    [switch]$RustOnly,
-    [switch]$ExtensionOnly,
-    [switch]$DesktopOnly
-)
+@echo off
+title FocusBlock Test Runner
+cd /d "%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$cliArgs = '%*'; Invoke-Expression (Get-Content -Path '%~f0' | Select-Object -Skip 6 | Out-String)"
+exit /b %ERRORLEVEL%
+rem --- PURE POWERSHELL CODE STARTS BELOW ---
 
 $ErrorActionPreference = "Continue"
 
-if (-not $RepoRoot) { $RepoRoot = (Get-Location).Path }
+$ScriptDir = (Get-Location).Path
+$RepoRoot = (Get-Item -Path "$ScriptDir\..").FullName
+
+$RustOnly = $cliArgs -match "(?i)(^|\s)(-r|--rust|-RustOnly)($|\s)"
+$ExtensionOnly = $cliArgs -match "(?i)(^|\s)(-e|--extension|-ExtensionOnly)($|\s)"
+$DesktopOnly = $cliArgs -match "(?i)(^|\s)(-d|--desktop|-DesktopOnly)($|\s)"
+$RunAll = -not ($RustOnly -or $ExtensionOnly -or $DesktopOnly)
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "       FocusBlock - Complete Test Runner          " -ForegroundColor Cyan
@@ -68,8 +54,6 @@ function Invoke-TestSuite {
     }
     Write-Host ""
 }
-
-$RunAll = -not ($RustOnly -or $ExtensionOnly -or $DesktopOnly)
 
 # 1. Rust backend suite
 if ($RunAll -or $RustOnly) {

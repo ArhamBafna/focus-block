@@ -16,6 +16,20 @@ After EVERY big change, go to `apps/extension` folder and run `npm run build`.
 
 - There are two user-facing parts: desktop app `apps/desktop/` and Chrome extension `apps/extension/`. For feature request, find which part(s) affected and change. Desktop code no change extension code, or vice versa.
 
+## Launch & Test Scripts
+
+All runnable scripts live in `scripts/`:
+- **Start App**: `.\scripts\start.bat`
+  - Default: Starts whole ecosystem (service + extension build + desktop app)
+  - `-DesktopOnly` (or `-d`): Starts desktop app + service
+  - `-ExtensionOnly` (or `-e`): Builds Chrome extension only
+  - `-ServiceOnly` (or `-s`): Starts background service only
+- **Run Tests**: `.\scripts\test.bat`
+  - Default: Runs all 3 test suites (Rust backend, Extension, Desktop UI)
+  - `-RustOnly` (or `-r`): Runs Rust backend tests only (`cargo test --workspace`)
+  - `-ExtensionOnly` (or `-e`): Runs Chrome extension tests only (`apps/extension npm test`)
+  - `-DesktopOnly` (or `-d`): Runs Desktop UI tests only (`apps/desktop npm test`)
+
 ## Agent skills
 
 ### Issue tracker
@@ -28,7 +42,7 @@ Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
 
 ## Test Map
 
-- **All in one**: `.\scripts\test-all.ps1` or `.\start-commands\test.bat` (runs all 3 suites below in sequence)
+- **Unified Runner**: `.\scripts\test.bat` (runs all 3 suites below in sequence)
 - Extension: `cd apps/extension && npm test`
   - Background: `apps/extension/background/__tests__/` (`rules`, `schedule`, `scheduled-stop-suppression`, `session-brain`)
   - Popup: `apps/extension/popup/lib/__tests__/` (`ipc`, `schedule-crud`, `storage`)
