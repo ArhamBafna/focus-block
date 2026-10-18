@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { Timer, Shield, ListPlus, ClockCounterClockwise, Gear, ListChecks } from "@phosphor-icons/react";
 import Home from "./pages/Home";
@@ -135,7 +135,7 @@ function AppContent() {
     };
   }, []);
 
-  const handleDismiss = () => {
+  const handleDismiss = useCallback(() => {
     setIsModalOpen(false);
     setBlockedEvent(null);
     try {
@@ -143,9 +143,9 @@ function AppContent() {
     } catch {
       // ignore
     }
-  };
+  }, []);
 
-  const handleBackToFocus = () => {
+  const handleBackToFocus = useCallback(() => {
     setIsModalOpen(false);
     setBlockedEvent(null);
     try {
@@ -154,7 +154,7 @@ function AppContent() {
       // ignore
     }
     navigate("/");
-  };
+  }, [navigate]);
 
   return (
     <div

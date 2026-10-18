@@ -19,6 +19,8 @@ export function AppBlockedModal({
   const dialogRef = useRef<HTMLDivElement>(null);
   const primaryButtonRef = useRef<HTMLButtonElement>(null);
   const previousActiveElement = useRef<HTMLElement | null>(null);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
     if (isOpen) {
@@ -30,7 +32,7 @@ export function AppBlockedModal({
       const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Escape") {
           e.preventDefault();
-          onDismiss();
+          onDismissRef.current();
           return;
         }
 
@@ -67,7 +69,7 @@ export function AppBlockedModal({
         }
       };
     }
-  }, [isOpen, onDismiss]);
+  }, [isOpen]);
 
   if (!isOpen || !event) return null;
 

@@ -87,7 +87,7 @@ mod windows {
                                 let _ = FwpmFilterDeleteById0(handle, (**filter).filterId);
                             }
                         }
-                        FwpmFreeMemory0(entries.cast());
+                        FwpmFreeMemory0((&mut entries as *mut *mut *mut FWPM_FILTER0).cast());
                     }
                 }
                 let _ = FwpmFilterDestroyEnumHandle0(handle, enum_handle);
@@ -420,7 +420,7 @@ mod windows {
     pub struct AppEnforcer {
         targets: Vec<AppBlockTarget>,
         matchers: Arc<RwLock<ProcessMatchers>>,
-        watcher_stop: Arc<AtomicBool>,
+        watcher_stop: Option<Arc<AtomicBool>>,
         watcher_handle: Option<JoinHandle<()>>,
         last_blocked: Arc<Mutex<Option<BlockedAppEvent>>>,
         is_using_fallback: bool,
@@ -433,7 +433,7 @@ mod windows {
             Self {
                 targets: Vec::new(),
                 matchers: Arc::new(RwLock::new(ProcessMatchers::default())),
-                watcher_stop: Arc::new(AtomicBool::new(false)),
+                watcher_stop: None,
                 watcher_handle: None,
                 last_blocked: Arc::new(Mutex::new(None)),
                 is_using_fallback: false,
@@ -517,10 +517,12 @@ mod windows {
                 return Ok(());
             }
 
-            // 1. Start kernel event watcher thread FIRST
-            self.watcher_stop.store(false, Ordering::Relaxed);
+            // 1. Start kernel event watcher thread with its own dedicated stop flag
+            let stop_flag = Arc::new(AtomicBool::new(false));
+            self.watcher_stop = Some(Arc::clone(&stop_flag));
+
             let matchers_clone = Arc::clone(&self.matchers);
-            let stop_flag_clone = Arc::clone(&self.watcher_stop);
+            let stop_flag_clone = Arc::clone(&stop_flag);
             let last_blocked_clone = Arc::clone(&self.last_blocked);
 
             let (init_tx, init_rx) = std::sync::mpsc::channel();
@@ -536,10 +538,12 @@ mod windows {
                 }
             });
 
+            // Retain thread handle even if init times out so stop_watcher can cleanly join it later
+            self.watcher_handle = Some(handle);
+
             match init_rx.recv_timeout(Duration::from_millis(2000)) {
                 Ok(Ok(())) => {
                     info!("Process event watcher started and active at 0% idle CPU");
-                    self.watcher_handle = Some(handle);
                     self.is_using_fallback = false;
                 }
                 Ok(Err(error)) => {
@@ -550,7 +554,7 @@ mod windows {
                     self.last_fallback_poll = Some(Instant::now());
                 }
                 Err(_) => {
-                    warn!("Kernel event watcher timed out waiting for readiness; enabling polling fallback");
+                    warn!("Kernel event watcher timed out waiting for readiness; enabling polling fallback while thread finishes");
                     self.is_using_fallback = true;
                     self.last_fallback_poll = Some(Instant::now());
                 }
@@ -617,7 +621,9 @@ mod windows {
         }
 
         fn stop_watcher(&mut self) {
-            self.watcher_stop.store(true, Ordering::Relaxed);
+            if let Some(stop) = self.watcher_stop.take() {
+                stop.store(true, Ordering::Relaxed);
+            }
             if let Some(handle) = self.watcher_handle.take() {
                 let _ = handle.join();
             }
