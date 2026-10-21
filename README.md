@@ -1,8 +1,8 @@
 # FocusBlock
 
-> **Looking to install?** Jump straight to the [Chrome Extension setup](https://github.com/ArhamBafna/focus-block#chrome-extension).
-
 Enhance focused work sessions by blocking distracting apps and websites. FocusBlock is designed to help you manage your time, safeguard your focus, and reduce stress.
+
+> For quick extension setup, jump [here](https://github.com/ArhamBafna/focus-block#chrome-extension).
 
 ## What's Included
 
