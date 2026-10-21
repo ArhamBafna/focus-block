@@ -21,35 +21,6 @@ Enhance focused work sessions by blocking distracting apps and websites. FocusBl
 - **IPC**: Cross-platform inter-process communication
 - **Build Tools**: Cargo (Rust), npm/pnpm (Node)
 
-## Project Structure
-
-```
-.
-├── apps/
-│   ├── desktop/              # Desktop app (Tauri)
-│   │   ├── src/              # React/TS frontend
-│   │   ├── src-tauri/        # Rust backend (Tauri)
-│   │   └── package.json      # Deps
-│   └── extension/            # Chrome extension
-│       ├── src/              # Frontend (React)
-│       ├── public/           # Manifest/assets
-│       ├── vite.config.ts    # Popup build
-│       ├── vite.config.bg.ts # Service worker build
-│       └── package.json      # Deps
-│
-├── crates/                   # Rust libs (workspace)
-│   ├── focus-core/           # Core blocking/domain models
-│   ├── focus-store/          # SQLite data/persistence
-│   └── focus-ipc/            # IPC
-│
-├── service/                  # Background service
-│   └── focus-service/        # Blocking system service
-│
-├── Cargo.toml               # Rust workspace root
-├── Cargo.lock
-└── README.md               # This file
-```
-
 ## Quickstart
 
 ### Quickstart Scripts
