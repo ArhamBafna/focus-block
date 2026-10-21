@@ -1,108 +1,110 @@
 # FocusBlock
 
-A distraction-blocking application for maintaining focused work sessions. FocusBlock helps users block distracting websites and apps, enabling them to protect focused time and work with less stress.
+Enhance focused work sessions by blocking distracting apps and websites. FocusBlock is designed to help you manage your time, safeguard your focus, and reduce stress.
 
-## Features
+## What's Included
 
-- **Quick Focus Sessions**: Start distraction-free sessions with a single click
-- **Smart Blocking**: Block websites and applications across your desktop and browser
-- **Flexible Controls**: Customize block lists, set session durations, and whitelist critical sites
-- **Session Review**: Track and review your focus history to understand your patterns
-- **Desktop + Chrome Extension**: Unified blocking across both desktop and web browsing
-- **Firm, Calm UX**: Decisive controls with visual clarity—no noisy gamification or guilt-heavy UI
+- **One-Click Focus Sessions**: Quick, distraction-free sessions
+- **Smart Blocking**: Blocking both websites and apps for desktop and browser
+- **Customizable Controls**: Manage your block lists, session times, and essential sites
+- **Session History**: View and analyze your focus sessions
+- **Desktop & Chrome Extension**: Seamless blocking for both desktop and browser use
+- **Strong, Minimal UI**: Clear, no-fuss controls without gimmicks or overbearing "guilt" elements
 
 ## Tech Stack
 
-- **Desktop**: [Tauri](https://tauri.app/) (Rust backend, React/TypeScript frontend)
-- **Backend**: Rust with [Tokio](https://tokio.rs/) async runtime
-- **Frontend**: React 19 + TypeScript + Vite + Tailwind CSS
+- **Desktop**: [Tauri](https://tauri.app/) (Rust backend + React/TypeScript frontend)
+- **Backend**: Rust + [Tokio](https://tokio.rs/) async
+- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS
 - **Chrome Extension**: Manifest V3, React + TypeScript
-- **Database**: SQLite via [rusqlite](https://github.com/rusqlite/rusqlite)
-- **IPC**: Cross-platform inter-process communication layer
-- **Build Tools**: Cargo (Rust), npm/pnpm (Node.js)
+- **Database**: SQLite (using [rusqlite](https://github.com/rusqlite/rusqlite))
+- **IPC**: Cross-platform inter-process communication
+- **Build Tools**: Cargo (Rust), npm/pnpm (Node)
 
 ## Project Structure
 
 ```
 .
 ├── apps/
-│   ├── desktop/              # Desktop application (Tauri)
-│   │   ├── src/              # React + TypeScript UI
-│   │   ├── src-tauri/        # Tauri Rust backend
-│   │   └── package.json      # Desktop dependencies
+│   ├── desktop/              # Desktop app (Tauri)
+│   │   ├── src/              # React/TS frontend
+│   │   ├── src-tauri/        # Rust backend (Tauri)
+│   │   └── package.json      # Deps
 │   └── extension/            # Chrome extension
-│       ├── src/              # Extension UI (React)
-│       ├── public/           # Extension manifest & assets
-│       ├── vite.config.ts    # Popup build config
-│       ├── vite.config.bg.ts # Service worker build config
-│       └── package.json      # Extension dependencies
+│       ├── src/              # Frontend (React)
+│       ├── public/           # Manifest/assets
+│       ├── vite.config.ts    # Popup build
+│       ├── vite.config.bg.ts # Service worker build
+│       └── package.json      # Deps
 │
-├── crates/                   # Rust libraries (workspace members)
-│   ├── focus-core/           # Core blocking logic & domain models
-│   ├── focus-store/          # SQLite data layer & persistence
-│   └── focus-ipc/            # Inter-process communication layer
+├── crates/                   # Rust libs (workspace)
+│   ├── focus-core/           # Core blocking/domain models
+│   ├── focus-store/          # SQLite data/persistence
+│   └── focus-ipc/            # IPC
 │
 ├── service/                  # Background service
-│   └── focus-service/        # System service for blocking enforcement
+│   └── focus-service/        # Blocking system service
 │
 ├── Cargo.toml               # Rust workspace root
-├── Cargo.lock               # Cargo lock file
+├── Cargo.lock
 └── README.md               # This file
 ```
 
-## Getting Started
+## Quickstart
 
-### Quick Start Scripts
+### Quickstart Scripts
 
-All core developer commands are consolidated into two scripts in `scripts/`:
+We have two main "core dev" scripts in `scripts/`:
 
 #### 1. Start App (`scripts/start.bat`)
-Run from PowerShell or double-click in File Explorer:
+
+Start from PowerShell or double-click in File Explorer:
 
 ```powershell
 .\scripts\start.bat
 ```
 
-| Argument | Shorthand | What it does |
+| Argument | Shorthand | Description |
 |---|---|---|
-| *(none)* | *(default)* | Starts full system: checks tools, builds extension, starts background `focus-service`, launches desktop app |
-| `-DesktopOnly` | `-d` / `--desktop` | Starts background `focus-service` + launches desktop UI (skips extension build) |
-| `-ExtensionOnly` | `-e` / `--extension` | Builds Chrome extension to `apps/extension/dist` (no admin elevation required) |
-| `-ServiceOnly` | `-s` / `--service` | Starts background `focus-service` only in console mode |
+| *(none)* | *(default)* | Full system: checks tools, builds extension, starts background `focus-service`, runs desktop app |
+| `-DesktopOnly` | `-d` / `--desktop` | Background `focus-service` + start desktop UI (no extension build) |
+| `-ExtensionOnly` | `-e` / `--extension` | Build Chrome extension to `apps/extension/dist` (no admin required) |
+| `-ServiceOnly` | `-s` / `--service` | Only background `focus-service` (console mode) |
 
-#### 2. Run Tests (`scripts/test.bat`)
-Runs test suites and outputs a color-coded status summary (exits code `0` on pass, `1` on fail):
+#### 2. Test (`scripts/test.bat`)
+
+Runs tests. Color-coded status (exits `0` = ok, `1` = fail):
 
 ```powershell
 .\scripts\test.bat
 ```
 
-| Argument | Shorthand | What it tests |
+| Argument | Shorthand | What does it test? |
 |---|---|---|
-| *(none)* | *(default)* | Runs all 3 test suites in sequence: Rust backend, Chrome extension, Desktop UI |
-| `-RustOnly` | `-r` / `--rust` | Runs Rust workspace unit tests only (`cargo test --workspace`) |
-| `-ExtensionOnly` | `-e` / `--extension` | Runs Chrome extension unit tests only (`apps/extension npm test`) |
-| `-DesktopOnly` | `-d` / `--desktop` | Runs Desktop React UI tests only (`apps/desktop npm test`) |
+| *(none)* | *(default)* | Runs all 3 tests in order: Rust backend, Chrome extension, desktop app UI |
+| `-RustOnly` | `-r` / `--rust` | Only Rust workspace unit tests (`cargo test --workspace`) |
+| `-ExtensionOnly` | `-e` / `--extension` | Only Chrome ext unit tests (`apps/extension npm test`) |
+| `-DesktopOnly` | `-d` / `--desktop` | Only desktop app (React) UI tests (`apps/desktop npm test`) |
 
 ---
 
 ### Prerequisites
 
 - **Rust**: [Install Rust](https://rustup.rs/) (1.70+)
-- **Node.js**: Version 18+ with npm or pnpm
-- **For Desktop**: Tauri CLI, WebView2 (Windows), or system webview (macOS/Linux)
-- **For Extension**: Chrome/Chromium browser
+- **Node.js**: 18+ (npm/pnpm)
+- **For Desktop**: Tauri CLI, WebView2 (Windows) / system webview (macOS/Linux)
+- **For Extension**: Chrome/Chromium
 
-### Manual Development & Low-Level Commands
+### Manual / Low-Level Dev
 
-1. **Install dependencies**:
+1. **Install deps**:
    ```bash
-   # Install Node.js dependencies
+   # Node deps
    npm install
    cd apps/desktop && npm install
    ```
 
-2. **Build Rust backend** (automatic via Tauri, but you can also):
+2. **Build Rust backend** (Tauri does it by default, but you can also):
    ```bash
    cargo build --workspace
    ```
@@ -121,17 +123,17 @@ Runs test suites and outputs a color-coded status summary (exits code `0` on pas
 
 ### Chrome Extension
 
-#### Install Pre-built Release (Fastest for Reviewers)
+#### Pre-built Release (Quick way for reviewers to install)
 
 1. Download `focus-blocker-v0.2.0.zip` from [Releases](https://github.com/ArhamBafna/focus-block/releases).
-2. Unzip the file into a folder.
-3. Open Chrome and navigate to `chrome://extensions/`.
-4. Turn on the **Developer mode** toggle in the top-right corner.
-5. Click **Load unpacked** and select the unzipped folder.
+2. Unzip to a folder.
+3. Go to Chrome, `chrome://extensions/`.
+4. Toggle on **Developer mode** (top right).
+5. Click **Load unpacked** button. Choose your unzipped folder.
 
 #### Build from Source
 
-1. **Install dependencies**:
+1. **Install deps**:
    ```bash
    cd apps/extension
    npm install
@@ -147,27 +149,27 @@ Runs test suites and outputs a color-coded status summary (exits code `0` on pas
    npm run build
    ```
 
-4. **Load extension in Chrome**:
+4. **Load in Chrome**:
    - Open `chrome://extensions/`
-   - Enable "Developer mode" (top right)
-   - Click "Load unpacked"
-   - Select `apps/extension/dist` folder
+   - Toggle on **Developer mode** (top right)
+   - Click **Load unpacked**
+   - Choose `apps/extension/dist` folder
 
 5. **Rebuild after changes**:
    ```bash
    npm run build
    ```
 
-## Development Workflow
+## Development
 
 ### Monorepo Structure
 
-This is a **Rust + Node.js monorepo**. Changes to code should be scoped:
+Rust + Node.js monorepo. Be focused when coding:
 
-- **Desktop feature**? Modify `apps/desktop/src/` (React) and `apps/desktop/src-tauri/` (Rust backend)
-- **Extension feature**? Modify `apps/extension/src/` (React)
-- **Shared Rust logic**? Modify `crates/focus-*/` libraries and rebuild
-- **System service**? Modify `service/focus-service/`
+- **Desktop feature**: change `apps/desktop/src/` (React) and `apps/desktop/src-tauri/` (Rust backend)
+- **Extension feature**: change `apps/extension/src/` (React)
+- **Rust common**: change `crates/focus-*/` libraries and rebuild
+- **System service**: change `service/focus-service/`
 
 ### Running Tests & Builds
 
@@ -191,34 +193,41 @@ This is a **Rust + Node.js monorepo**. Changes to code should be scoped:
 
 ### Unit Tests
 
-Both frontend apps ship a vitest suite runnable locally and in CI:
+Both frontend apps have vitest suite that you can run locally/CI:
 
 ```bash
-cd apps/desktop   # or apps/extension
+cd apps/desktop   # or cd apps/extension
 npm test
 ```
 
 ## Continuous Integration
 
-`.github/workflows/ci.yml` runs on every push and pull request. A change is green only when all three jobs pass:
+`.github/workflows/ci.yml` runs on every push / pull request.
 
-1. **Rust workspace tests** — `cargo test --workspace`
-2. **Desktop build** — `npm ci`, `npm test`, `npm run build` in `apps/desktop`
-3. **Extension build** — `npm ci`, `npm test`, `npm run build` in `apps/extension`
+Your PR/changes will be green when all 3 jobs are green:
 
-A failing test or build marks the commit red.
+1. **Rust workspace tests**: `cargo test --workspace`
+2. **Desktop build**: `npm ci` -> `npm test` -> `npm run build` in `apps/desktop`
+3. **Extension build**: `npm ci` -> `npm test` -> `npm run build` in `apps/extension`
 
-### Requiring green CI before merge (one-time, owner only)
+If there is a failed test or build, the commit will be red.
 
-Branch protection cannot be enabled from CI itself; do this once in GitHub:
+---
+
+### Requiring Green CI Before Merge (One-time, owner only)
+
+There is no way to enable branch protection from CI. You need to do it once in GitHub:
 
 **Settings → Branches → Add branch protection rule →**
 
 - Branch name pattern: `main`
-- Check **Require a pull request before merging** (optional) and **Require status checks to pass before merging**
-- Under status checks, search for and select: `Rust workspace tests`, `Desktop build`, `Extension build`
+- Check (optional): **Require pull request before merging**
+- Check: **Require status checks to pass before merging**
+- In status checks search and choose: `Rust workspace tests`, `Desktop build`, `Extension build`
 
-After that, merges to `main` are impossible while any job is red.
+From now on, any merge to `main` won't be possible if any of the jobs are red.
+
+---
 
 ## License
 
