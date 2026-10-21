@@ -1,5 +1,7 @@
 # FocusBlock
 
+> **Looking to install?** Jump straight to the [Chrome Extension setup](https://github.com/ArhamBafna/focus-block#chrome-extension).
+
 Enhance focused work sessions by blocking distracting apps and websites. FocusBlock is designed to help you manage your time, safeguard your focus, and reduce stress.
 
 ## What's Included
@@ -94,7 +96,7 @@ Runs tests. Color-coded status (exits `0` = ok, `1` = fail):
 
 ### Chrome Extension
 
-#### Pre-built Release (Quick way for reviewers to install)
+#### Pre-built Release (Quick way for extension install)
 
 1. Download `focus-blocker-v0.2.0.zip` from [Releases](https://github.com/ArhamBafna/focus-block/releases).
 2. Unzip to a folder.
@@ -130,75 +132,6 @@ Runs tests. Color-coded status (exits `0` = ok, `1` = fail):
    ```bash
    npm run build
    ```
-
-## Development
-
-### Monorepo Structure
-
-Rust + Node.js monorepo. Be focused when coding:
-
-- **Desktop feature**: change `apps/desktop/src/` (React) and `apps/desktop/src-tauri/` (Rust backend)
-- **Extension feature**: change `apps/extension/src/` (React)
-- **Rust common**: change `crates/focus-*/` libraries and rebuild
-- **System service**: change `service/focus-service/`
-
-### Running Tests & Builds
-
-- **Rust workspace**:
-  ```bash
-  cargo test --workspace
-  cargo build --workspace --release
-  ```
-
-- **Desktop**:
-  ```bash
-  cd apps/desktop
-  npm run build
-  ```
-
-- **Extension**:
-  ```bash
-  cd apps/extension
-  npm run build
-  ```
-
-### Unit Tests
-
-Both frontend apps have vitest suite that you can run locally/CI:
-
-```bash
-cd apps/desktop   # or cd apps/extension
-npm test
-```
-
-## Continuous Integration
-
-`.github/workflows/ci.yml` runs on every push / pull request.
-
-Your PR/changes will be green when all 3 jobs are green:
-
-1. **Rust workspace tests**: `cargo test --workspace`
-2. **Desktop build**: `npm ci` -> `npm test` -> `npm run build` in `apps/desktop`
-3. **Extension build**: `npm ci` -> `npm test` -> `npm run build` in `apps/extension`
-
-If there is a failed test or build, the commit will be red.
-
----
-
-### Requiring Green CI Before Merge (One-time, owner only)
-
-There is no way to enable branch protection from CI. You need to do it once in GitHub:
-
-**Settings → Branches → Add branch protection rule →**
-
-- Branch name pattern: `main`
-- Check (optional): **Require pull request before merging**
-- Check: **Require status checks to pass before merging**
-- In status checks search and choose: `Rust workspace tests`, `Desktop build`, `Extension build`
-
-From now on, any merge to `main` won't be possible if any of the jobs are red.
-
----
 
 ## License
 
