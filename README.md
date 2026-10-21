@@ -119,7 +119,17 @@ Runs test suites and outputs a color-coded status summary (exits code `0` on pas
    npm run build
    ```
 
-### Chrome Extension Development
+### Chrome Extension
+
+#### Install Pre-built Release (Fastest for Reviewers)
+
+1. Download `focus-blocker-v0.2.0.zip` from [Releases](https://github.com/ArhamBafna/focus-block/releases).
+2. Unzip the file into a folder.
+3. Open Chrome and navigate to `chrome://extensions/`.
+4. Turn on the **Developer mode** toggle in the top-right corner.
+5. Click **Load unpacked** and select the unzipped folder.
+
+#### Build from Source
 
 1. **Install dependencies**:
    ```bash
