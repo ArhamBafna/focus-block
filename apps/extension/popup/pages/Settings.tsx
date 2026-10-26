@@ -121,6 +121,14 @@ export default function Settings() {
     if (!Number.isNaN(duration)) void saveSetting("challenge_countdown_duration", duration);
   };
 
+  const toggleLockdownChallenge = () => {
+    if (settings) void saveSetting("stop_challenge_lockdown", !settings.stop_challenge_lockdown);
+  };
+
+  const toggleFocusChallenge = () => {
+    if (settings) void saveSetting("stop_challenge_focus", !settings.stop_challenge_focus);
+  };
+
   const toggleCountdownBreathing = () => {
     if (settings) void saveSetting("challenge_countdown_breathing", !settings.challenge_countdown_breathing);
   };
@@ -160,9 +168,9 @@ export default function Settings() {
             layout="vertical"
             title={
               <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                Stop Lockdown Session Method
+                Session Stop Challenge
                 <div
-                  title="Challenge required to end a lockdown session early."
+                  title="Challenge required to end a session early."
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -177,7 +185,7 @@ export default function Settings() {
                 </div>
               </div>
             }
-            description=""
+            description="Challenge required to end a session early."
             control={
               <select
                 value={settings.stop_challenge}
@@ -206,7 +214,32 @@ export default function Settings() {
             }
           />
 
-          {settings.stop_challenge === "countdown" && (
+          {settings.stop_challenge !== "none" && (
+            <>
+              <SettingRow
+                title="Lockdown Sessions"
+                description="Challenge required before stopping a lockdown session early."
+                control={
+                  <Toggle
+                    checked={settings.stop_challenge_lockdown}
+                    onChange={toggleLockdownChallenge}
+                  />
+                }
+              />
+              <SettingRow
+                title="Focus Sessions"
+                description="Challenge required before stopping a standard focus session early."
+                control={
+                  <Toggle
+                    checked={settings.stop_challenge_focus}
+                    onChange={toggleFocusChallenge}
+                  />
+                }
+              />
+            </>
+          )}
+
+          {settings.stop_challenge === "countdown" && (settings.stop_challenge_lockdown || settings.stop_challenge_focus) && (
             <div style={{ paddingLeft: "16px", borderLeft: "2px solid var(--color-neutral-200)", display: "flex", flexDirection: "column", gap: "8px", marginLeft: "4px" }}>
               <SettingRow
                 title="Timer Duration"

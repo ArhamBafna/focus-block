@@ -58,6 +58,17 @@ export interface ServiceStatus {
   active_challenge: ActiveChallengeView | null;
 }
 
+export function shouldTriggerStopChallenge(
+  mode: SessionMode,
+  settings: Pick<AppSettings, "stop_challenge" | "stop_challenge_lockdown" | "stop_challenge_focus"> | null
+): boolean {
+  if (!settings || settings.stop_challenge === "none") return false;
+  return (
+    (mode === "lockdown" && Boolean(settings.stop_challenge_lockdown)) ||
+    (mode === "blocklist" && Boolean(settings.stop_challenge_focus))
+  );
+}
+
 const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 function parseTime(value: string): number | null {
@@ -499,7 +510,14 @@ export const ipc = {
 
   // Settings ─────────────────────────────────────────────────────────────────
 
-  getSettings: async (): Promise<AppSettings> => storageGet("settings"),
+  getSettings: async (): Promise<AppSettings> => {
+    const stored = await storageGet("settings");
+    return {
+      ...stored,
+      stop_challenge_lockdown: stored.stop_challenge_lockdown ?? true,
+      stop_challenge_focus: stored.stop_challenge_focus ?? false,
+    };
+  },
 
   updateSettings: async (settings: AppSettings): Promise<null> => {
     await storageSet("settings", settings);

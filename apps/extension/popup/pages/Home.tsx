@@ -114,7 +114,17 @@ export default function Home() {
   };
 
   const stopSession = async () => {
-    if (settings && settings.stop_challenge !== "none") {
+    const active = status?.active_session;
+    if (!active) return;
+
+    const currentMode = active.session.mode; // "lockdown" | "blocklist"
+    const isChallengeConfigured = settings && settings.stop_challenge !== "none";
+    const shouldChallenge =
+      isChallengeConfigured &&
+      ((currentMode === "lockdown" && settings.stop_challenge_lockdown) ||
+       (currentMode === "blocklist" && settings.stop_challenge_focus));
+
+    if (shouldChallenge) {
       try {
         let challengeToStart = settings.stop_challenge;
         if (challengeToStart === "random") {

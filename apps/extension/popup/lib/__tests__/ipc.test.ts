@@ -12,6 +12,7 @@ type IpcModule = typeof import("../ipc");
 
 let mock: ChromeMockHandles;
 let ipc: IpcModule["ipc"];
+let shouldTriggerStopChallenge: IpcModule["shouldTriggerStopChallenge"];
 
 type SendMessageOutcome = { response?: unknown; lastError?: string } | "throw";
 
@@ -41,6 +42,7 @@ beforeEach(async () => {
   mock = installChromeMock();
   const imported = await import("../ipc");
   ipc = imported.ipc;
+  shouldTriggerStopChallenge = imported.shouldTriggerStopChallenge;
 });
 
 describe("background channel arms", () => {
@@ -145,5 +147,101 @@ describe("getStatusSafe raw envelope", () => {
       ok: false,
       kind: "unavailable",
     });
+  });
+});
+
+describe("getSettings fallback handling", () => {
+  it("supplies default challenge scopes when missing from older storage versions", async () => {
+    mock.data.set("settings", {
+      stop_challenge: "countdown",
+      challenge_countdown_duration: 60,
+      challenge_countdown_breathing: true,
+    } as any);
+
+    const settings = await ipc.getSettings();
+    expect(settings.stop_challenge).toBe("countdown");
+    expect(settings.stop_challenge_lockdown).toBe(true);
+    expect(settings.stop_challenge_focus).toBe(false);
+  });
+
+  it("preserves explicitly false lockdown challenge", async () => {
+    mock.data.set("settings", {
+      stop_challenge: "countdown",
+      stop_challenge_lockdown: false,
+      stop_challenge_focus: true,
+      challenge_countdown_duration: 30,
+      challenge_countdown_breathing: false,
+    } as any);
+
+    const settings = await ipc.getSettings();
+    expect(settings.stop_challenge_lockdown).toBe(false);
+    expect(settings.stop_challenge_focus).toBe(true);
+  });
+});
+
+describe("shouldTriggerStopChallenge behavior verification", () => {
+  const baseSettings = {
+    stop_challenge: "countdown",
+    stop_challenge_lockdown: true,
+    stop_challenge_focus: false,
+  };
+
+  it("triggers challenge for lockdown session when lockdown switch is on", () => {
+    expect(shouldTriggerStopChallenge("lockdown", baseSettings)).toBe(true);
+  });
+
+  it("stops immediately for lockdown session when lockdown switch is off", () => {
+    expect(
+      shouldTriggerStopChallenge("lockdown", { ...baseSettings, stop_challenge_lockdown: false })
+    ).toBe(false);
+  });
+
+  it("triggers challenge for focus session when focus switch is on", () => {
+    expect(
+      shouldTriggerStopChallenge("blocklist", { ...baseSettings, stop_challenge_focus: true })
+    ).toBe(true);
+  });
+
+  it("stops immediately for focus session when focus switch is off", () => {
+    expect(shouldTriggerStopChallenge("blocklist", baseSettings)).toBe(false);
+  });
+
+  it("stops immediately when both switches are off", () => {
+    expect(
+      shouldTriggerStopChallenge("lockdown", {
+        ...baseSettings,
+        stop_challenge_lockdown: false,
+        stop_challenge_focus: false,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerStopChallenge("blocklist", {
+        ...baseSettings,
+        stop_challenge_lockdown: false,
+        stop_challenge_focus: false,
+      })
+    ).toBe(false);
+  });
+
+  it("stops immediately when challenge method is none even if switches are on", () => {
+    expect(
+      shouldTriggerStopChallenge("lockdown", {
+        stop_challenge: "none",
+        stop_challenge_lockdown: true,
+        stop_challenge_focus: true,
+      })
+    ).toBe(false);
+    expect(
+      shouldTriggerStopChallenge("blocklist", {
+        stop_challenge: "none",
+        stop_challenge_lockdown: true,
+        stop_challenge_focus: true,
+      })
+    ).toBe(false);
+  });
+
+  it("stops immediately when settings is null", () => {
+    expect(shouldTriggerStopChallenge("lockdown", null)).toBe(false);
+    expect(shouldTriggerStopChallenge("blocklist", null)).toBe(false);
   });
 });

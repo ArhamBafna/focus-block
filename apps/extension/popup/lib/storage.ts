@@ -71,7 +71,11 @@ export interface ChallengeRecord {
 }
 
 export interface SettingsRecord {
+  auto_start: boolean;
+  block_windows_services: boolean;
   stop_challenge: string;
+  stop_challenge_lockdown: boolean;
+  stop_challenge_focus: boolean;
   challenge_countdown_duration: number;
   challenge_countdown_breathing: boolean;
 }
@@ -119,7 +123,11 @@ const DEFAULTS: StorageData = {
   schedule_suppressed_until: null,
   active_challenge: null,
   settings: {
+    auto_start: false,
+    block_windows_services: false,
     stop_challenge: "none",
+    stop_challenge_lockdown: true,
+    stop_challenge_focus: false,
     challenge_countdown_duration: 30,
     challenge_countdown_breathing: false,
   },
