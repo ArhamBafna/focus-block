@@ -37,6 +37,13 @@ fn target_cache_key(target: &AppBlockTarget) -> String {
     format!("{}_{:016x}.b64", clean, h)
 }
 
+/// Renders `value` as a PowerShell single-quoted literal. Single-quoted strings
+/// expand nothing, so doubling `'` is the only escape needed: a target path or
+/// package family name can never break out into script code.
+fn powershell_single_quoted(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
+}
+
 fn get_cached_icon(cache_dir: &Path, key: &str) -> Option<String> {
     let file = cache_dir.join(key);
     if file.is_file() {
@@ -67,7 +74,7 @@ fn extract_app_icon_native(target: &AppBlockTarget) -> Option<String> {
                 r#"
 $ErrorActionPreference = 'SilentlyContinue'
 Add-Type -AssemblyName System.Drawing
-$exe = "{}"
+$exe = {}
 if (Test-Path $exe) {{
     $icon = [System.Drawing.Icon]::ExtractAssociatedIcon($exe)
     if ($icon) {{
@@ -82,14 +89,14 @@ if (Test-Path $exe) {{
     }}
 }}
 "#,
-                path.replace('"', "`\"")
+                powershell_single_quoted(path)
             )
         }
         AppBlockTarget::Package { package_family_name } => {
             format!(
                 r#"
 $ErrorActionPreference = 'SilentlyContinue'
-$pfn = "{}"
+$pfn = {}
 $pkg = Get-AppxPackage | Where-Object {{ $_.PackageFamilyName -eq $pfn }} | Select-Object -First 1
 if ($pkg -and $pkg.InstallLocation) {{
     $manifestPath = Join-Path $pkg.InstallLocation "AppxManifest.xml"
@@ -117,7 +124,7 @@ if ($pkg -and $pkg.InstallLocation) {{
     }}
 }}
 "#,
-                package_family_name.replace('"', "`\"")
+                powershell_single_quoted(package_family_name)
             )
         }
     };
@@ -316,7 +323,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::StoreApp;
+    use super::{powershell_single_quoted, StoreApp};
 
     #[test]
     fn parses_store_apps_from_the_powershell_json_shape() {
@@ -331,5 +338,43 @@ mod tests {
             apps[0].package_family_name,
             "Microsoft.WindowsCalculator_8wekyb3d8bbwe"
         );
+    }
+
+    /// A blockable target reaches PowerShell through format!(). Anything that
+    /// survives as more than literal text would be an injection, so every
+    /// hostile shape has to stay inert inside the quoted literal.
+    #[test]
+    fn powershell_literals_keep_hostile_targets_inert() {
+        assert_eq!(
+            powershell_single_quoted(r"C:\Program Files\Discord\Update.exe"),
+            r"'C:\Program Files\Discord\Update.exe'"
+        );
+        assert_eq!(
+            powershell_single_quoted(r"C:\App's\a.exe"),
+            r"'C:\App''s\a.exe'"
+        );
+
+        for hostile in [
+            r#""; Remove-Item C:\ -Recurse; ""#,
+            "$(Start-Process calc)",
+            "Microsoft.App`nwhoami_8wekyb3d8bbwe",
+            "a'; Start-Process calc; 'b",
+        ] {
+            let quoted = powershell_single_quoted(hostile);
+            assert!(quoted.starts_with('\'') && quoted.ends_with('\''));
+
+            // Inside a single-quoted literal only a doubled quote is allowed.
+            let inner = &quoted[1..quoted.len() - 1];
+            let mut chars = inner.chars().peekable();
+            while let Some(ch) = chars.next() {
+                if ch == '\'' {
+                    assert_eq!(
+                        chars.next(),
+                        Some('\''),
+                        "a lone quote would close the literal: {hostile}"
+                    );
+                }
+            }
+        }
     }
 }
