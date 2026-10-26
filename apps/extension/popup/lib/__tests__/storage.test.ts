@@ -5,7 +5,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { installChromeMock, type ChromeMockHandles } from "../../../background/__tests__/chrome-mock";
-import { storageGet, type ArchivedSessionRecord } from "../storage";
+import { storageGet, storageSet, type ArchivedSessionRecord } from "../storage";
 
 let mock: ChromeMockHandles;
 
@@ -49,5 +49,33 @@ describe("storageGet active_session", () => {
 
   it("falls back to null when nothing occupies the slot", async () => {
     await expect(storageGet("active_session")).resolves.toBeNull();
+  });
+});
+
+describe("storageGet and storageSet settings", () => {
+  it("returns default settings with lockdown challenge true and focus challenge false", async () => {
+    const settings = await storageGet("settings");
+    expect(settings).toEqual({
+      auto_start: false,
+      block_windows_services: false,
+      stop_challenge: "none",
+      stop_challenge_lockdown: true,
+      stop_challenge_focus: false,
+      challenge_countdown_duration: 30,
+      challenge_countdown_breathing: false,
+    });
+  });
+
+  it("persists updated challenge scope settings", async () => {
+    const current = await storageGet("settings");
+    await storageSet("settings", {
+      ...current,
+      stop_challenge_lockdown: false,
+      stop_challenge_focus: true,
+    });
+
+    const updated = await storageGet("settings");
+    expect(updated.stop_challenge_lockdown).toBe(false);
+    expect(updated.stop_challenge_focus).toBe(true);
   });
 });

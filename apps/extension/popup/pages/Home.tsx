@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ipc, ServiceStatus, AppSettings } from "../lib/ipc";
+import { ipc, ServiceStatus, AppSettings, shouldTriggerStopChallenge } from "../lib/ipc";
 import { Play, Stop, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { ChallengeGate } from "../components/ChallengeGate";
 
@@ -114,7 +114,12 @@ export default function Home() {
   };
 
   const stopSession = async () => {
-    if (settings && settings.stop_challenge !== "none") {
+    const active = status?.active_session;
+    if (!active) return;
+
+    const shouldChallenge = shouldTriggerStopChallenge(active.session.mode, settings);
+
+    if (shouldChallenge && settings) {
       try {
         let challengeToStart = settings.stop_challenge;
         if (challengeToStart === "random") {

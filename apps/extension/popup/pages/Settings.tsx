@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Info } from "@phosphor-icons/react";
+
 import { ipc, AppSettings } from "../lib/ipc";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -121,6 +121,14 @@ export default function Settings() {
     if (!Number.isNaN(duration)) void saveSetting("challenge_countdown_duration", duration);
   };
 
+  const toggleLockdownChallenge = () => {
+    if (settings) void saveSetting("stop_challenge_lockdown", !settings.stop_challenge_lockdown);
+  };
+
+  const toggleFocusChallenge = () => {
+    if (settings) void saveSetting("stop_challenge_focus", !settings.stop_challenge_focus);
+  };
+
   const toggleCountdownBreathing = () => {
     if (settings) void saveSetting("challenge_countdown_breathing", !settings.challenge_countdown_breathing);
   };
@@ -158,26 +166,8 @@ export default function Settings() {
           )}
           <SettingRow
             layout="vertical"
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                Stop Lockdown Session Method
-                <div
-                  title="Challenge required to end a lockdown session early."
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    color: "var(--color-neutral-400)",
-                    cursor: "help",
-                    transition: "color 0.15s ease",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "var(--color-neutral-600)")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "var(--color-neutral-400)")}
-                >
-                  <Info size={13} weight="bold" />
-                </div>
-              </div>
-            }
-            description=""
+            title="Session Stop Challenge"
+            description="Challenge required to end a session early."
             control={
               <select
                 value={settings.stop_challenge}
@@ -206,7 +196,32 @@ export default function Settings() {
             }
           />
 
-          {settings.stop_challenge === "countdown" && (
+          {settings.stop_challenge !== "none" && (
+            <>
+              <SettingRow
+                title="Lockdown Sessions"
+                description="Challenge required before stopping a lockdown session early."
+                control={
+                  <Toggle
+                    checked={settings.stop_challenge_lockdown}
+                    onChange={toggleLockdownChallenge}
+                  />
+                }
+              />
+              <SettingRow
+                title="Focus Sessions"
+                description="Challenge required before stopping a standard focus session early."
+                control={
+                  <Toggle
+                    checked={settings.stop_challenge_focus}
+                    onChange={toggleFocusChallenge}
+                  />
+                }
+              />
+            </>
+          )}
+
+          {settings.stop_challenge === "countdown" && (settings.stop_challenge_lockdown || settings.stop_challenge_focus) && (
             <div style={{ paddingLeft: "16px", borderLeft: "2px solid var(--color-neutral-200)", display: "flex", flexDirection: "column", gap: "8px", marginLeft: "4px" }}>
               <SettingRow
                 title="Timer Duration"
