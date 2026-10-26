@@ -38,7 +38,7 @@ Issues live in GitHub Issues (`ArhamBafna/focus-block`) via the `gh` CLI. See `d
 
 ### Domain docs
 
-Single-context: root `CONTEXT.md` + `docs/adr/`. See `docs/agents/domain.md`.
+See `docs/agents/domain.md`.
 
 ## Test Map
 

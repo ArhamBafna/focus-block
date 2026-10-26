@@ -1,15 +1,14 @@
-# Run FocusBlock on Windows from a clean computer
+# Run FocusBlock on Windows
 
-This is the complete local testing procedure. Use **PowerShell as Administrator** for every step that builds or installs the Windows service.
+Procedure to run and test FocusBlock locally on Windows.
 
-## 1. Install prerequisites
+## 1. Prerequisites
 
 Install:
+- **Rust**: [rustup.rs](https://rustup.rs/) (1.70+)
+- **Node.js**: 18+ from [nodejs.org](https://nodejs.org/)
 
-- Rust (rustup)
-- Node.js 18+
-
-Confirm they work:
+Verify in PowerShell:
 
 ```powershell
 rustc --version
@@ -18,158 +17,86 @@ node --version
 npm --version
 ```
 
-## 2. Open the project
+## 2. Quickstart (Automated)
+
+Run the unified launcher from the project root:
 
 ```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking
+.\scripts\start.bat
 ```
 
-## 3. Build the Windows service and Chrome native bridge
+This script:
+1. Elevates to Administrator automatically (required for background app blocking).
+2. Installs missing npm dependencies if needed.
+3. Builds the Chrome extension to `apps/extension/dist`.
+4. Starts the background `focus-service` (connected via named pipe `\\.\pipe\focusblock`).
+5. Launches the Tauri desktop app in dev mode.
 
-```powershell
-cargo build -p focus-service --release
-```
+### Launcher Flags
 
-## 4. Build and load the Chrome extension
+| Flag | Shorthand | Action |
+|---|---|---|
+| *(none)* | *(default)* | Runs full ecosystem (service + extension build + desktop app) |
+| `-DesktopOnly` | `-d` | Starts background service and desktop UI only |
+| `-ExtensionOnly` | `-e` | Builds extension only (no admin required) |
+| `-ServiceOnly` | `-s` | Starts background service only in console mode |
 
-```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking\apps\extension
-npm install
-npm run build
-```
+## 3. Load Chrome Extension
 
-Load it in Chrome:
-
-1. Open `chrome://extensions`.
-2. Enable **Developer mode**.
+1. Open `chrome://extensions` in Chrome.
+2. Toggle on **Developer mode** (top-right corner).
 3. Click **Load unpacked**.
-4. Select `C:\Users\bafna\Desktop\Projects\blocking\apps\extension\dist`.
-5. Copy the 32-character extension ID shown under **Focus Blocker**.
+4. Select `apps/extension/dist` from the repository root.
+5. Pin **Focus Blocker** in the Chrome toolbar.
 
-The ID in the next command must match the ID Chrome shows.
-```
+## 4. Run Test Suites
 
-## 5. Install and start the Windows service/native bridge
-
-Stay in an **Administrator PowerShell** and replace `YOUR_EXTENSION_ID` with the copied Chrome ID:
+Run all automated unit and integration tests:
 
 ```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking
-
-.\service\focus-service\install\install-focusblock.ps1 `
-  -ServiceExecutablePath ".\target\release\focus-service.exe" `
-  -NativeHostExecutablePath ".\target\release\focus-native-host.exe" `
-  -ExtensionId "YOUR_EXTENSION_ID"
+.\scripts\test.bat
 ```
 
-Verify the service:
+Flags:
+- `.\scripts\test.bat -RustOnly` (`-r`): Rust core and service tests (`cargo test --workspace`)
+- `.\scripts\test.bat -ExtensionOnly` (`-e`): Extension unit tests (`npm test` in `apps/extension`)
+- `.\scripts\test.bat -DesktopOnly` (`-d`): Desktop UI tests (`npm test` in `apps/desktop`)
+
+## 5. Verification
+
+### Test App Blocking (Desktop)
+1. In the Desktop UI, navigate to the **Blocklists** tab.
+2. Click **+ Add App** and select an app (e.g. Notepad or Calculator).
+3. Go to the **Focus** tab and click **Start Focus Session**.
+4. Attempt to open the blocked app:
+   - Process terminates immediately (< 10ms) before window renders.
+   - Desktop app displays the **App Blocked Modal**.
+5. Stop the session: app launches normally again.
+
+### Test Website Blocking (Extension)
+1. Open the Focus Blocker extension popup.
+2. In the **Block** tab, add `reddit.com`.
+3. In the **Focus** tab, start a 5-minute session.
+4. Visit `reddit.com` in Chrome: page redirects to the blocked notification page.
+5. Click **Stop Session**: `reddit.com` loads normally again.
+
+## 6. Troubleshooting
+
+### Background Service Not Running
+Run the service directly in console mode from an Administrator PowerShell:
 
 ```powershell
-Get-Service FocusBlockService
+cargo run --bin focus-service -- --console
 ```
 
-It must say `Running`. If it says `Stopped`, run in same Admin window:
-
+Verify the named pipe is available:
 ```powershell
-Start-Service FocusBlockService
-Start-Sleep -Seconds 3
-Get-Service FocusBlockService
+Test-Path '\\.\pipe\focusblock'
 ```
 
-## 6. Start the desktop UI
-
-Open a **second normal PowerShell window** at same time:
-
+### Rebuilding Extension After Changes
 ```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking\apps\desktop
-npm install
-npm run tauri dev
-```
-Keep this terminal open while using the desktop UI.
-
-## 7. Verification
-
-Check service:
-
-```powershell
-Get-Service FocusBlockService
-```
-
-Check Instant App Blocking:
-
-1. In Desktop UI, go to **Blocklists** tab.
-2. Click **+ Add App** and select an installed app (for example, Notepad or Calculator).
-3. Go to **Focus** tab and click **Start Focus Session**.
-4. Try to open the blocked app:
-   - App closes immediately (< 10ms) without showing a window.
-   - Desktop app displays the centered **App Blocked Modal** showing the app name and launch attempt badge.
-   - Click **Back to Focus** to dismiss the modal.
-
-Check Chrome:
-
-1. Open `chrome://extensions`.
-2. Find **Focus Blocker**.
-3. Confirm there is no **Errors** badge.
-4. Click **service worker** to inspect logs if needed.
-
-## 8. Reboot test
-
-Restart Windows. Do not manually start the service afterward. Confirm:
-
-```powershell
-Get-Service FocusBlockService
-```
-
-It should return `Running`, and the active policy should still be enforced.
-
-## 9. Troubleshooting
-
-### Service is stopped
-
-Run the following in Administrator PowerShell:
-
-```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking
-cargo build -p focus-service --release
-
-.\service\focus-service\install\install-focusblock.ps1 `
-  -ServiceExecutablePath ".\target\release\focus-service.exe" `
-  -NativeHostExecutablePath ".\target\release\focus-native-host.exe" `
-  -ExtensionId "YOUR_EXTENSION_ID"
-
-Start-Service FocusBlockService
-Get-Service FocusBlockService
-```
-
-
-For direct diagnostics, use Administrator PowerShell:
-
-```powershell
-.\target\release\focus-service.exe --console
-```
-
-The process should stay running. Stop it with `Ctrl+C`.
-
-
-### Rebuilding after code changes
-
-After extension changes:
-```powershell
-Set-Location C:\Users\bafna\Desktop\Projects\blocking\apps\extension
+cd apps/extension
 npm run build
 ```
-
-Then click **Reload** for the extension in `chrome://extensions`.
-
-After service changes, rebuild release and rerun the installer from Administrator PowerShell.
-
-## 10. Remove the test installation
-
-Run as Administrator:
-
-```powershell
-Stop-Service FocusBlockService -ErrorAction SilentlyContinue
-sc.exe delete FocusBlockService
-```
-
-This removes the Windows service registration. It does not remove the source code or Chrome extension files.
+Then reload the extension on `chrome://extensions`.
