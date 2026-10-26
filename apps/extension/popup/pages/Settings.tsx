@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Info } from "@phosphor-icons/react";
+
 import { ipc, AppSettings } from "../lib/ipc";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
@@ -166,25 +166,7 @@ export default function Settings() {
           )}
           <SettingRow
             layout="vertical"
-            title={
-              <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-                Session Stop Challenge
-                <div
-                  title="Challenge required to end a session early."
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    color: "var(--color-neutral-400)",
-                    cursor: "help",
-                    transition: "color 0.15s ease",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.color = "var(--color-neutral-600)")}
-                  onMouseLeave={e => (e.currentTarget.style.color = "var(--color-neutral-400)")}
-                >
-                  <Info size={13} weight="bold" />
-                </div>
-              </div>
-            }
+            title="Session Stop Challenge"
             description="Challenge required to end a session early."
             control={
               <select

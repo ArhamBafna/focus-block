@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ipc, ServiceStatus, AppSettings } from "../lib/ipc";
+import { ipc, ServiceStatus, AppSettings, shouldTriggerStopChallenge } from "../lib/ipc";
 import { Play, Stop, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { ChallengeGate } from "../components/ChallengeGate";
 
@@ -117,14 +117,9 @@ export default function Home() {
     const active = status?.active_session;
     if (!active) return;
 
-    const currentMode = active.session.mode; // "lockdown" | "blocklist"
-    const isChallengeConfigured = settings && settings.stop_challenge !== "none";
-    const shouldChallenge =
-      isChallengeConfigured &&
-      ((currentMode === "lockdown" && settings.stop_challenge_lockdown) ||
-       (currentMode === "blocklist" && settings.stop_challenge_focus));
+    const shouldChallenge = shouldTriggerStopChallenge(active.session.mode, settings);
 
-    if (shouldChallenge) {
+    if (shouldChallenge && settings) {
       try {
         let challengeToStart = settings.stop_challenge;
         if (challengeToStart === "random") {
