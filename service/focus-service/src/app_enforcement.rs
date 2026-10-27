@@ -1,10 +1,12 @@
 #[cfg(not(windows))]
-use focus_core::{AppBlockTarget, BlockedAppEvent};
+use crate::enforcement::Enforcement;
+#[cfg(not(windows))]
+use focus_core::{AppBlockTarget, BlockedAppEvent, EnforcementMode};
 
 #[cfg(windows)]
 mod windows {
     use chrono::Utc;
-    use focus_core::{AppBlockTarget, BlockedAppEvent};
+    use focus_core::{AppBlockTarget, BlockedAppEvent, EnforcementMode};
     use std::collections::HashSet;
     use std::ffi::OsString;
     use std::fs;
@@ -16,6 +18,8 @@ mod windows {
     use std::thread::{self, JoinHandle};
     use std::time::{Duration, Instant};
     use tracing::{info, warn};
+
+    use crate::enforcement::Enforcement;
 
     use windows::core::{w, BSTR};
     use windows::Win32::System::Com::{
@@ -46,6 +50,11 @@ mod windows {
     };
 
     const FALLBACK_POLL_INTERVAL: Duration = Duration::from_millis(2500);
+
+    /// How long a watcher is given to notice its stop flag before the caller
+    /// joins it. `Enumerator::Next` uses a 500ms timeout, so a healthy watcher
+    /// exits well inside this budget.
+    const WATCHER_STOP_BUDGET: Duration = Duration::from_secs(2);
 
     const EXCLUDED_SYSTEM_EXECUTABLES: &[&str] = &[
         "taskmgr.exe",
@@ -237,6 +246,35 @@ mod windows {
             CloseHandle(snapshot);
         }
         events
+    }
+
+    /// Whether a process with this executable name is running. Read-only; used by
+    /// guarded-test prerequisite checks, never by enforcement itself.
+    #[cfg(test)]
+    pub fn process_running(exe_name: &str) -> bool {
+        let target = exe_name.to_ascii_lowercase();
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return false;
+            }
+            let mut entry = PROCESSENTRY32W {
+                dwSize: std::mem::size_of::<PROCESSENTRY32W>() as u32,
+                ..Default::default()
+            };
+            let mut found = false;
+            let mut has_entry = Process32FirstW(snapshot, &mut entry) != 0;
+            while has_entry {
+                let name = String::from_utf16_lossy(&entry.szExeFile);
+                if name.trim_end_matches('\0').to_ascii_lowercase() == target {
+                    found = true;
+                    break;
+                }
+                has_entry = Process32NextW(snapshot, &mut entry) != 0;
+            }
+            CloseHandle(snapshot);
+            found
+        }
     }
 
     fn run_process_watcher(
@@ -432,8 +470,10 @@ mod windows {
         }
 
         pub fn apply(&mut self, targets: &[AppBlockTarget]) -> Result<(), String> {
-            // Stop any existing watcher before applying new targets
-            self.stop_watcher();
+            // Stop any existing watcher before applying new targets. If it cannot
+            // be stopped, refuse: two live subscriptions would double-kill or drop
+            // events, and the old targets are still enforced until this succeeds.
+            self.stop_watcher()?;
 
             let candidate_targets: Vec<AppBlockTarget> = targets
                 .iter()
@@ -543,7 +583,7 @@ mod windows {
         }
 
         pub fn clear(&mut self) -> Result<(), String> {
-            self.stop_watcher();
+            self.stop_watcher()?;
             self.targets.clear();
             {
                 let mut matchers_guard = self.matchers.write().unwrap();
@@ -554,19 +594,43 @@ mod windows {
             Ok(())
         }
 
-        fn stop_watcher(&mut self) {
+        /// Bounded, awaited stop. A replacement watcher is never started while the
+        /// previous subscription is alive; if the bounded wait cannot prove it
+        /// exited, the caller gets an error and enforcement is reported degraded.
+        fn stop_watcher(&mut self) -> Result<(), String> {
             if let Some(stop) = self.watcher_stop.take() {
                 stop.store(true, Ordering::Relaxed);
             }
             if let Some(handle) = self.watcher_handle.take() {
-                if handle.is_finished() {
-                    let _ = handle.join();
-                } else {
-                    // Avoid unbounded wait while holding service lock; join asynchronously
-                    thread::spawn(move || {
-                        let _ = handle.join();
-                    });
+                let started = Instant::now();
+                while !handle.is_finished() && started.elapsed() < WATCHER_STOP_BUDGET {
+                    thread::sleep(Duration::from_millis(10));
                 }
+                if !handle.is_finished() {
+                    // The thread is detached and will notice its stop flag on its
+                    // own next iteration, but this caller cannot prove that, so it
+                    // must not start another subscription over it.
+                    self.is_using_fallback = true;
+                    let message = format!(
+                        "process event watcher did not stop within {WATCHER_STOP_BUDGET:?}"
+                    );
+                    warn!("{message}; refusing to start a replacement");
+                    return Err(message);
+                }
+                let _ = handle.join();
+            }
+            Ok(())
+        }
+
+        /// Which mechanism is enforcing right now. Derived from state rather than
+        /// set alongside every transition, so it cannot drift out of sync.
+        pub fn mode(&self) -> EnforcementMode {
+            if self.targets.is_empty() {
+                EnforcementMode::Inactive
+            } else if self.is_using_fallback {
+                EnforcementMode::PollingFallback
+            } else {
+                EnforcementMode::KernelEvents
             }
         }
 
@@ -582,6 +646,32 @@ mod windows {
         #[allow(dead_code)]
         pub fn is_using_fallback(&self) -> bool {
             self.is_using_fallback
+        }
+    }
+
+    impl Enforcement for AppEnforcer {
+        fn apply(&mut self, targets: &[AppBlockTarget]) -> Result<(), String> {
+            AppEnforcer::apply(self, targets)
+        }
+
+        fn tick(&mut self) -> Result<(), String> {
+            AppEnforcer::tick(self)
+        }
+
+        fn clear(&mut self) -> Result<(), String> {
+            AppEnforcer::clear(self)
+        }
+
+        fn last_blocked_app(&self) -> Option<BlockedAppEvent> {
+            AppEnforcer::last_blocked_app(self)
+        }
+
+        fn clear_last_blocked_app(&mut self) {
+            AppEnforcer::clear_last_blocked_app(self)
+        }
+
+        fn mode(&self) -> EnforcementMode {
+            AppEnforcer::mode(self)
         }
     }
 
@@ -729,6 +819,8 @@ mod windows {
 
 #[cfg(windows)]
 pub use windows::AppEnforcer;
+#[cfg(all(windows, test))]
+pub use windows::process_running;
 
 #[cfg(not(windows))]
 #[derive(Default)]
@@ -765,5 +857,36 @@ impl AppEnforcer {
 
     pub fn is_using_fallback(&self) -> bool {
         false
+    }
+
+    pub fn mode(&self) -> EnforcementMode {
+        EnforcementMode::Inactive
+    }
+}
+
+#[cfg(not(windows))]
+impl Enforcement for AppEnforcer {
+    fn apply(&mut self, targets: &[AppBlockTarget]) -> Result<(), String> {
+        AppEnforcer::apply(self, targets)
+    }
+
+    fn tick(&mut self) -> Result<(), String> {
+        AppEnforcer::tick(self)
+    }
+
+    fn clear(&mut self) -> Result<(), String> {
+        AppEnforcer::clear(self)
+    }
+
+    fn last_blocked_app(&self) -> Option<BlockedAppEvent> {
+        AppEnforcer::last_blocked_app(self)
+    }
+
+    fn clear_last_blocked_app(&mut self) {
+        AppEnforcer::clear_last_blocked_app(self)
+    }
+
+    fn mode(&self) -> EnforcementMode {
+        EnforcementMode::Inactive
     }
 }

@@ -191,12 +191,31 @@ pub struct BlockedAppEvent {
     pub count: u32,
 }
 
+/// Which mechanism is currently enforcing app blocking. A machine where the
+/// kernel process-start subscription failed looks identical to a healthy one in
+/// the UI unless the service reports this, so it is part of the status reply.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EnforcementMode {
+    /// Nothing is being enforced: no active session, or no app targets.
+    #[default]
+    Inactive,
+    /// Windows delivers a kernel process-start event for every launch, and the
+    /// matching process is terminated before it renders.
+    KernelEvents,
+    /// Kernel events are unavailable; a periodic process sweep (every 2.5s) is
+    /// enforcing instead. Blocking still works, but a launch can be visible first.
+    PollingFallback,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ServiceStatus {
     pub health: ServiceHealth,
     pub active_session: Option<crate::ActiveSessionView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_blocked_app: Option<BlockedAppEvent>,
+    #[serde(default)]
+    pub enforcement_mode: EnforcementMode,
 }
 
 #[cfg(test)]
@@ -212,6 +231,7 @@ mod tests {
             health: health.clone(),
             active_session: None,
             last_blocked_app: None,
+            enforcement_mode: EnforcementMode::PollingFallback,
         };
         let domain = DomainEntry { id: 1, domain: "a.com".into() };
         let preset = Preset {

@@ -1,6 +1,14 @@
 mod app_enforcement;
+mod enforcement;
 mod service;
 mod session_manager;
+
+// Test-only: the fake enforcer, guarded-run prerequisites, and the real
+// enforcement checks. None of this is compiled into a shipped service.
+#[cfg(test)]
+mod real_enforcement;
+#[cfg(test)]
+mod test_support;
 
 use tracing_subscriber::EnvFilter;
 

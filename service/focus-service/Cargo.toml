@@ -11,6 +11,12 @@ path = "src/main.rs"
 name = "focus-native-host"
 path = "src/native_host.rs"
 
+# Test-only target for the guarded real-enforcement checks (`cargo test` builds
+# examples; a normal `cargo build` does not).
+[[example]]
+name = "focus-test-dummy"
+path = "examples/focus_test_dummy.rs"
+
 [dependencies]
 focus-core = { workspace = true }
 focus-store = { workspace = true }
