@@ -12,11 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Linux dependencies
-        # The hosted runners occasionally blackhole IPv6 to the Ubuntu mirrors,
-        # which makes apt sit in this step indefinitely. Force IPv4, bound every
-        # connection, retry, and cap the step so a bad mirror fails fast instead
-        # of hanging until the job times out.
-        timeout-minutes: 12
+        # A 25.5 MB webkit2gtk download from azure.archive.ubuntu.com stalled for
+        # five minutes on an otherwise healthy runner, so this step is slow rather
+        # than broken. Force IPv4, bound each connection, retry, and keep a cap
+        # generous enough for a slow mirror but short enough to fail fast.
+        timeout-minutes: 25
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
