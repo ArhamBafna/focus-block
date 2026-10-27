@@ -11,6 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Restore Linux package downloads
+        uses: actions/cache@v4
+        with:
+          path: /tmp/focus-apt-archives
+          key: ${{ runner.os }}-${{ runner.arch }}-apt-${{ hashFiles('.github/workflows/ci.yml') }}
       - name: Start Linux dependency installation
         # Install native packages while Rust setup and cache restore run. The
         # following wait step checks the installer result before any tests run.
@@ -20,9 +25,11 @@ jobs:
           nohup bash -c '
             set +e
             APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true"
-            sudo apt-get update $APT_OPTS &&
-              sudo apt-get install -y $APT_OPTS libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+            sudo mkdir -p /tmp/focus-apt-archives/partial &&
+              sudo apt-get update $APT_OPTS &&
+              sudo apt-get install -y $APT_OPTS -o Dir::Cache::archives=/tmp/focus-apt-archives libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
             result=$?
+            sudo chown -R "$(id -u):$(id -g)" /tmp/focus-apt-archives || result=1
             printf "%s\n" "$result" > "$RUNNER_TEMP/focus-apt-status.tmp"
             mv "$RUNNER_TEMP/focus-apt-status.tmp" "$RUNNER_TEMP/focus-apt-status"
           ' > "$RUNNER_TEMP/focus-apt.log" 2>&1 < /dev/null &
