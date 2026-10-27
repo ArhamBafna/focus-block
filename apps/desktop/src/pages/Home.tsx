@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ipc, ServiceStatus } from "../lib/ipc";
-import { Play, Stop, ShieldCheck } from "@phosphor-icons/react";
+import { Play } from "@phosphor-icons/react/Play";
+import { Stop } from "@phosphor-icons/react/Stop";
+import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 
 function formatTime(sec: number) {
   const m = Math.floor(sec / 60).toString().padStart(2, "0");

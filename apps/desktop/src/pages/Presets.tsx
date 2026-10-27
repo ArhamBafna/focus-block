@@ -1,6 +1,10 @@
 import { useState, useEffect } from "react";
 import { ipc, Preset, SessionMode } from "../lib/ipc";
-import { Trash, Plus, X, Clock, Shield } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react/Trash";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { X } from "@phosphor-icons/react/X";
+import { Clock } from "@phosphor-icons/react/Clock";
+import { Shield } from "@phosphor-icons/react/Shield";
 
 type NewPresetForm = {
   name: string;

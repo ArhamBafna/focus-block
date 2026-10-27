@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
 import { ipc, AppBlockEntry, AppBlockTarget, DomainEntry } from "../lib/ipc";
-import { File, Plus, SpinnerGap, SquaresFour, Trash, WindowsLogo } from "@phosphor-icons/react";
+import { File } from "@phosphor-icons/react/File";
+import { Plus } from "@phosphor-icons/react/Plus";
+import { SpinnerGap } from "@phosphor-icons/react/SpinnerGap";
+import { SquaresFour } from "@phosphor-icons/react/SquaresFour";
+import { Trash } from "@phosphor-icons/react/Trash";
+import { WindowsLogo } from "@phosphor-icons/react/WindowsLogo";
 import { listStoreApps, pickExecutable, StoreApp } from "../lib/app-picker";
 import { AppPickerModal, DiscoveredApp } from "../components/AppPickerModal";
 

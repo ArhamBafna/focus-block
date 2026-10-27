@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ClockCounterClockwise } from "@phosphor-icons/react";
+import { ClockCounterClockwise } from "@phosphor-icons/react/ClockCounterClockwise";
 import { ipc, Session } from "../lib/ipc";
 
 function formatDuration(sec: number) {

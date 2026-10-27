@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { ipc, DomainEntry } from "../lib/ipc";
-import { Trash, Plus } from "@phosphor-icons/react";
+import { Trash } from "@phosphor-icons/react/Trash";
+import { Plus } from "@phosphor-icons/react/Plus";
 
 /** Which list a DomainListPage instance edits. */
 export type DomainListKind = "blocklist" | "whitelist";

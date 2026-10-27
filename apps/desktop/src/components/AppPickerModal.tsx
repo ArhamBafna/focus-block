@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { MagnifyingGlass, X } from "@phosphor-icons/react";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
+import { X } from "@phosphor-icons/react/X";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAppIcon, listInstalledApps, type DiscoveredApp } from "../lib/app-picker";
 import type { AppBlockEntry } from "../lib/ipc";

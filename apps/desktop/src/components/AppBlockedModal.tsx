@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ShieldSlash, X, ArrowLeft } from "@phosphor-icons/react";
+import { ShieldSlash } from "@phosphor-icons/react/ShieldSlash";
+import { X } from "@phosphor-icons/react/X";
+import { ArrowLeft } from "@phosphor-icons/react/ArrowLeft";
 import type { BlockedAppEvent } from "../lib/ipc";
 
 interface Props {

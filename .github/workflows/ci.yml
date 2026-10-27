@@ -11,19 +11,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Linux dependencies
-        # A 25.5 MB webkit2gtk download from azure.archive.ubuntu.com stalled for
-        # five minutes on an otherwise healthy runner, so this step is slow rather
-        # than broken. Force IPv4, bound each connection, retry, and keep a cap
-        # generous enough for a slow mirror but short enough to fail fast.
+      - name: Install Linux dependencies while preparing Rust
+        # Rust setup and native package installation are independent. Wait for
+        # both before restoring the Rust cache and running the full workspace.
         timeout-minutes: 25
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
-          APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true"
-          sudo apt-get update $APT_OPTS
-          sudo apt-get install -y $APT_OPTS libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
-      - uses: dtolnay/rust-toolchain@stable
+          set -euo pipefail
+          (
+            APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true"
+            sudo apt-get update $APT_OPTS
+            sudo apt-get install -y $APT_OPTS libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+          ) &
+          apt_pid=$!
+          if ! rustup toolchain install stable --profile minimal --no-self-update; then
+            wait "$apt_pid" || true
+            exit 1
+          fi
+          wait "$apt_pid"
+          rustup default stable
       - uses: Swatinem/rust-cache@v2
       - name: Run all Rust tests
         run: cargo test --workspace

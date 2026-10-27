@@ -1,6 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
-import { Timer, Shield, ListPlus, ClockCounterClockwise, Gear, ListChecks } from "@phosphor-icons/react";
+import { Timer } from "@phosphor-icons/react/Timer";
+import { Shield } from "@phosphor-icons/react/Shield";
+import { ListPlus } from "@phosphor-icons/react/ListPlus";
+import { ClockCounterClockwise } from "@phosphor-icons/react/ClockCounterClockwise";
+import { Gear } from "@phosphor-icons/react/Gear";
+import { ListChecks } from "@phosphor-icons/react/ListChecks";
 import Home from "./pages/Home";
 import Blocklists from "./pages/Blocklists";
 import Whitelist from "./pages/Whitelist";
