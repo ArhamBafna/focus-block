@@ -29,8 +29,15 @@ fn dummy_target() -> AppBlockTarget {
     }
 }
 
-/// Unguarded: proves the dedicated target exists before any guarded run needs it,
-/// so a missing build artifact is a clear failure rather than a skipped check.
+/// Unguarded: proves the dedicated dummy target exists before any guarded run
+/// needs it, so a missing build artifact is a clear failure rather than a
+/// skipped check.
+///
+/// The service binary is deliberately not asserted here. `cargo test` builds
+/// examples but not the normal service binary, so requiring it would fail a
+/// plain `cargo test` on every clean checkout, on any platform. Only Tier B
+/// consumes that binary, and it asserts availability where it installs the
+/// test-owned service, on a machine prepared for a real run.
 #[test]
 fn dedicated_dummy_executable_is_available() {
     let dummy = dummy_exe();
@@ -38,10 +45,6 @@ fn dedicated_dummy_executable_is_available() {
         dummy.is_file(),
         "the dedicated test executable must exist at {} (built by cargo test)",
         dummy.display()
-    );
-    assert!(
-        crate::test_support::service_exe().is_file(),
-        "the service binary must exist next to the test executable"
     );
 }
 

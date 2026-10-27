@@ -498,7 +498,11 @@ pub fn service_exe() -> PathBuf {
             return candidate;
         }
     }
-    panic!("{name} not found next to the test executable; `cargo test` builds it");
+    panic!(
+        "{name} not found next to the test executable; `cargo test` builds test \
+         harnesses and examples but not the service binary, so build it first \
+         with `cargo build -p focus-service`"
+    );
 }
 
 pub fn service_install() -> String {
