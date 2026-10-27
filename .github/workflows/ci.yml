@@ -21,7 +21,7 @@ jobs:
             set +e
             APT_OPTS="-o Acquire::Retries=3 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o Acquire::ForceIPv4=true"
             sudo apt-get update $APT_OPTS &&
-              sudo apt-get install -y --no-install-recommends $APT_OPTS libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+              sudo apt-get install -y $APT_OPTS libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
             result=$?
             printf "%s\n" "$result" > "$RUNNER_TEMP/focus-apt-status.tmp"
             mv "$RUNNER_TEMP/focus-apt-status.tmp" "$RUNNER_TEMP/focus-apt-status"
