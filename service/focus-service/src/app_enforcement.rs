@@ -822,6 +822,13 @@ pub use windows::AppEnforcer;
 #[cfg(all(windows, test))]
 pub use windows::process_running;
 
+// Real-enforcement prerequisite checks compile on every test platform, even
+// though they fail fast before querying processes off Windows.
+#[cfg(all(not(windows), test))]
+pub fn process_running(_exe_name: &str) -> bool {
+    false
+}
+
 #[cfg(not(windows))]
 #[derive(Default)]
 pub struct AppEnforcer {
