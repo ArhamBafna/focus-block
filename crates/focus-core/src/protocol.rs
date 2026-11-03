@@ -1,4 +1,4 @@
-use crate::{Preset, Session, SessionMode};
+use crate::{Preset, Schedule, Session, SessionMode};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -43,6 +43,10 @@ pub enum IpcRequest {
     GetActivePolicy,
     /// Clear the most recent blocked application notification after user dismisses it.
     ClearLastBlockedApp,
+    ListSchedules,
+    CreateSchedule { schedule: Schedule },
+    UpdateSchedule { schedule: Schedule },
+    DeleteSchedule { id: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -68,7 +72,13 @@ pub enum ResponseData {
     Sessions(Vec<Session>),
     Settings(AppSettings),
     Policy(BlockingPolicySnapshot),
+    Schedules(ScheduleList),
     Id(i64),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScheduleList {
+    pub schedules: Vec<Schedule>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -258,7 +268,16 @@ mod tests {
             ..session
         };
 
+        let sched = Schedule {
+            id: "sched-1".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: SessionMode::Blocklist,
+            days_of_week: vec![1, 2, 3],
+            ends_on: None,
+        };
         let cases: Vec<ResponseData> = vec![
+            ResponseData::Schedules(ScheduleList { schedules: vec![sched] }),
             ResponseData::Unit(()),
             ResponseData::Health(health),
             ResponseData::Status(status),
@@ -280,6 +299,7 @@ mod tests {
                 (ResponseData::Presets(a), ResponseData::Presets(b)) => assert_eq!(a, b),
                 (ResponseData::Sessions(a), ResponseData::Sessions(b)) => assert_eq!(a, b),
                 (ResponseData::Settings(a), ResponseData::Settings(b)) => assert_eq!(a, b),
+                (ResponseData::Schedules(a), ResponseData::Schedules(b)) => assert_eq!(a, b),
                 (ResponseData::Id(a), ResponseData::Id(b)) => assert_eq!(a, b),
                 other => panic!("variant mis-decoded: {:?}", other.1),
             }

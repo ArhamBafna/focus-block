@@ -6,9 +6,11 @@ import { ListPlus } from "@phosphor-icons/react/ListPlus";
 import { ClockCounterClockwise } from "@phosphor-icons/react/ClockCounterClockwise";
 import { Gear } from "@phosphor-icons/react/Gear";
 import { ListChecks } from "@phosphor-icons/react/ListChecks";
+import { CalendarDots } from "@phosphor-icons/react/CalendarDots";
 import Home from "./pages/Home";
 import Blocklists from "./pages/Blocklists";
 import Whitelist from "./pages/Whitelist";
+import Schedule from "./pages/Schedule";
 import Presets from "./pages/Presets";
 import History from "./pages/History";
 import Settings from "./pages/Settings";
@@ -20,6 +22,7 @@ const navItems = [
   { path: "/", label: "Focus", icon: <Timer size={18} /> },
   { path: "/blocklists", label: "Block", icon: <Shield size={18} /> },
   { path: "/whitelist", label: "Allow", icon: <ListChecks size={18} /> },
+  { path: "/schedule", label: "Schedule", icon: <CalendarDots size={18} /> },
   { path: "/presets", label: "Presets", icon: <ListPlus size={18} /> },
   { path: "/history", label: "History", icon: <ClockCounterClockwise size={18} /> },
   { path: "/settings", label: "Settings", icon: <Gear size={18} /> },
@@ -186,6 +189,7 @@ function AppContent() {
           <Route path="/" element={<Home />} />
           <Route path="/blocklists" element={<Blocklists />} />
           <Route path="/whitelist" element={<Whitelist />} />
+          <Route path="/schedule" element={<Schedule />} />
           <Route path="/presets" element={<Presets />} />
           <Route path="/history" element={<History />} />
           <Route path="/settings" element={<Settings />} />

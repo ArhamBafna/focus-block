@@ -4,7 +4,7 @@ use crate::migrations::{SCHEMA, SEED_PRESETS};
 use chrono::{DateTime, Utc};
 use focus_core::protocol::DomainEntry;
 use focus_core::{
-    normalize_domain, AppBlockEntry, AppBlockTarget, Preset, Session, SessionMode,
+    normalize_domain, AppBlockEntry, AppBlockTarget, Preset, Schedule, Session, SessionMode,
 };
 use rusqlite::{params, Connection};
 use std::path::{Path, PathBuf};
@@ -47,6 +47,7 @@ impl FocusStore {
     fn migrate(&self) -> Result<(), StoreError> {
         self.conn.execute_batch(SCHEMA)?;
         self.add_sessions_app_target_snapshot_column()?;
+        self.add_sessions_scheduled_schedule_id_column()?;
         // Migrate and purge legacy folder targets so only executable and package remain
         let _ = self.conn.execute("DELETE FROM app_block_targets WHERE target_kind = 'folder'", []);
 
@@ -77,7 +78,7 @@ impl FocusStore {
         Ok(())
     }
 
-    fn raw_setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, StoreError> {
         let value = self.conn.query_row(
             "SELECT value FROM settings WHERE key = ?1",
             params![key],
@@ -91,7 +92,7 @@ impl FocusStore {
     }
 
     pub fn get_setting_bool(&self, key: &str) -> Result<bool, StoreError> {
-        match self.raw_setting(key)? {
+        match self.get_setting(key)? {
             Some(value) => Ok(value == "true"),
             // Declared default wins when no row exists; real DB errors above propagate.
             None => Ok(SETTING_DEFAULTS
@@ -104,7 +105,7 @@ impl FocusStore {
 
     /// Numeric settings have no declared defaults yet; missing rows read as 0.
     pub fn get_setting_u64(&self, key: &str) -> Result<u64, StoreError> {
-        match self.raw_setting(key)? {
+        match self.get_setting(key)? {
             Some(value) => Ok(value.parse().unwrap_or(0)),
             None => Ok(0),
         }
@@ -321,7 +322,7 @@ impl FocusStore {
         let mode_str = codec::encode_mode(session.mode);
         let status_str = codec::encode_status(session.status);
         self.conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot, scheduled_schedule_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 session.id.to_string(),
                 session.preset_id.map(|id| id.to_string()),
@@ -333,6 +334,7 @@ impl FocusStore {
                 serde_json::to_string(&session.blocklist_snapshot)?,
                 serde_json::to_string(&session.whitelist_snapshot)?,
                 serde_json::to_string(&session.app_block_targets_snapshot)?,
+                session.scheduled_schedule_id,
             ],
         )?;
         Ok(())
@@ -340,7 +342,7 @@ impl FocusStore {
 
     pub fn get_active_session(&self) -> Result<Option<Session>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot, scheduled_schedule_id FROM sessions WHERE status = 'active' ORDER BY started_at DESC LIMIT 1",
         )?;
         let mut rows = stmt.query([])?;
         while let Some(row) = rows.next()? {
@@ -358,7 +360,7 @@ impl FocusStore {
 
     pub fn list_history(&self, limit: u32) -> Result<Vec<Session>, StoreError> {
         let mut stmt = self.conn.prepare(
-            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT ?1",
+            "SELECT id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot, scheduled_schedule_id FROM sessions WHERE status != 'active' ORDER BY started_at DESC LIMIT ?1",
         )?;
         let mut rows = stmt.query(params![limit])?;
         let mut sessions = Vec::new();
@@ -384,6 +386,93 @@ impl FocusStore {
     /// Existing installations predate app blocking. SQLite's `CREATE TABLE IF
     /// NOT EXISTS` does not add new columns, so make that upgrade explicit and
     /// idempotent before any session is read or written.
+    pub fn list_schedules(&self) -> Result<Vec<Schedule>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, start_time, end_time, mode, days_of_week, ends_on FROM schedules ORDER BY start_time, id",
+        )?;
+        let mut rows = stmt.query([])?;
+        let mut schedules = Vec::new();
+        while let Some(row) = rows.next()? {
+            match row_to_schedule(row) {
+                Ok(schedule) => schedules.push(schedule),
+                Err(StoreError::CorruptRow(message)) => {
+                    tracing::warn!(reason = %message, "schedule row corrupt, skipping it");
+                    continue;
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(schedules)
+    }
+
+    pub fn create_schedule(&self, schedule: &Schedule) -> Result<(), StoreError> {
+        let mode_str = codec::encode_mode(schedule.mode);
+        let days_json = serde_json::to_string(&schedule.days_of_week)?;
+        self.conn.execute(
+            "INSERT INTO schedules (id, start_time, end_time, mode, days_of_week, ends_on) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                schedule.id,
+                schedule.start_time,
+                schedule.end_time,
+                mode_str,
+                days_json,
+                schedule.ends_on,
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn update_schedule(&self, schedule: &Schedule) -> Result<(), StoreError> {
+        let mode_str = codec::encode_mode(schedule.mode);
+        let days_json = serde_json::to_string(&schedule.days_of_week)?;
+        let rows_affected = self.conn.execute(
+            "UPDATE schedules SET start_time = ?2, end_time = ?3, mode = ?4, days_of_week = ?5, ends_on = ?6 WHERE id = ?1",
+            params![
+                schedule.id,
+                schedule.start_time,
+                schedule.end_time,
+                mode_str,
+                days_json,
+                schedule.ends_on,
+            ],
+        )?;
+        if rows_affected == 0 {
+            return Err(StoreError::Message(format!("schedule not found: {}", schedule.id)));
+        }
+        Ok(())
+    }
+
+    pub fn delete_schedule(&self, id: &str) -> Result<(), StoreError> {
+        self.conn.execute("DELETE FROM schedules WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+
+    pub fn get_schedule(&self, id: &str) -> Result<Option<Schedule>, StoreError> {
+        let mut stmt = self.conn.prepare(
+            "SELECT id, start_time, end_time, mode, days_of_week, ends_on FROM schedules WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(row_to_schedule(row)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn add_sessions_scheduled_schedule_id_column(&self) -> Result<(), StoreError> {
+        let mut stmt = self.conn.prepare("PRAGMA table_info(sessions)")?;
+        let columns = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        if !columns.iter().any(|column| column == "scheduled_schedule_id") {
+            self.conn.execute_batch(
+                "ALTER TABLE sessions ADD COLUMN scheduled_schedule_id TEXT;",
+            )?;
+        }
+        Ok(())
+    }
+
     fn add_sessions_app_target_snapshot_column(&self) -> Result<(), StoreError> {
         let mut stmt = self.conn.prepare("PRAGMA table_info(sessions)")?;
         let columns = stmt
@@ -446,6 +535,26 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
         blocklist_snapshot: blocklist,
         whitelist_snapshot: whitelist,
         app_block_targets_snapshot: app_block_targets,
+        scheduled_schedule_id: row.get(10).ok(),
+    })
+}
+
+fn row_to_schedule(row: &rusqlite::Row<'_>) -> Result<Schedule, StoreError> {
+    let id: String = row.get(0)?;
+    let start_time: String = row.get(1)?;
+    let end_time: String = row.get(2)?;
+    let mode = codec::parse_mode(&row.get::<_, String>(3)?);
+    let days_json: String = row.get(4)?;
+    let days_of_week: Vec<u8> = serde_json::from_str(&days_json)
+        .map_err(|e| StoreError::CorruptRow(format!("days_of_week JSON error: {e}")))?;
+    let ends_on: Option<String> = row.get(5)?;
+    Ok(Schedule {
+        id,
+        start_time,
+        end_time,
+        mode,
+        days_of_week,
+        ends_on,
     })
 }
 
@@ -456,6 +565,62 @@ mod tests {
 
     fn memory_store() -> FocusStore {
         FocusStore::open(":memory:").expect("in-memory store opens")
+    }
+
+    #[test]
+    fn schedule_survives_round_trip() {
+        let store = memory_store();
+        let schedule = Schedule {
+            id: "sched-1".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: SessionMode::Lockdown,
+            days_of_week: vec![1, 2, 3, 4, 5],
+            ends_on: Some("2026-12-31".into()),
+        };
+        store.create_schedule(&schedule).expect("create_schedule");
+
+        let loaded = store.get_schedule("sched-1").expect("get_schedule").expect("exists");
+        assert_eq!(loaded, schedule);
+
+        let mut updated = schedule.clone();
+        updated.end_time = "18:00".into();
+        updated.mode = SessionMode::Blocklist;
+        store.update_schedule(&updated).expect("update_schedule");
+
+        let loaded_updated = store.get_schedule("sched-1").expect("get").expect("exists");
+        assert_eq!(loaded_updated.end_time, "18:00");
+        assert_eq!(loaded_updated.mode, SessionMode::Blocklist);
+
+        let list = store.list_schedules().expect("list_schedules");
+        assert_eq!(list.len(), 1);
+
+        store.delete_schedule("sched-1").expect("delete_schedule");
+        assert!(store.get_schedule("sched-1").expect("get").is_none());
+        assert_eq!(store.list_schedules().expect("list").len(), 0);
+    }
+
+    #[test]
+    fn corrupt_schedule_row_is_skipped_others_still_load() {
+        let store = memory_store();
+        let good = Schedule {
+            id: "good-1".into(),
+            start_time: "09:00".into(),
+            end_time: "10:00".into(),
+            mode: SessionMode::Blocklist,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        store.create_schedule(&good).expect("create good schedule");
+
+        store.conn.execute(
+            "INSERT INTO schedules (id, start_time, end_time, mode, days_of_week, ends_on) VALUES ('corrupt-1', '08:00', '09:00', 'blocklist', 'not-json', NULL)",
+            [],
+        ).expect("insert corrupt schedule row");
+
+        let list = store.list_schedules().expect("list_schedules succeeds");
+        assert_eq!(list.len(), 1);
+        assert_eq!(list[0].id, "good-1");
     }
 
     #[test]
