@@ -78,7 +78,7 @@ impl FocusStore {
         Ok(())
     }
 
-    fn raw_setting(&self, key: &str) -> Result<Option<String>, StoreError> {
+    pub fn get_setting(&self, key: &str) -> Result<Option<String>, StoreError> {
         let value = self.conn.query_row(
             "SELECT value FROM settings WHERE key = ?1",
             params![key],
@@ -92,7 +92,7 @@ impl FocusStore {
     }
 
     pub fn get_setting_bool(&self, key: &str) -> Result<bool, StoreError> {
-        match self.raw_setting(key)? {
+        match self.get_setting(key)? {
             Some(value) => Ok(value == "true"),
             // Declared default wins when no row exists; real DB errors above propagate.
             None => Ok(SETTING_DEFAULTS
@@ -105,7 +105,7 @@ impl FocusStore {
 
     /// Numeric settings have no declared defaults yet; missing rows read as 0.
     pub fn get_setting_u64(&self, key: &str) -> Result<u64, StoreError> {
-        match self.raw_setting(key)? {
+        match self.get_setting(key)? {
             Some(value) => Ok(value.parse().unwrap_or(0)),
             None => Ok(0),
         }

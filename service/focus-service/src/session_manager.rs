@@ -26,6 +26,12 @@ pub fn default_db_path() -> PathBuf {
 }
 
 impl SessionManager {
+    fn persist_suppressions(&self) {
+        if let Ok(json) = serde_json::to_string(&self.schedule_suppressed_until) {
+            let _ = self.store.set_setting("scheduled_suppressions", &json);
+        }
+    }
+
     pub fn new() -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let store = FocusStore::open(default_db_path())?;
         Self::with_enforcement(store, Box::new(AppEnforcer::default()))
@@ -39,18 +45,12 @@ impl SessionManager {
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let active_session = store.get_active_session()?;
         let mut schedule_suppressed_until = std::collections::HashMap::new();
-        if let Ok(history) = store.list_history(50) {
-            let now = Utc::now();
-            for session in history {
-                if session.status == SessionStatus::Stopped {
-                    if let Some(sched_id) = session.scheduled_schedule_id {
-                        let planned_end = session
-                            .started_at
-                            .checked_add_signed(Duration::seconds(session.planned_duration_sec as i64))
-                            .unwrap_or_else(Utc::now);
-                        if now < planned_end {
-                            schedule_suppressed_until.entry(sched_id).or_insert(planned_end);
-                        }
+        if let Ok(Some(json)) = store.get_setting("scheduled_suppressions") {
+            if let Ok(saved) = serde_json::from_str::<std::collections::HashMap<String, chrono::DateTime<Utc>>>(&json) {
+                let now = Utc::now();
+                for (id, until) in saved {
+                    if now < until {
+                        schedule_suppressed_until.insert(id, until);
                     }
                 }
             }
@@ -357,7 +357,11 @@ impl SessionManager {
         now_local: &chrono::DateTime<chrono::Local>,
         now_utc: &chrono::DateTime<Utc>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let prev_len = self.schedule_suppressed_until.len();
         self.schedule_suppressed_until.retain(|_, until| now_utc < until);
+        if self.schedule_suppressed_until.len() != prev_len {
+            self.persist_suppressions();
+        }
 
         let schedules = self.store.list_schedules()?;
 
@@ -373,6 +377,14 @@ impl SessionManager {
                     if active.scheduled_schedule_id.as_deref() == Some(&schedule.id) {
                         return Ok(());
                     }
+                }
+
+                let remaining_sec = (end_utc - *now_utc).num_seconds().max(1) as u64;
+                let blocklist = self.store.blocklist_domains()?;
+                let whitelist = self.store.whitelist_domains()?;
+                let app_targets = self.store.app_block_targets()?;
+
+                if let Some(active) = &self.active_session {
                     tracing::info!("Scheduled session {} taking over active session", schedule.id);
                     self.app_enforcer.clear()?;
                     let mut old = active.clone();
@@ -381,11 +393,6 @@ impl SessionManager {
                     self.store.save_session(&old)?;
                     self.active_session = None;
                 }
-
-                let remaining_sec = (end_utc - *now_utc).num_seconds().max(1) as u64;
-                let blocklist = self.store.blocklist_domains()?;
-                let whitelist = self.store.whitelist_domains()?;
-                let app_targets = self.store.app_block_targets()?;
 
                 let mut session = Session::new(
                     schedule.mode,
@@ -509,6 +516,7 @@ impl SessionManager {
 
     fn delete_schedule(&mut self, id: &str) -> IpcResponse {
         self.schedule_suppressed_until.remove(id);
+        self.persist_suppressions();
         if let Some(session) = &self.active_session {
             if session.scheduled_schedule_id.as_deref() == Some(id) {
                 let stop_resp = self.stop_session();
@@ -545,6 +553,7 @@ impl SessionManager {
                 .checked_add_signed(Duration::seconds(session.planned_duration_sec as i64))
                 .unwrap_or_else(Utc::now);
             self.schedule_suppressed_until.insert(sched_id.clone(), suppressed_until);
+            self.persist_suppressions();
         }
 
         session.status = SessionStatus::Stopped;
@@ -1331,7 +1340,7 @@ mod tests {
         let db = TempDb::new();
         let store = db.open();
         let (fake, _log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
-        let manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+        let mut manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
 
         let sched = Schedule {
             id: "sched-restart".into(),
@@ -1352,15 +1361,59 @@ mod tests {
             None,
         ).with_scheduled_schedule_id(Some("sched-restart".into()));
         session.started_at = Utc::now();
-        session.status = SessionStatus::Stopped;
-        session.ended_at = Some(Utc::now());
+        session.status = SessionStatus::Active;
         manager.store.save_session(&session).expect("save session");
+        manager.active_session = Some(session);
 
+        // Deliberate user stop records suppression
+        manager.handle_request(IpcRequest::StopSession);
+        assert!(manager.schedule_suppressed_until.contains_key("sched-restart"));
+
+        // Restart service: suppression restored
         let store2 = db.open();
         let (fake2, _log2) = FakeEnforcer::new(EnforcementMode::KernelEvents);
         let manager2 = SessionManager::with_enforcement(store2, Box::new(fake2)).expect("new manager");
 
         assert!(manager2.schedule_suppressed_until.contains_key("sched-restart"));
+    }
+
+    #[test]
+    fn failed_enforcement_does_not_suppress_schedule_on_restart() {
+        let db = TempDb::new();
+        let store = db.open();
+        let (fake, _log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+
+        let sched = Schedule {
+            id: "sched-failed".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: focus_core::SessionMode::Lockdown,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        manager.store.create_schedule(&sched).expect("save schedule");
+
+        // Simulate failed enforcement saving session as Stopped
+        let mut failed = Session::new(
+            focus_core::SessionMode::Lockdown,
+            7200,
+            vec![],
+            vec![],
+            vec![],
+            None,
+        ).with_scheduled_schedule_id(Some("sched-failed".into()));
+        failed.started_at = Utc::now();
+        failed.status = SessionStatus::Stopped;
+        failed.ended_at = Some(Utc::now());
+        manager.store.save_session(&failed).expect("save session");
+
+        // Restart service: schedule must NOT be suppressed because this was not a user stop!
+        let store2 = db.open();
+        let (fake2, _log2) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let manager2 = SessionManager::with_enforcement(store2, Box::new(fake2)).expect("new manager");
+
+        assert!(!manager2.schedule_suppressed_until.contains_key("sched-failed"));
     }
 
     #[test]
