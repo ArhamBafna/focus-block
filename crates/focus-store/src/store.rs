@@ -322,7 +322,7 @@ impl FocusStore {
         let mode_str = codec::encode_mode(session.mode);
         let status_str = codec::encode_status(session.status);
         self.conn.execute(
-            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT OR REPLACE INTO sessions (id, preset_id, mode, started_at, ended_at, planned_duration_sec, status, blocklist_snapshot, whitelist_snapshot, app_block_targets_snapshot, scheduled_schedule_id) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 session.id.to_string(),
                 session.preset_id.map(|id| id.to_string()),
@@ -334,6 +334,7 @@ impl FocusStore {
                 serde_json::to_string(&session.blocklist_snapshot)?,
                 serde_json::to_string(&session.whitelist_snapshot)?,
                 serde_json::to_string(&session.app_block_targets_snapshot)?,
+                session.scheduled_schedule_id,
             ],
         )?;
         Ok(())
@@ -447,7 +448,15 @@ impl FocusStore {
     }
 
     pub fn get_schedule(&self, id: &str) -> Result<Option<Schedule>, StoreError> {
-        Ok(self.list_schedules()?.into_iter().find(|s| s.id == id))
+        let mut stmt = self.conn.prepare(
+            "SELECT id, start_time, end_time, mode, days_of_week, ends_on FROM schedules WHERE id = ?1",
+        )?;
+        let mut rows = stmt.query(params![id])?;
+        if let Some(row) = rows.next()? {
+            Ok(Some(row_to_schedule(row)?))
+        } else {
+            Ok(None)
+        }
     }
 
     fn add_sessions_scheduled_schedule_id_column(&self) -> Result<(), StoreError> {

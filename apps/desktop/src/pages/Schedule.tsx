@@ -5,9 +5,8 @@ import { PencilSimple } from "@phosphor-icons/react/PencilSimple";
 import { Plus } from "@phosphor-icons/react/Plus";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { X } from "@phosphor-icons/react/X";
-import { ipc, Schedule as ScheduleType, SessionMode } from "../lib/ipc";
+import { ALL_DAYS, ipc, localDateKey, Schedule as ScheduleType, SessionMode } from "../lib/ipc";
 
-const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 const WEEKDAYS = [1, 2, 3, 4, 5];
 const WEEKENDS = [0, 6];
 const DAY_OPTIONS = [
@@ -35,12 +34,6 @@ function displayTime(value: string) {
   return date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 }
 
-function localDateKey(date = new Date()) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function sameDays(first: number[], second: number[]) {
   return first.length === second.length && first.every((day, index) => day === second[index]);
@@ -302,7 +295,7 @@ export default function Schedule() {
                   width: "30px",
                   height: "30px",
                   borderRadius: "8px",
-                  background: schedule.mode === "lockdown" ? "#fff1f0" : "var(--color-accent-50)",
+                  background: schedule.mode === "lockdown" ? "var(--color-pulse-soft)" : "var(--color-accent-50)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -365,3 +358,4 @@ const primaryButtonStyle = { width: "100%", display: "flex", alignItems: "center
 const quietButtonStyle = { display: "inline-flex", alignItems: "center", gap: "3px", border: "none", background: "transparent", color: "var(--color-neutral-500)", fontFamily: "var(--font-sans)", fontSize: "11px", fontWeight: 600, cursor: "pointer", padding: "3px" };
 const iconButtonStyle = { display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", border: "none", borderRadius: "7px", background: "transparent", color: "var(--color-neutral-400)", cursor: "pointer" };
 const errorStyle = { marginBottom: "10px", padding: "9px 10px", borderRadius: "8px", background: "var(--color-pulse-soft)", color: "var(--color-pulse)", fontSize: "12px", lineHeight: 1.35 };
+

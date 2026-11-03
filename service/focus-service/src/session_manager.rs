@@ -13,7 +13,7 @@ pub struct SessionManager {
     store: FocusStore,
     active_session: Option<Session>,
     app_enforcer: Box<dyn Enforcement>,
-    pub schedule_suppressed_until: Option<chrono::DateTime<Utc>>,
+    pub schedule_suppressed_until: std::collections::HashMap<String, chrono::DateTime<Utc>>,
 }
 
 /// The real, machine-wide state this service owns. Tests must never reach it:
@@ -38,11 +38,29 @@ impl SessionManager {
         app_enforcer: Box<dyn Enforcement>,
     ) -> Result<Self, Box<dyn std::error::Error + Send + Sync>> {
         let active_session = store.get_active_session()?;
+        let mut schedule_suppressed_until = std::collections::HashMap::new();
+        if let Ok(history) = store.list_history(50) {
+            let now = Utc::now();
+            for session in history {
+                if session.status == SessionStatus::Stopped {
+                    if let Some(sched_id) = session.scheduled_schedule_id {
+                        let planned_end = session
+                            .started_at
+                            .checked_add_signed(Duration::seconds(session.planned_duration_sec as i64))
+                            .unwrap_or_else(Utc::now);
+                        if now < planned_end {
+                            schedule_suppressed_until.entry(sched_id).or_insert(planned_end);
+                        }
+                    }
+                }
+            }
+        }
+
         let mut mgr = Self {
             store,
             active_session: None,
             app_enforcer,
-            schedule_suppressed_until: None,
+            schedule_suppressed_until,
         };
 
         match active_session {
@@ -301,24 +319,29 @@ impl SessionManager {
         now_local: &chrono::DateTime<chrono::Local>,
         now_utc: &chrono::DateTime<Utc>,
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        if let Some(suppressed_until) = self.schedule_suppressed_until {
-            if now_utc < &suppressed_until {
-                return Ok(());
-            } else {
-                self.schedule_suppressed_until = None;
-            }
-        }
+        self.schedule_suppressed_until.retain(|_, until| now_utc < until);
 
         let schedules = self.store.list_schedules()?;
 
         for schedule in &schedules {
+            if let Some(until) = self.schedule_suppressed_until.get(&schedule.id) {
+                if now_utc < until {
+                    continue;
+                }
+            }
+
             if let Some((_start_utc, end_utc)) = schedule_is_active_at(schedule, now_local) {
                 if let Some(active) = &self.active_session {
                     if active.scheduled_schedule_id.as_deref() == Some(&schedule.id) {
                         return Ok(());
                     }
                     tracing::info!("Scheduled session {} taking over active session", schedule.id);
-                    self.stop_session();
+                    self.app_enforcer.clear()?;
+                    let mut old = active.clone();
+                    old.status = SessionStatus::Stopped;
+                    old.ended_at = Some(Utc::now());
+                    let _ = self.store.save_session(&old);
+                    self.active_session = None;
                 }
 
                 let remaining_sec = (end_utc - *now_utc).num_seconds().max(1) as u64;
@@ -447,9 +470,11 @@ impl SessionManager {
     }
 
     fn delete_schedule(&mut self, id: &str) -> IpcResponse {
+        self.schedule_suppressed_until.remove(id);
         if let Some(session) = &self.active_session {
             if session.scheduled_schedule_id.as_deref() == Some(id) {
                 let stop_resp = self.stop_session();
+                self.schedule_suppressed_until.remove(id);
                 if let IpcResponse::Err { message } = stop_resp {
                     return IpcResponse::Err { message };
                 }
@@ -476,12 +501,12 @@ impl SessionManager {
             };
         }
 
-        if session.scheduled_schedule_id.is_some() {
+        if let Some(sched_id) = &session.scheduled_schedule_id {
             let suppressed_until = session
                 .started_at
                 .checked_add_signed(Duration::seconds(session.planned_duration_sec as i64))
                 .unwrap_or_else(Utc::now);
-            self.schedule_suppressed_until = Some(suppressed_until);
+            self.schedule_suppressed_until.insert(sched_id.clone(), suppressed_until);
         }
 
         session.status = SessionStatus::Stopped;
@@ -1094,7 +1119,7 @@ mod tests {
         let stop_resp = manager.handle_request(IpcRequest::StopSession);
         assert!(matches!(stop_resp, IpcResponse::Ok { .. }));
         assert!(manager.active_session.is_none());
-        assert!(manager.schedule_suppressed_until.is_some());
+        assert!(manager.schedule_suppressed_until.contains_key("sched-work"));
 
         // 3. Immediately evaluate again at 10:01:00 -> MUST NOT retrigger
         let next_local = chrono::Local.with_ymd_and_hms(2026, 8, 24, 10, 1, 0).single().unwrap();
@@ -1106,7 +1131,7 @@ mod tests {
         let evening_local = chrono::Local.with_ymd_and_hms(2026, 8, 24, 17, 1, 0).single().unwrap();
         let evening_utc = evening_local.with_timezone(&Utc);
         manager.evaluate_schedules_at(&evening_local, &evening_utc).expect("eval");
-        assert!(manager.schedule_suppressed_until.is_none());
+        assert!(manager.schedule_suppressed_until.is_empty());
         assert!(manager.active_session.is_none());
     }
 
@@ -1141,6 +1166,122 @@ mod tests {
         let active = manager.active_session.as_ref().unwrap();
         assert_eq!(active.scheduled_schedule_id.as_deref(), Some("sched-takeover"));
         assert_eq!(active.mode, focus_core::SessionMode::Lockdown);
+    }
+
+    #[test]
+    fn stopping_schedule_a_does_not_suppress_schedule_b() {
+        use chrono::TimeZone;
+        let db = TempDb::new();
+        let store = db.open();
+        let (fake, log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let mut manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+        reset(&log);
+
+        let sched_a = Schedule {
+            id: "sched-a".into(),
+            start_time: "09:00".into(),
+            end_time: "12:00".into(),
+            mode: focus_core::SessionMode::Blocklist,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        let sched_b = Schedule {
+            id: "sched-b".into(),
+            start_time: "10:00".into(),
+            end_time: "15:00".into(),
+            mode: focus_core::SessionMode::Lockdown,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        manager.store.create_schedule(&sched_a).expect("save sched_a");
+        manager.store.create_schedule(&sched_b).expect("save sched_b");
+
+        let t1_local = chrono::Local.with_ymd_and_hms(2026, 8, 24, 9, 30, 0).single().unwrap();
+        let t1_utc = t1_local.with_timezone(&Utc);
+        manager.evaluate_schedules_at(&t1_local, &t1_utc).expect("eval");
+        assert_eq!(manager.active_session.as_ref().unwrap().scheduled_schedule_id.as_deref(), Some("sched-a"));
+
+        manager.handle_request(IpcRequest::StopSession);
+        assert!(manager.active_session.is_none());
+        assert!(manager.schedule_suppressed_until.contains_key("sched-a"));
+        assert!(!manager.schedule_suppressed_until.contains_key("sched-b"));
+
+        let t2_local = chrono::Local.with_ymd_and_hms(2026, 8, 24, 10, 15, 0).single().unwrap();
+        let t2_utc = t2_local.with_timezone(&Utc);
+        manager.evaluate_schedules_at(&t2_local, &t2_utc).expect("eval");
+        assert!(manager.active_session.is_some());
+        assert_eq!(manager.active_session.as_ref().unwrap().scheduled_schedule_id.as_deref(), Some("sched-b"));
+    }
+
+    #[test]
+    fn service_restart_restores_suppression_for_stopped_scheduled_session() {
+        let db = TempDb::new();
+        let store = db.open();
+        let (fake, _log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+
+        let sched = Schedule {
+            id: "sched-restart".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: focus_core::SessionMode::Lockdown,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        manager.store.create_schedule(&sched).expect("save schedule");
+
+        let mut session = Session::new(
+            focus_core::SessionMode::Lockdown,
+            7200,
+            vec![],
+            vec![],
+            vec![],
+            None,
+        ).with_scheduled_schedule_id(Some("sched-restart".into()));
+        session.started_at = Utc::now();
+        session.status = SessionStatus::Stopped;
+        session.ended_at = Some(Utc::now());
+        manager.store.save_session(&session).expect("save session");
+
+        let store2 = db.open();
+        let (fake2, _log2) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let manager2 = SessionManager::with_enforcement(store2, Box::new(fake2)).expect("new manager");
+
+        assert!(manager2.schedule_suppressed_until.contains_key("sched-restart"));
+    }
+
+    #[test]
+    fn deleting_active_schedule_clears_suppression() {
+        let db = TempDb::new();
+        let store = db.open();
+        let (fake, _log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let mut manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+
+        let sched = Schedule {
+            id: "sched-del".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: focus_core::SessionMode::Lockdown,
+            days_of_week: vec![1],
+            ends_on: None,
+        };
+        manager.store.create_schedule(&sched).expect("save schedule");
+
+        let mut active = Session::new(
+            focus_core::SessionMode::Lockdown,
+            3600,
+            vec![],
+            vec![],
+            vec![],
+            None,
+        ).with_scheduled_schedule_id(Some("sched-del".into()));
+        active.status = SessionStatus::Active;
+        manager.store.save_session(&active).expect("save session");
+        manager.active_session = Some(active);
+
+        manager.handle_request(IpcRequest::DeleteSchedule { id: "sched-del".into() });
+        assert!(manager.active_session.is_none());
+        assert!(!manager.schedule_suppressed_until.contains_key("sched-del"));
     }
 
     fn runtime_block_on<F: std::future::Future>(future: F) -> F::Output {

@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import Schedule from "./Schedule";
 
 vi.mock("../lib/ipc", () => ({
+  ALL_DAYS: [0, 1, 2, 3, 4, 5, 6],
+  localDateKey: () => "2026-08-24",
   ipc: {
     listSchedules: vi.fn(),
     createSchedule: vi.fn(),

@@ -13,6 +13,7 @@ export interface Session {
   status: SessionStatus;
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
+  scheduled_schedule_id?: string | null;
 }
 
 export interface Preset {
@@ -90,7 +91,7 @@ const isTauri = typeof window !== "undefined" && (
   (window as any).__TAURI_IPC__ !== undefined
 );
 
-const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+export const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
 
 function parseTime(value: string): number | null {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
@@ -105,7 +106,7 @@ function isDateKey(value: string): boolean {
   return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
 }
 
-function localDateKey(date = new Date()): string {
+export function localDateKey(date = new Date()): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
@@ -420,6 +421,15 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
       let schedules = getStorage<Schedule[]>("schedules", []);
       schedules = schedules.filter(s => s.id !== data.id);
       setStorage("schedules", schedules);
+      const activeSession = getStorage<Session | null>("active_session", null);
+      if (activeSession && activeSession.scheduled_schedule_id === data.id) {
+        activeSession.status = "stopped";
+        activeSession.ended_at = new Date().toISOString();
+        setStorage("active_session", null);
+        const history = getStorage<Session[]>("history", []);
+        history.unshift(activeSession);
+        setStorage("history", history);
+      }
       return null as unknown as T;
     }
     case "ClearLastBlockedApp": {
@@ -540,7 +550,6 @@ export const ipc = {
     const res = await request<ScheduleList>("ListSchedules").then(unwrap);
     return res?.schedules ?? [];
   },
-  getSchedules: async (): Promise<Schedule[]> => ipc.listSchedules(),
   createSchedule: async (
     startTime: string,
     endTime: string,
