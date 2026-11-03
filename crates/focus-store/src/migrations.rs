@@ -47,6 +47,16 @@ CREATE TABLE IF NOT EXISTS settings (
     value TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS schedules (
+    id TEXT PRIMARY KEY,
+    start_time TEXT NOT NULL,
+    end_time TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    days_of_week TEXT NOT NULL DEFAULT '[]',
+    ends_on TEXT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 ";
 
 pub const SEED_PRESETS: &[(&str, &str, u32, &str)] = &[

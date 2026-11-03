@@ -41,6 +41,20 @@ pub struct Session {
     pub whitelist_snapshot: Vec<String>,
     #[serde(default)]
     pub app_block_targets_snapshot: Vec<AppBlockTarget>,
+    #[serde(default)]
+    pub scheduled_schedule_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Schedule {
+    pub id: String,
+    pub start_time: String,
+    pub end_time: String,
+    pub mode: SessionMode,
+    #[serde(default)]
+    pub days_of_week: Vec<u8>,
+    #[serde(default)]
+    pub ends_on: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -80,7 +94,13 @@ impl Session {
             blocklist_snapshot: blocklist,
             whitelist_snapshot: whitelist,
             app_block_targets_snapshot: app_block_targets,
+            scheduled_schedule_id: None,
         }
+    }
+
+    pub fn with_scheduled_schedule_id(mut self, schedule_id: Option<String>) -> Self {
+        self.scheduled_schedule_id = schedule_id;
+        self
     }
 
     pub fn remaining_sec(&self) -> Option<u64> {
