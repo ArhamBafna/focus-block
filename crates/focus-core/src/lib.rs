@@ -7,5 +7,5 @@ pub use session::{ActiveSessionView, Preset, Schedule, Session, SessionMode, Ses
 pub use protocol::{
     AppBlockEntry, AppBlockTarget, AppBlockTargetList, AppSettings, BlockedAppEvent,
     BlockingPolicySnapshot, DiscoveredApp, DomainEntry, EnforcementMode, IpcRequest, IpcResponse,
-    ResponseData, ServiceHealth, ServiceStatus,
+    ResponseData, ScheduleList, ServiceHealth, ServiceStatus,
 };

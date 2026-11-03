@@ -3,7 +3,7 @@ use crate::enforcement::Enforcement;
 use chrono::{Duration, Utc};
 use focus_core::{
     ActiveSessionView, AppBlockTargetList, AppSettings, BlockingPolicySnapshot, IpcRequest,
-    IpcResponse, ResponseData, ServiceHealth, ServiceStatus, Session, SessionStatus,
+    IpcResponse, ResponseData, Schedule, ScheduleList, ServiceHealth, ServiceStatus, Session, SessionStatus,
 };
 use focus_store::FocusStore;
 use std::path::PathBuf;
@@ -254,6 +254,28 @@ impl SessionManager {
                     data: ResponseData::Unit(()),
                 }
             }
+            IpcRequest::ListSchedules => self
+                .store
+                .list_schedules()
+                .map(|schedules| IpcResponse::Ok {
+                    data: ResponseData::Schedules(ScheduleList { schedules }),
+                })
+                .unwrap_or_else(store_error),
+            IpcRequest::CreateSchedule { schedule } => self
+                .store
+                .create_schedule(&schedule)
+                .map(|()| IpcResponse::Ok {
+                    data: ResponseData::Unit(()),
+                })
+                .unwrap_or_else(store_error),
+            IpcRequest::UpdateSchedule { schedule } => self
+                .store
+                .update_schedule(&schedule)
+                .map(|()| IpcResponse::Ok {
+                    data: ResponseData::Unit(()),
+                })
+                .unwrap_or_else(store_error),
+            IpcRequest::DeleteSchedule { id } => self.delete_schedule(&id),
         }
     }
 
@@ -353,6 +375,23 @@ impl SessionManager {
         self.active_session = Some(session);
         IpcResponse::Ok {
             data: ResponseData::Unit(()),
+        }
+    }
+
+    fn delete_schedule(&mut self, id: &str) -> IpcResponse {
+        if let Some(session) = &self.active_session {
+            if session.scheduled_schedule_id.as_deref() == Some(id) {
+                let stop_resp = self.stop_session();
+                if let IpcResponse::Err { message } = stop_resp {
+                    return IpcResponse::Err { message };
+                }
+            }
+        }
+        match self.store.delete_schedule(id) {
+            Ok(()) => IpcResponse::Ok {
+                data: ResponseData::Unit(()),
+            },
+            Err(e) => store_error(e),
         }
     }
 
@@ -824,6 +863,71 @@ mod tests {
             .active_session
             .expect("session is active")
             .session
+    }
+
+    #[test]
+    fn schedule_ipc_crud_and_active_deletion_stops_session() {
+        let db = TempDb::new();
+        let store = db.open();
+        let (fake, log) = FakeEnforcer::new(EnforcementMode::KernelEvents);
+        let mut manager = SessionManager::with_enforcement(store, Box::new(fake)).expect("manager");
+        reset(&log);
+
+        let sched = Schedule {
+            id: "sched-123".into(),
+            start_time: "09:00".into(),
+            end_time: "17:00".into(),
+            mode: focus_core::SessionMode::Lockdown,
+            days_of_week: vec![1, 2, 3],
+            ends_on: None,
+        };
+
+        // Create
+        let resp = manager.handle_request(IpcRequest::CreateSchedule { schedule: sched.clone() });
+        assert_eq!(resp, IpcResponse::Ok { data: ResponseData::Unit(()) });
+
+        // List
+        let resp = manager.handle_request(IpcRequest::ListSchedules);
+        match resp {
+            IpcResponse::Ok { data: ResponseData::Schedules(list) } => {
+                assert_eq!(list.schedules.len(), 1);
+                assert_eq!(list.schedules[0].id, "sched-123");
+            }
+            other => panic!("unexpected list response: {other:?}"),
+        }
+
+        // Update
+        let mut updated = sched.clone();
+        updated.end_time = "18:00".into();
+        let resp = manager.handle_request(IpcRequest::UpdateSchedule { schedule: updated });
+        assert_eq!(resp, IpcResponse::Ok { data: ResponseData::Unit(()) });
+
+        // Seed an active session started by this schedule
+        let mut active = Session::new(
+            focus_core::SessionMode::Lockdown,
+            3600,
+            vec![],
+            vec![],
+            vec![],
+            None,
+        ).with_scheduled_schedule_id(Some("sched-123".into()));
+        active.status = SessionStatus::Active;
+        manager.store.save_session(&active).expect("save active session");
+        manager.active_session = Some(active);
+
+        // Deleting active schedule stops the session immediately
+        let resp = manager.handle_request(IpcRequest::DeleteSchedule { id: "sched-123".into() });
+        assert_eq!(resp, IpcResponse::Ok { data: ResponseData::Unit(()) });
+        assert!(manager.active_session.is_none());
+
+        // List is now empty
+        let resp = manager.handle_request(IpcRequest::ListSchedules);
+        match resp {
+            IpcResponse::Ok { data: ResponseData::Schedules(list) } => {
+                assert_eq!(list.schedules.len(), 0);
+            }
+            other => panic!("unexpected list response: {other:?}"),
+        }
     }
 
     fn runtime_block_on<F: std::future::Future>(future: F) -> F::Output {
