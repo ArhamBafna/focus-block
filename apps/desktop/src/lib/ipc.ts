@@ -71,10 +71,97 @@ export interface AppSettings {
   os_allowlist_enabled: boolean;
 }
 
+export interface Schedule {
+  id: string;
+  start_time: string;
+  end_time: string;
+  mode: SessionMode;
+  days_of_week: number[];
+  ends_on: string | null;
+}
+
+export interface ScheduleList {
+  schedules: Schedule[];
+}
+
+
 const isTauri = typeof window !== "undefined" && (
   (window as any).__TAURI_INTERNALS__ !== undefined || 
   (window as any).__TAURI_IPC__ !== undefined
 );
+
+const ALL_DAYS = [0, 1, 2, 3, 4, 5, 6];
+
+function parseTime(value: string): number | null {
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
+  const [hours, minutes] = value.split(":").map(Number);
+  return hours * 60 + minutes;
+}
+
+function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+}
+
+function localDateKey(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeDays(days: number[]): number[] {
+  return [...new Set(days.filter((day) => Number.isInteger(day) && day >= 0 && day <= 6))].sort((a, b) => a - b);
+}
+
+function dateRangesOverlap(firstEndsOn: string | null, secondEndsOn: string | null): boolean {
+  const today = localDateKey();
+  return (firstEndsOn === null || firstEndsOn >= today) && (secondEndsOn === null || secondEndsOn >= today);
+}
+
+export function validateSchedule(
+  startTime: string,
+  endTime: string,
+  daysOfWeek: number[],
+  endsOn: string | null,
+  existingSchedules: Schedule[],
+  excludedId?: string
+): { days: number[]; endsOn: string | null } {
+  const start = parseTime(startTime);
+  const end = parseTime(endTime);
+  if (start === null || end === null) throw new Error("Enter valid start and end times.");
+  if (start >= end) throw new Error("End time must be after start time.");
+
+  const days = normalizeDays(daysOfWeek);
+  if (days.length === 0) throw new Error("Choose at least one day.");
+
+  if (endsOn !== null) {
+    if (!isDateKey(endsOn)) throw new Error("Choose a valid end date.");
+    if (endsOn < localDateKey()) throw new Error("End date cannot be in the past.");
+  }
+
+  const overlap = existingSchedules.find((schedule) => {
+    if (schedule.id === excludedId) return false;
+    const existingStart = parseTime(schedule.start_time);
+    const existingEnd = parseTime(schedule.end_time);
+    return (
+      existingStart !== null &&
+      existingEnd !== null &&
+      start < existingEnd &&
+      end > existingStart &&
+      schedule.days_of_week.some((day) => days.includes(day)) &&
+      dateRangesOverlap(schedule.ends_on, endsOn)
+    );
+  });
+
+  if (overlap) {
+    throw new Error(`Schedule overlaps with ${overlap.start_time}–${overlap.end_time} on one or more selected days.`);
+  }
+
+  return { days, endsOn };
+}
 
 export function normalizeDomain(input: string): string | null {
   let str = input.trim().toLowerCase();
@@ -310,6 +397,31 @@ function handleMockRequest<T>(cmd: string, data?: any): T {
       return null as unknown as T;
     }
 
+    case "ListSchedules":
+      return { schedules: getStorage<Schedule[]>("schedules", []) } as unknown as T;
+
+    case "CreateSchedule": {
+      const schedules = getStorage<Schedule[]>("schedules", []);
+      const schedule = data.schedule as Schedule;
+      schedules.push(schedule);
+      setStorage("schedules", schedules);
+      return null as unknown as T;
+    }
+
+    case "UpdateSchedule": {
+      let schedules = getStorage<Schedule[]>("schedules", []);
+      const updated = data.schedule as Schedule;
+      schedules = schedules.map(s => s.id === updated.id ? updated : s);
+      setStorage("schedules", schedules);
+      return null as unknown as T;
+    }
+
+    case "DeleteSchedule": {
+      let schedules = getStorage<Schedule[]>("schedules", []);
+      schedules = schedules.filter(s => s.id !== data.id);
+      setStorage("schedules", schedules);
+      return null as unknown as T;
+    }
     case "ClearLastBlockedApp": {
       setStorage("last_blocked_app", null);
       return null as unknown as T;
@@ -424,6 +536,74 @@ export const ipc = {
   updateSettings: (os_allowlist_enabled: boolean) => request<null>("UpdateSettings", { os_allowlist_enabled }).then(unwrap),
 
   clearLastBlockedApp: () => request<null>("ClearLastBlockedApp").then(unwrap),
+  listSchedules: async (): Promise<Schedule[]> => {
+    const res = await request<ScheduleList>("ListSchedules").then(unwrap);
+    return res?.schedules ?? [];
+  },
+  getSchedules: async (): Promise<Schedule[]> => ipc.listSchedules(),
+  createSchedule: async (
+    startTime: string,
+    endTime: string,
+    mode: SessionMode,
+    daysOfWeek: number[] = ALL_DAYS,
+    endsOn: string | null = null
+  ): Promise<Schedule> => {
+    const schedules = await ipc.listSchedules();
+    const { days, endsOn: cleanEndsOn } = validateSchedule(
+      startTime,
+      endTime,
+      daysOfWeek,
+      endsOn,
+      schedules
+    );
+
+    const schedule: Schedule = {
+      id: `schedule-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      start_time: startTime,
+      end_time: endTime,
+      mode,
+      days_of_week: days,
+      ends_on: cleanEndsOn,
+    };
+
+    await request<null>("CreateSchedule", { schedule }).then(unwrap);
+    return schedule;
+  },
+  updateSchedule: async (
+    id: string,
+    startTime: string,
+    endTime: string,
+    mode: SessionMode,
+    daysOfWeek: number[],
+    endsOn: string | null
+  ): Promise<Schedule> => {
+    const schedules = await ipc.listSchedules();
+    if (!schedules.some((s) => s.id === id)) {
+      throw new Error("Schedule no longer exists.");
+    }
+    const { days, endsOn: cleanEndsOn } = validateSchedule(
+      startTime,
+      endTime,
+      daysOfWeek,
+      endsOn,
+      schedules,
+      id
+    );
+
+    const schedule: Schedule = {
+      id,
+      start_time: startTime,
+      end_time: endTime,
+      mode,
+      days_of_week: days,
+      ends_on: cleanEndsOn,
+    };
+
+    await request<null>("UpdateSchedule", { schedule }).then(unwrap);
+    return schedule;
+  },
+  deleteSchedule: (id: string) => request<null>("DeleteSchedule", { id }).then(unwrap),
+
 };
 
 export function setMockBlockedApp(event: BlockedAppEvent | null): void {
