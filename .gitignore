@@ -44,6 +44,9 @@ yarn-error.log*
 coverage/
 *.lcov
 .nyc_output/
+test-results/
+playwright-report/
+.tmp-*
 
 # System & Cache
 .cache/

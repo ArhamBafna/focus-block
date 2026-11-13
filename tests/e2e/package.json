@@ -1,0 +1,15 @@
+{
+  "name": "focus-block-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "build:ext": "npm run build --prefix ../../apps/extension"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.50.0",
+    "typescript": "^5.8.2"
+  }
+}

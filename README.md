@@ -54,10 +54,12 @@ Runs tests. Color-coded status (exits `0` = ok, `1` = fail):
 
 | Argument | Shorthand | What does it test? |
 |---|---|---|
-| *(none)* | *(default)* | Runs all 3 tests in order: Rust backend, Chrome extension, desktop app UI |
+| *(none)* | *(default)* | Runs all 4 test suites: Rust backend, Chrome extension unit, desktop app UI, Chrome extension E2E |
 | `-RustOnly` | `-r` / `--rust` | Only Rust workspace unit tests (`cargo test --workspace`) |
 | `-ExtensionOnly` | `-e` / `--extension` | Only Chrome ext unit tests (`apps/extension npm test`) |
 | `-DesktopOnly` | `-d` / `--desktop` | Only desktop app (React) UI tests (`apps/desktop npm test`) |
+| `-E2EOnly` | `-e2e` / `--e2e` | Only Chrome extension Playwright E2E suite (`tests/e2e`) |
+| `-Headed` | `-v` / `--headed` | Runs Playwright E2E tests in a visible, live Chrome browser window |
 
 ---
 

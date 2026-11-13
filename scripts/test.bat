@@ -13,7 +13,14 @@ $RepoRoot = (Get-Item -Path "$ScriptDir\..").FullName
 $RustOnly = $cliArgs -match "(?i)(^|\s)(-r|--rust|-RustOnly)($|\s)"
 $ExtensionOnly = $cliArgs -match "(?i)(^|\s)(-e|--extension|-ExtensionOnly)($|\s)"
 $DesktopOnly = $cliArgs -match "(?i)(^|\s)(-d|--desktop|-DesktopOnly)($|\s)"
-$RunAll = -not ($RustOnly -or $ExtensionOnly -or $DesktopOnly)
+$E2EOnly = $cliArgs -match "(?i)(^|\s)(-e2e|--e2e|-E2EOnly)($|\s)"
+$Headed = $cliArgs -match "(?i)(^|\s)(-headed|--headed|-Headed|-v)($|\s)"
+if ($Headed) {
+    $env:HEADED = "1"
+} else {
+    $env:HEADED = ""
+}
+$RunAll = -not ($RustOnly -or $ExtensionOnly -or $DesktopOnly -or $E2EOnly)
 
 Write-Host "==================================================" -ForegroundColor Cyan
 Write-Host "       FocusBlock - Complete Test Runner          " -ForegroundColor Cyan
@@ -73,6 +80,16 @@ if ($RunAll -or $ExtensionOnly) {
 if ($RunAll -or $DesktopOnly) {
     Invoke-TestSuite -Title "Desktop UI (apps/desktop npm test)" -Directory "$RepoRoot\apps\desktop" -CommandBlock {
         npm test
+    }
+}
+
+# 4. Chrome Extension E2E Playwright suite
+if ($RunAll -or $E2EOnly) {
+    Invoke-TestSuite -Title "Chrome Extension E2E (Playwright in tests/e2e)" -Directory "$RepoRoot\tests\e2e" -CommandBlock {
+        Write-Host "Compiling latest extension build..." -ForegroundColor Cyan
+        npm run build --prefix "$RepoRoot\apps\extension"
+        if ($LASTEXITCODE -ne 0) { throw "Extension build failed before E2E tests" }
+        npx playwright test
     }
 }
 

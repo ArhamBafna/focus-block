@@ -603,7 +603,16 @@ export async function expireSession(): Promise<void> {
 
   // A manual session started after this expiry was scheduled must survive.
   // Stale alarms racing a fresh start are no-ops; real expiry still fires.
-  if (!session.scheduled_schedule_id) {
+  if (session.scheduled_schedule_id) {
+    const schedules = (await storageGet("schedules")) ?? [];
+    const currentSchedule = getCurrentSchedule(schedules);
+    if (currentSchedule && currentSchedule.id === session.scheduled_schedule_id) {
+      const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
+      if (end && end.getTime() > Date.now()) {
+        return; // Schedule window is still active; do not expire
+      }
+    }
+  } else {
     const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
     if (elapsed < session.planned_duration_sec) return;
   }

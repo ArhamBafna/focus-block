@@ -25,10 +25,12 @@ All runnable scripts live in `scripts/`:
   - `-ExtensionOnly` (or `-e`): Builds Chrome extension only
   - `-ServiceOnly` (or `-s`): Starts background service only
 - **Run Tests**: `.\scripts\test.bat`
-  - Default: Runs all 3 test suites (Rust backend, Extension, Desktop UI)
+  - Default: Runs all 4 test suites (Rust backend, Extension unit, Desktop UI, Extension E2E)
   - `-RustOnly` (or `-r`): Runs Rust backend tests only (`cargo test --workspace`)
-  - `-ExtensionOnly` (or `-e`): Runs Chrome extension tests only (`apps/extension npm test`)
+  - `-ExtensionOnly` (or `-e`): Runs Chrome extension unit tests only (`apps/extension npm test`)
   - `-DesktopOnly` (or `-d`): Runs Desktop UI tests only (`apps/desktop npm test`)
+  - `-E2EOnly` (or `-e2e`): Runs Chrome Extension Playwright E2E suite (`tests/e2e`)
+  - `-Headed` (or `-v`): Runs E2E Playwright tests visibly in a live browser window
 
 ## Agent skills
 
@@ -42,8 +44,10 @@ See `docs/agents/domain.md`.
 
 ## Test Map
 
-- **Unified Runner**: `.\scripts\test.bat` (runs all 3 suites below in sequence)
-- Extension: `cd apps/extension && npm test`
+- **Unified Runner**: `.\scripts\test.bat` (runs all 4 suites below in sequence)
+- Extension E2E: `cd tests/e2e && npx playwright test`
+  - Specs: `tests/e2e/specs/` (`01-focus-blocking`, `02-lockdown-whitelist`, `03-schedule`, `04-presets-and-challenges`, `05-desktop-sync`)
+- Extension Unit: `cd apps/extension && npm test`
   - Background: `apps/extension/background/__tests__/` (`rules`, `schedule`, `scheduled-stop-suppression`, `session-brain`)
   - Popup: `apps/extension/popup/lib/__tests__/` (`ipc`, `schedule-crud`, `storage`)
 - Desktop UI: `cd apps/desktop && npm test`
