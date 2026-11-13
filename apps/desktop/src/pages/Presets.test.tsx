@@ -58,7 +58,16 @@ function renderPresets() {
 
 describe("Presets page", () => {
   it("renders saved presets with mode, duration, and list size", async () => {
-    listPresets.mockResolvedValue([preset(), preset({ name: "Lockdown", mode: "lockdown", duration_minutes: 60, blocklist: [] })]);
+    listPresets.mockResolvedValue([
+      preset(),
+      preset({
+        id: "22222222-2222-2222-2222-222222222222",
+        name: "Lockdown",
+        mode: "lockdown",
+        duration_minutes: 60,
+        blocklist: [],
+      }),
+    ]);
 
     await act(async () => {
       renderPresets();

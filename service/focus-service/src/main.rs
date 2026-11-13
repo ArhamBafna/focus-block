@@ -16,8 +16,13 @@ fn main() {
     tracing_subscriber::fmt()
         .with_env_filter(
             EnvFilter::from_default_env()
+                // Without these directives the env filter's implicit default is
+                // ERROR, which would hide the store's corrupt-row warnings —
+                // the only signal that saved data is being silently dropped.
                 .add_directive("focus_service=info".parse().unwrap())
-                .add_directive("focus_ipc=info".parse().unwrap()),
+                .add_directive("focus_ipc=info".parse().unwrap())
+                .add_directive("focus_store=info".parse().unwrap())
+                .add_directive("focus_core=info".parse().unwrap()),
         )
         .init();
 

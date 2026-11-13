@@ -1,17 +1,17 @@
-# Graph Report - focus-block  (2026-10-27)
+# Graph Report - focus-block  (2026-11-12)
 
 ## Corpus Check
-- 114 files · ~72,770 words
+- 118 files · ~79,760 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 16 file(s) not represented in the graph (top: (none) 5, .css 3, .woff2 2)
 
 ## Summary
-- 1319 nodes · 2197 edges · 156 communities (63 shown, 93 thin omitted)
-- Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 55 edges (avg confidence: 0.86)
+- 1391 nodes · 2402 edges · 151 communities (70 shown, 81 thin omitted)
+- Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 57 edges (avg confidence: 0.86)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `74c0e93a`
+- Built from commit: `fd0e2901`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -26,7 +26,7 @@
 - Freedom.to
 - test_support.rs
 - manifest.json
-- String
+- src-tauri/src/lib.rs
 - Runbook: how to run FocusBlock (service + desktop)
 - ref_vitest
 - Schedule.tsx
@@ -37,19 +37,19 @@
 - compilerOptions
 - session.rs
 - src/pages/History.tsx
-- AppBlockTarget
-- Option
-- Path
-- PathBuf
-- Result
+- applyBlockingState
+- client.rs
+- Presets.tsx
+- scheduled-stop-suppression.test.ts
+- focus_core
 - Enforcement (Feature Category)
 - popup/pages/Home.tsx
-- String
+- handle_connection
 - default.json
 - compilerOptions
 - service-worker.ts
 - devDependencies
-- Vec
+- ipc.parity.test.ts
 - popup/pages/History.tsx
 - Local Data Storage [DONE]
 - Mindful Unlock Flow (Delay + Breathing Task + Ask Why)
@@ -66,18 +66,18 @@
 - Vite Logo SVG (favicon)
 - FakeEnforcer
 - GuardedRun
-- AppEnforcer
+- BlockedAppEvent
 - Focus-block desktop app icon (128x128): two interlocking ring/arc shapes in amber-orange and cyan on a black square background
 - Focus Block app branding (interlocking orange and cyan circular mark on black)
 - blocked.js
-- IpcResponse
-- SessionManager
+- server.rs
+- Box
 - ipc
-- Enforcement
-- Arc
-- Default
-- AppBlockTargetList
-- AppSettings
+- PipeSecurity
+- ipc.bridge.test.ts
+- desktop/vitest.config.ts
+- focus_test_dummy.rs
+- AppBlockTarget
 - Focus Block desktop app built with Tauri
 - React framework logo (SVG asset)
 - Focus Block 32x32 app icon (cyan and amber circular mark)
@@ -95,17 +95,17 @@
 - Focus/target symbol design (white concentric circles on purple rounded square)
 - BTreeSet
 - collections
-- AppBlockTarget
-- DomainEntry
-- Preset
+- DiscoveredApp
+- Drop
+- Enforcement
 - Motion Rules (motion/react)
 - Student Market Segment (budget-sensitive students)
 - Core Blocking (Feature Category)
 - Focus Streaks (Consecutive Focus Days)
 - focus-service/src/main.rs
 - AGENTS.md Project Instructions
-- ServiceHealth
-- Duration
+- EnforcementMode
+- Error
 - deriveappcontainersidfromappcontainername
 - ffi
 - Focus-block app icon 256x256 (@2x retina variant): two interlocking arcs in amber/orange and cyan forming a stylized '8'/link motif on black background, representing focus blocking/connection between desktop app and browser
@@ -122,76 +122,71 @@
 - storage.ts
 - focus-store/src/codec.rs
 - Home.test.tsx
-- AppBlockTarget
+- Instant
 - Issue tracker: GitHub
 - Domain Docs
 - DesktopFlow.e2e.test.tsx
-- Instant
+- IpcRequest
 - app_enforcement.rs
-- Box
-- Error
+- IpcResponse
+- Mutex
 - scripts
-- ServiceHealth
+- Option
 - desktop/package.json
 - src/App.tsx
-- Sync
+- Output
 - real_enforcement.rs
 - popup/App.tsx
 - T
 - windowsfilteringplatform
-- Mutex
-- Option
-- Chrome Web Store Submission — Focus Blocker
 - Path
+- PathBuf
+- Chrome Web Store Submission — Focus Blocker
+- Preset
 - Focus Blocker — Privacy Policy
 - src/pages/Blocklists.tsx
 - package.js
-- PathBuf
+- ref_node_fs
+- ref_node_test
+- ref_typescript
 - Result
 - Self
-- String
-- Vec
-- ipc-response.test.mjs
+- ref_node_assert
 - App blocking test harness
 - ChildGuard
 - native_host.rs
-- TempDb
-- Arc
 - Default
 - FocusStore
-- Mutex
-- Option
-- Output
-- Path
-- PathBuf
-- Result
-- Self
+- ServiceStatus
 - String
+- FocusStore
 - Vec
+- .begin
+- .require_prerequisites
 
 ## God Nodes (most connected - your core abstractions)
-1. `FocusStore` - 38 edges
-2. `StoreError` - 37 edges
+1. `FocusStore` - 50 edges
+2. `SessionManager` - 28 edges
 3. `Freedom.to` - 25 edges
 4. `AppEnforcer` - 24 edges
-5. `SessionManager` - 21 edges
+5. `FakeEnforcer` - 20 edges
 6. `applyBlockingState()` - 20 edges
-7. `FakeEnforcer` - 20 edges
+7. `IpcRequest` - 18 edges
 8. `compilerOptions` - 18 edges
-9. `Session` - 16 edges
-10. `compilerOptions` - 16 edges
+9. `Session` - 17 edges
+10. `IpcResponse` - 16 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `What `cargo test` does by default` --references--> `FakeEnforcer`  [EXTRACTED]
-  docs/app-blocking-tests.md → service/focus-service/src/test_support.rs
 - `Prove the check can fail` --references--> `inspect_and_terminate_process()`  [EXTRACTED]
   docs/app-blocking-tests.md → service/focus-service/src/app_enforcement.rs
+- `What `cargo test` does by default` --references--> `FakeEnforcer`  [EXTRACTED]
+  docs/app-blocking-tests.md → service/focus-service/src/test_support.rs
 - `Brand Personality: Firm, Focused, De-stressing` --semantically_similar_to--> `Firm, Calm UX Principle`  [INFERRED] [semantically similar]
   PRODUCT.md → README.md
+- `NativeRequest` --references--> `IpcRequest`  [EXTRACTED]
+  service/focus-service/src/native_host.rs → crates/focus-core/src/protocol.rs
 - `Desktop App Entry HTML` --references--> `FocusBlock Application`  [INFERRED]
   apps/desktop/index.html → README.md
-- `Freedom.to Functional Reference` --conceptually_related_to--> `FocusBlock Application`  [INFERRED]
-  AGENTS.md → README.md
 
 ## Import Cycles
 - None detected.
@@ -200,15 +195,15 @@
 - **Network-Level Blocking Pipeline** — readme_md_smart_blocking, apps_extension_build_md_dnr_blocking, apps_extension_build_md_data_flow, apps_extension_blocked_index_blocked_site_blocked_page [INFERRED]
 - **WisprFlow-Derived Design Language** — agents_md_wisprflow_ui_directive, design_md_color_tokens, design_md_typography_figtree, apps_extension_blocked_index_blocked_site_blocked_page, apps_extension_popup_index_popup_entry_html [INFERRED]
 
-## Communities (156 total, 93 thin omitted)
+## Communities (151 total, 81 thin omitted)
 
 ### Community 0 - "FocusStore"
 Cohesion: 0.08
-Nodes (35): AppBlockEntry, AsRef, Connection, Error, String, StoreError, SCHEMA, SEED_PRESETS (+27 more)
+Nodes (39): AppBlockEntry, AsRef, Connection, SCHEMA, SEED_PRESETS, corrupt_history_row_is_skipped_others_still_load(), corrupt_preset_row_is_skipped_others_still_load(), corrupt_schedule_row_is_skipped_others_still_load() (+31 more)
 
 ### Community 1 - "src/lib/ipc.ts"
-Cohesion: 0.13
-Nodes (16): ActiveSessionView, AppBlockTargetList, BridgeEnvelope, BridgeFailure, BridgeFailureKind, errorMessage(), handleMockRequest(), normalizeDomain() (+8 more)
+Cohesion: 0.12
+Nodes (20): ActiveSessionView, ALL_DAYS, AppBlockTargetList, BridgeEnvelope, BridgeFailure, BridgeFailureKind, dateRangesOverlap(), errorMessage() (+12 more)
 
 ### Community 2 - "dependencies"
 Cohesion: 0.18
@@ -223,12 +218,12 @@ Cohesion: 0.04
 Nodes (44): allowScripts, canvas@3.2.3, dependencies, @phosphor-icons/react, react, react-dom, react-router-dom, tailwindcss (+36 more)
 
 ### Community 5 - "service.rs"
-Cohesion: 0.14
-Nodes (19): focus_ipc, Receiver, configure_service_recovery(), Box, Duration, Error, Option, Result (+11 more)
+Cohesion: 0.13
+Nodes (20): Arc, focus_ipc, Receiver, configure_service_recovery(), Box, Duration, Error, Option (+12 more)
 
 ### Community 6 - "protocol.rs"
-Cohesion: 0.10
-Nodes (29): ActiveSessionView, chrono, crate, AppBlockEntry, AppBlockTarget, AppBlockTargetList, AppSettings, BlockedAppEvent (+21 more)
+Cohesion: 0.06
+Nodes (43): ActiveSessionView, AppBlockTargetList, AppSettings, chrono, crate, AppBlockEntry, AppBlockTarget, AppBlockTargetList (+35 more)
 
 ### Community 7 - "Freedom.to"
 Cohesion: 0.07
@@ -236,23 +231,23 @@ Nodes (32): Feature Gap: Accountability Partnerships (buddy system), Opportunity
 
 ### Community 8 - "test_support.rs"
 Cohesion: 0.12
-Nodes (31): ipc_request(), FnMut, fs, IpcRequest, IpcResponse, Output, process, tier_b_service_lifecycle_start_stop_and_restart() (+23 more)
+Nodes (29): FnMut, process, tier_b_service_lifecycle_start_stop_and_restart(), default_db_path(), PathBuf, ACK_ENV, ipc(), is_elevated() (+21 more)
 
 ### Community 9 - "manifest.json"
 Cohesion: 0.07
 Nodes (26): action, default_icon, default_popup, default_title, author, background, service_worker, type (+18 more)
 
-### Community 10 - "String"
-Cohesion: 0.19
-Nodes (18): AppBlockTarget, extract_app_icon_native(), get_app_icon(), get_cached_icon(), icon_cache_dir(), list_installed_apps(), list_store_apps(), powershell_literals_keep_hostile_targets_inert() (+10 more)
+### Community 10 - "src-tauri/src/lib.rs"
+Cohesion: 0.12
+Nodes (25): extract_app_icon_native(), get_app_icon(), get_cached_icon(), icon_cache_dir(), ipc_request(), list_installed_apps(), list_store_apps(), powershell_literals_keep_hostile_targets_inert() (+17 more)
 
 ### Community 11 - "Runbook: how to run FocusBlock (service + desktop)"
 Cohesion: 0.50
 Nodes (4): Run focus-service as Administrator (cargo run --bin focus-service -- --console), Runbook: how to run FocusBlock (service + desktop), Run Tauri desktop app in dev mode (cd apps/desktop; npm run tauri dev), WiX installer fragment to register focus-service as Windows Service (v1: manual launch)
 
 ### Community 12 - "ref_vitest"
-Cohesion: 0.06
-Nodes (29): everyCommand, invokeMock, IpcModule, IpcModule, invokeMock, MemoryStorage, appRoot, ActiveSessionRecord (+21 more)
+Cohesion: 0.15
+Nodes (11): ChromeMockHandles, installChromeMock(), WorkerModule, rawSet(), seedDomainList(), UpdateOptions, IpcModule, SendMessageOutcome (+3 more)
 
 ### Community 13 - "Schedule.tsx"
 Cohesion: 0.11
@@ -276,11 +271,31 @@ Nodes (17): compilerOptions, allowImportingTsExtensions, isolatedModules, jsx, l
 
 ### Community 19 - "session.rs"
 Cohesion: 0.13
-Nodes (24): ActiveSessionView, double_end_is_impossible(), end_records_timestamp_and_reason(), ended_session_serializes_to_stable_wire_shape(), expired_session_reports_zero_remaining(), fresh_session_has_positive_remaining_within_planned(), future_started_at_clamps_elapsed_to_zero(), Preset (+16 more)
+Nodes (25): ActiveSessionView, double_end_is_impossible(), end_records_timestamp_and_reason(), ended_session_serializes_to_stable_wire_shape(), expired_session_reports_zero_remaining(), fresh_session_has_positive_remaining_within_planned(), future_started_at_clamps_elapsed_to_zero(), Preset (+17 more)
 
 ### Community 20 - "src/pages/History.tsx"
 Cohesion: 0.43
 Nodes (5): Session, formatDuration(), History(), statusBg(), statusColor()
+
+### Community 21 - "applyBlockingState"
+Cohesion: 0.25
+Nodes (20): activateScheduledSession(), applyBlockingState(), clearAllRules(), expireSession(), finalizeActiveSession(), getActiveTemporaryAllows(), handleBackgroundMessage(), isActiveSessionShape() (+12 more)
+
+### Community 22 - "client.rs"
+Cohesion: 0.25
+Nodes (10): clientoptions, DEFAULT_TIMEOUT, IpcClient, Duration, Error, Instant, Result, timeout_error() (+2 more)
+
+### Community 23 - "Presets.tsx"
+Cohesion: 0.16
+Nodes (10): Preset, SessionMode, EMPTY_FORM, NewPresetForm, parseDomains(), Presets(), deletePreset, listPresets (+2 more)
+
+### Community 24 - "scheduled-stop-suppression.test.ts"
+Cohesion: 0.20
+Nodes (10): ActiveSessionRecord, ArchivedSessionRecord, Schedule, SessionBase, rawSet(), seedScheduledSession(), history(), rawGet() (+2 more)
+
+### Community 25 - "focus_core"
+Cohesion: 0.20
+Nodes (10): read_message(), Result, write_message(), Error, String, StoreError, focus_core, io (+2 more)
 
 ### Community 26 - "Enforcement (Feature Category)"
 Cohesion: 0.67
@@ -289,6 +304,10 @@ Nodes (3): Delay Override - Require Waiting Before Ending Session [NOT YET], Enf
 ### Community 27 - "popup/pages/Home.tsx"
 Cohesion: 0.17
 Nodes (8): ChallengeGate(), Props, AppSettings, ServiceStatus, formatTime(), Home(), HomePhase, warningBannerStyle
+
+### Community 28 - "handle_connection"
+Cohesion: 0.38
+Nodes (6): handle_connection(), IpcServer, Result, Self, NamedPipeServer, RequestHandler
 
 ### Community 29 - "default.json"
 Cohesion: 0.33
@@ -299,12 +318,16 @@ Cohesion: 0.25
 Nodes (7): compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include
 
 ### Community 31 - "service-worker.ts"
-Cohesion: 0.13
-Nodes (40): activateScheduledSession(), ActiveChallenge, addDomainRules(), applyBlockingState(), ArchivedOutcome, BackgroundResponse, buildLockdownRules(), buildRules() (+32 more)
+Cohesion: 0.16
+Nodes (19): ActiveChallenge, addDomainRules(), ArchivedOutcome, BackgroundResponse, buildLockdownRules(), buildRules(), computeScheduleSuppression(), escapeRegex() (+11 more)
 
 ### Community 32 - "devDependencies"
 Cohesion: 0.17
 Nodes (12): devDependencies, jsdom, @tauri-apps/cli, @testing-library/dom, @testing-library/react, @types/chrome, @types/react, @types/react-dom (+4 more)
+
+### Community 33 - "ipc.parity.test.ts"
+Cohesion: 0.28
+Nodes (3): IpcModule, invokeMock, MemoryStorage
 
 ### Community 34 - "popup/pages/History.tsx"
 Cohesion: 0.43
@@ -315,8 +338,8 @@ Cohesion: 0.40
 Nodes (5): design-extract-output Reference Directory, WisprFlow UI/UX Directive, FocusBlock Design System, theme.css (Tailwind v4 @theme), variables.css (CSS Custom Properties)
 
 ### Community 44 - "session_manager.rs"
-Cohesion: 0.20
-Nodes (27): F, a_failed_release_keeps_enforcement_and_says_so(), a_session_with_no_app_targets_reports_inactive_enforcement(), construction_without_a_saved_session_clears_stale_enforcement(), degraded_blocking_is_visible_in_status_instead_of_looking_healthy(), enforcement_failure_marks_the_session_stopped_and_surfaces_the_error(), expired_session_is_completed_on_recovery_without_replacing_it(), expiry_during_a_tick_completes_the_saved_session() (+19 more)
+Cohesion: 0.09
+Nodes (64): IpcResponse, F, HashMap, Local, a_failed_release_keeps_enforcement_and_says_so(), a_session_with_no_app_targets_reports_inactive_enforcement(), construction_without_a_saved_session_clears_stale_enforcement(), degraded_blocking_is_visible_in_status_instead_of_looking_healthy() (+56 more)
 
 ### Community 45 - "focus-core"
 Cohesion: 0.70
@@ -331,16 +354,12 @@ Cohesion: 0.67
 Nodes (4): Vite Logo SVG (favicon), Desktop App Favicon/Branding, Iconify Logos Icon Set, Vite Build Tool
 
 ### Community 48 - "FakeEnforcer"
-Cohesion: 0.19
-Nodes (10): Arc, Enforcement, EnforcementMode, Mutex, Self, dummy_exe(), FakeEnforcer, FakeLog (+2 more)
+Cohesion: 0.24
+Nodes (7): EnforcementMode, FakeEnforcer, FakeLog, Arc, BlockedAppEvent, Mutex, Self
 
 ### Community 49 - "GuardedRun"
-Cohesion: 0.21
-Nodes (8): Drop, Into, GuardedRun, OutOfProcessLock, requested_tier(), require_acknowledgement(), Tier, TierBEnvironment
-
-### Community 50 - "AppEnforcer"
-Cohesion: 0.15
-Nodes (17): AtomicBool, BlockedAppEvent, HANDLE, Instant, JoinHandle, Option, Result, RwLock (+9 more)
+Cohesion: 0.19
+Nodes (10): GuardedRun, OutOfProcessLock, Default, Drop, Path, PathBuf, Vec, service_exe() (+2 more)
 
 ### Community 51 - "Focus-block desktop app icon (128x128): two interlocking ring/arc shapes in amber-orange and cyan on a black square background"
 Cohesion: 0.67
@@ -350,21 +369,25 @@ Nodes (3): Interlocking dual-ring visual motif suggesting focus, blocking, and c
 Cohesion: 0.67
 Nodes (3): Focus Block app branding (interlocking orange and cyan circular mark on black), Square71x71Logo.png - Windows Store square logo asset, Windows Store / MSIX small tile icon asset (71x71 px)
 
-### Community 54 - "IpcResponse"
-Cohesion: 0.17
-Nodes (9): IpcResponse, DateTime, Option, SessionMode, Utc, Uuid, session_expiry(), store_error() (+1 more)
-
-### Community 55 - "SessionManager"
-Cohesion: 0.39
-Nodes (7): Box, Error, Result, Send, String, SessionManager, Sync
+### Community 54 - "server.rs"
+Cohesion: 0.29
+Nodes (6): codec, future, imp, ipcclient, named_pipe, pin
 
 ### Community 56 - "ipc"
-Cohesion: 0.17
-Nodes (6): DomainListKind, DomainListPage(), LIST_COPY, AppSettings, DomainEntry, ipc
+Cohesion: 0.18
+Nodes (5): COPY, DomainListPage(), AppSettings, DomainEntry, ipc
 
-### Community 57 - "Enforcement"
-Cohesion: 0.23
-Nodes (6): EnforcementMode, Enforcement, Option, Result, Send, String
+### Community 57 - "PipeSecurity"
+Cohesion: 0.33
+Nodes (5): c_void, PipeSecurity, Drop, Send, Sync
+
+### Community 58 - "ipc.bridge.test.ts"
+Cohesion: 0.50
+Nodes (3): everyCommand, invokeMock, IpcModule
+
+### Community 59 - "desktop/vitest.config.ts"
+Cohesion: 0.50
+Nodes (3): appRoot, ref_node_path, ref_node_url
 
 ### Community 98 - "extension/vite.config.ts"
 Cohesion: 0.32
@@ -375,12 +398,12 @@ Cohesion: 0.13
 Nodes (17): ActiveSessionRecord, ALL_DAYS, ArchivedOutcome, ArchivedSessionRecord, ChallengeRecord, DEFAULTS, DomainListEntry, normalizeSchedule() (+9 more)
 
 ### Community 107 - "focus-store/src/codec.rs"
-Cohesion: 0.08
-Nodes (18): domain_matches(), normalize_domain(), Option, String, encode_domain_list(), encode_mode(), encode_status(), parse_domain_list() (+10 more)
+Cohesion: 0.12
+Nodes (14): encode_domain_list(), encode_mode(), encode_status(), parse_domain_list(), parse_id(), parse_mode(), parse_status(), Result (+6 more)
 
 ### Community 108 - "Home.test.tsx"
-Cohesion: 0.15
-Nodes (12): ServiceStatus, formatTime(), Home(), HomePhase, buildStatus(), Deferred, Envelope, getStatusSafe (+4 more)
+Cohesion: 0.17
+Nodes (11): ServiceStatus, formatTime(), Home(), HomePhase, buildStatus(), Deferred, Envelope, getStatusSafe (+3 more)
 
 ### Community 110 - "Issue tracker: GitHub"
 Cohesion: 0.29
@@ -395,8 +418,8 @@ Cohesion: 0.20
 Nodes (9): addAppBlockTarget, getStatusSafe, listAppBlockTargets, listBlocklist, listHistory, listInstalledApps, listWhitelist, startSession (+1 more)
 
 ### Community 114 - "app_enforcement.rs"
-Cohesion: 0.08
-Nodes (26): atomic, com, core, Duration, foundation, getpackagefamilyname, HashSet, osstring (+18 more)
+Cohesion: 0.06
+Nodes (56): atomic, AtomicBool, com, core, foundation, fs, getpackagefamilyname, HANDLE (+48 more)
 
 ### Community 117 - "scripts"
 Cohesion: 0.33
@@ -407,16 +430,16 @@ Cohesion: 0.09
 Nodes (21): @phosphor-icons/react, react, react-dom, react-router-dom, tailwindcss, @tailwindcss/vite, @types/chrome, @types/react (+13 more)
 
 ### Community 120 - "src/App.tsx"
-Cohesion: 0.16
-Nodes (7): App(), navItems, AppBlockedModal(), Props, apps_desktop_src_lib_ipc_blockedappevent, ErrorBoundary, framer-motion
+Cohesion: 0.15
+Nodes (9): App(), navItems, AppBlockedModal(), Props, BlockedAppEvent, ErrorBoundary, App(), ref_react (+1 more)
 
 ### Community 122 - "real_enforcement.rs"
-Cohesion: 0.24
-Nodes (9): appenforcer, default_db_path, BLOCK_DEADLINE, dedicated_dummy_executable_is_available(), dummy_target(), OBSERVE_RELEASED, AppBlockTarget, Duration (+1 more)
+Cohesion: 0.19
+Nodes (12): appenforcer, default_db_path, FocusStore, BLOCK_DEADLINE, dedicated_dummy_executable_is_available(), dummy_target(), OBSERVE_RELEASED, AppBlockTarget (+4 more)
 
 ### Community 123 - "popup/App.tsx"
-Cohesion: 0.11
-Nodes (21): App(), navItems, DomainEntry, ipc, TemporaryAllowEntry, Blocklists(), bodyStyle, headingStyle (+13 more)
+Cohesion: 0.12
+Nodes (18): navItems, DomainEntry, ipc, TemporaryAllowEntry, Blocklists(), bodyStyle, headingStyle, listItemStyle (+10 more)
 
 ### Community 128 - "Chrome Web Store Submission — Focus Blocker"
 Cohesion: 0.17
@@ -427,16 +450,12 @@ Cohesion: 0.18
 Nodes (10): Changes, Contact, Deletion, Focus Blocker — Privacy Policy, How the permissions are used, Retention, Sharing, Summary (+2 more)
 
 ### Community 131 - "src/pages/Blocklists.tsx"
-Cohesion: 0.18
-Nodes (17): AppPickerModal(), apps_desktop_src_components_apppickermodal_discoveredapp, Props, DiscoveredApp, getAppIcon(), listInstalledApps(), listStoreApps(), pickExecutable() (+9 more)
+Cohesion: 0.17
+Nodes (18): AppPickerModal(), apps_desktop_src_components_apppickermodal_discoveredapp, Props, DiscoveredApp, getAppIcon(), listInstalledApps(), listStoreApps(), pickExecutable() (+10 more)
 
 ### Community 132 - "package.js"
 Cohesion: 0.09
 Nodes (20): copyDir(), __dirname, dist, root, children, start(), __dirname, iconsDir (+12 more)
-
-### Community 138 - "ipc-response.test.mjs"
-Cohesion: 0.33
-Nodes (5): standaloneSource, ref_node_assert, ref_node_fs, ref_node_test, ref_typescript
 
 ### Community 139 - "App blocking test harness"
 Cohesion: 0.14
@@ -447,36 +466,40 @@ Cohesion: 0.29
 Nodes (3): Child, ExitStatus, ChildGuard
 
 ### Community 142 - "native_host.rs"
-Cohesion: 0.06
-Nodes (47): clientoptions, codec, DEFAULT_TIMEOUT, IpcClient, Duration, Error, Instant, Result (+39 more)
+Cohesion: 0.20
+Nodes (17): deserialize, Read, Serialize, inactive_policy(), main(), MAX_NATIVE_MESSAGE_BYTES, NativeRequest, read_native_message() (+9 more)
 
-### Community 143 - "TempDb"
+### Community 149 - ".begin"
+Cohesion: 0.60
+Nodes (4): requested_tier(), require_acknowledgement(), Option, Tier
+
+### Community 153 - ".require_prerequisites"
 Cohesion: 0.33
-Nodes (5): Default, FocusStore, PathBuf, sidecar_paths(), TempDb
+Nodes (4): Into, AppBlockTarget, Result, String
 
 ## Ambiguous Edges - Review These
 - `Vite Logo SVG (favicon)` → `Vite Build Tool`  [AMBIGUOUS]
   apps/desktop/public/vite.svg · relation: rationale_for
 
 ## Knowledge Gaps
-- **432 isolated node(s):** `Overview`, `1. Enforcement Seam (`service/focus-service/src/enforcement.rs`, `service/focus-service/src/real_enforcement.rs`)`, `2. Session Manager (`service/focus-service/src/session_manager.rs`)`, `3. Watcher Safety (`service/focus-service/src/app_enforcement.rs`)`, `4. Visible Degraded Mode (`crates/focus-core/src/protocol.rs`)` (+427 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 656 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **93 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **437 isolated node(s):** `COPY`, `SessionStatus`, `ActiveSessionView`, `AppBlockTargetList`, `ServiceHealth` (+432 more)
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 661 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **81 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **What is the exact relationship between `Vite Logo SVG (favicon)` and `Vite Build Tool`?**
   _Edge tagged AMBIGUOUS (relation: rationale_for) - confidence is low._
+- **Why does `FocusStore` connect `FocusStore` to `test_support.rs`, `GuardedRun`, `session_manager.rs`?**
+  _High betweenness centrality (0.026) - this node is a cross-community bridge._
 - **Why does `start()` connect `package.js` to `ref_vitest`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **Why does `canvas` connect `package.js` to `extension/package.json`?**
-  _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **Why does `@testing-library/react` connect `Home.test.tsx` to `DesktopFlow.e2e.test.tsx`, `desktop/package.json`?**
-  _High betweenness centrality (0.013) - this node is a cross-community bridge._
-- **What connects `Overview`, `1. Enforcement Seam (`service/focus-service/src/enforcement.rs`, `service/focus-service/src/real_enforcement.rs`)`, `2. Session Manager (`service/focus-service/src/session_manager.rs`)` to the rest of the system?**
-  _432 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _High betweenness centrality (0.016) - this node is a cross-community bridge._
+- **Why does `FakeEnforcer` connect `FakeEnforcer` to `test_support.rs`, `.require_prerequisites`, `App blocking test harness`, `.begin`?**
+  _High betweenness centrality (0.014) - this node is a cross-community bridge._
+- **What connects `COPY`, `SessionStatus`, `ActiveSessionView` to the rest of the system?**
+  _437 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `FocusStore` be split into smaller, more focused modules?**
-  _Cohesion score 0.08209255533199195 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07685185185185185 - nodes in this community are weakly interconnected._
 - **Should `src/lib/ipc.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.12631578947368421 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.1225296442687747 - nodes in this community are weakly interconnected._

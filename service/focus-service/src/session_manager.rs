@@ -531,11 +531,17 @@ impl SessionManager {
 
         let blocklist = match preset_blocklist {
             Some(list) => list,
-            None => self.store.blocklist_domains().unwrap_or_default(),
+            None => match self.store.blocklist_domains() {
+                Ok(list) => list,
+                Err(error) => return store_error(error),
+            },
         };
         let whitelist = match preset_whitelist {
             Some(list) => list,
-            None => self.store.whitelist_domains().unwrap_or_default(),
+            None => match self.store.whitelist_domains() {
+                Ok(list) => list,
+                Err(error) => return store_error(error),
+            },
         };
         let app_targets = match self.store.app_block_targets() {
             Ok(targets) => targets,

@@ -57,14 +57,27 @@ impl FocusStore {
         let count: i64 = self
             .conn
             .query_row("SELECT COUNT(*) FROM presets", [], |r| r.get(0))?;
-        if count == 0 {
-            for (name, mode, duration, blocklist) in SEED_PRESETS {
-                let id = Uuid::new_v4();
-                self.conn.execute(
-                    "INSERT INTO presets (id, name, mode, duration_minutes, blocklist_json) VALUES (?1, ?2, ?3, ?4, ?5)",
-                    params![id.to_string(), name, mode, duration, blocklist],
-                )?;
+        // Seed exactly once, tracked in settings: a user who deletes every
+        // preset must not see the samples reappear on the next start.
+        let seeded: Option<String> = self
+            .conn
+            .query_row(
+                "SELECT value FROM settings WHERE key = 'presets_seeded'",
+                [],
+                |r| r.get(0),
+            )
+            .ok();
+        if seeded.as_deref() != Some("1") {
+            if count == 0 {
+                for (name, mode, duration, blocklist) in SEED_PRESETS {
+                    let id = Uuid::new_v4();
+                    self.conn.execute(
+                        "INSERT INTO presets (id, name, mode, duration_minutes, blocklist_json) VALUES (?1, ?2, ?3, ?4, ?5)",
+                        params![id.to_string(), name, mode, duration, blocklist],
+                    )?;
+                }
             }
+            self.set_setting("presets_seeded", "1")?;
         }
 
         for (key, value) in SETTING_DEFAULTS {
@@ -324,8 +337,12 @@ impl FocusStore {
     }
 
     pub fn delete_preset(&self, id: Uuid) -> Result<(), StoreError> {
-        self.conn
+        let deleted = self
+            .conn
             .execute("DELETE FROM presets WHERE id = ?1", params![id.to_string()])?;
+        if deleted == 0 {
+            return Err(StoreError::Message("preset not found".into()));
+        }
         Ok(())
     }
 
