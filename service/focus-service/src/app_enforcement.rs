@@ -57,6 +57,19 @@ mod windows {
     const WATCHER_STOP_BUDGET: Duration = Duration::from_secs(2);
 
     const EXCLUDED_SYSTEM_EXECUTABLES: &[&str] = &[
+        // Core Windows critical OS processes (killing causes immediate BSOD/hang)
+        "csrss.exe",
+        "lsass.exe",
+        "smss.exe",
+        "winlogon.exe",
+        "services.exe",
+        "svchost.exe",
+        "dwm.exe",
+        "wininit.exe",
+        "fontdrvhost.exe",
+        "sihost.exe",
+        "runtimebroker.exe",
+        "ctfmon.exe",
         "taskmgr.exe",
         "perfmon.exe",
         "mmc.exe",
@@ -72,6 +85,10 @@ mod windows {
         "focus-native-host.exe",
         "focus-block.exe",
         "desktop.exe",
+    ];
+
+    const GENERIC_FOLDER_NAMES: &[&str] = &[
+        "bin", "app", "application", "current", "release", "debug", "x64", "x86", "dist", "build", "src",
     ];
 
     #[derive(Default, Clone)]
@@ -97,10 +114,12 @@ mod windows {
                         }
                         if let Some(parent) = path_obj.parent() {
                             if let Some(parent_name) = parent.file_name() {
-                                let mut inferred_exe =
-                                    parent_name.to_string_lossy().to_ascii_lowercase();
-                                inferred_exe.push_str(".exe");
-                                matchers.executable_names.insert(inferred_exe);
+                                let parent_lower = parent_name.to_string_lossy().to_ascii_lowercase();
+                                if !GENERIC_FOLDER_NAMES.contains(&parent_lower.as_str()) {
+                                    let mut inferred_exe = parent_lower;
+                                    inferred_exe.push_str(".exe");
+                                    matchers.executable_names.insert(inferred_exe);
+                                }
                             }
                         }
                     }

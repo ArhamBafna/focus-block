@@ -405,6 +405,7 @@ export const ipc = {
   // Sessions & Challenges ────────────────────────────────────────────────────
 
   getSchedules: async (): Promise<Schedule[]> => storageGet("schedules"),
+  listSchedules: async (): Promise<Schedule[]> => storageGet("schedules"),
 
   createSchedule: async (
     start_time: string,

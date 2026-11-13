@@ -73,14 +73,12 @@ export function AppBlockedModal({
     }
   }, [isOpen]);
 
-  if (!isOpen || !event) return null;
-
-  const appName = event.app_name || "Application";
-  const count = event.count || 1;
+  const appName = event?.app_name || "Application";
+  const count = event?.count || 1;
 
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isOpen && event && (
         <div
           ref={dialogRef}
           role="dialog"

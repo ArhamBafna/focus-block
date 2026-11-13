@@ -11,6 +11,22 @@ struct StoreApp {
     package_family_name: String,
 }
 
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OneOrMany<T> {
+    One(T),
+    Many(Vec<T>),
+}
+
+impl<T> OneOrMany<T> {
+    fn into_vec(self) -> Vec<T> {
+        match self {
+            Self::One(item) => vec![item],
+            Self::Many(items) => items,
+        }
+    }
+}
+
 fn icon_cache_dir() -> PathBuf {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
@@ -135,10 +151,14 @@ if ($pkg -and $pkg.InstallLocation) {{
         }
     };
 
-    let output = std::process::Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-        .output()
-        .ok()?;
+    let mut cmd = std::process::Command::new("powershell.exe");
+    cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let output = cmd.output().ok()?;
 
     if output.status.success() {
         let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -205,27 +225,35 @@ $storeApps = @(Get-StartApps | ForEach-Object {
 })
 $shell = New-Object -ComObject WScript.Shell
 $win32Apps = @(Get-ChildItem -Path "$env:ProgramData\Microsoft\Windows\Start Menu\Programs", "$env:APPDATA\Microsoft\Windows\Start Menu\Programs" -Filter *.lnk -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
-    $shortcut = $shell.CreateShortcut($_.FullName)
-    $targetPath = $shortcut.TargetPath
-    if ($targetPath -match '\.exe$') {
-        [PSCustomObject]@{
-            displayName = $_.BaseName
-            target = [PSCustomObject]@{
-                kind = "executable"
-                path = $targetPath
+    try {
+        $shortcut = $shell.CreateShortcut($_.FullName)
+        $targetPath = $shortcut.TargetPath
+        if ($targetPath -match '\.exe$') {
+            [PSCustomObject]@{
+                displayName = $_.BaseName
+                target = [PSCustomObject]@{
+                    kind = "executable"
+                    path = $targetPath
+                }
+                category = "Desktop App"
+                iconDataUri = $null
             }
-            category = "Desktop App"
-            iconDataUri = $null
         }
-    }
+    } catch {}
 } | Group-Object { $_.target.path } | ForEach-Object {
     $_.Group | Sort-Object displayName | Select-Object -First 1
 })
 $allApps = $storeApps + $win32Apps | Sort-Object displayName
 @($allApps) | ConvertTo-Json -Compress -Depth 5
 "#;
-        let output = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        let mut cmd = std::process::Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let output = cmd
             .output()
             .map_err(|error| format!("Could not list installed apps: {error}"))?;
 
@@ -240,8 +268,9 @@ $allApps = $storeApps + $win32Apps | Sort-Object displayName
 
         let json = String::from_utf8(output.stdout)
             .map_err(|error| format!("Could not read installed app list: {error}"))?;
-        let mut apps: Vec<DiscoveredApp> = serde_json::from_str(&json)
+        let parsed: OneOrMany<DiscoveredApp> = serde_json::from_str(&json)
             .map_err(|error| format!("Could not parse installed app list: {error}"))?;
+        let mut apps = parsed.into_vec();
 
         let cache_dir = icon_cache_dir();
         for app in &mut apps {
@@ -284,8 +313,14 @@ $apps = @(Get-StartApps | ForEach-Object {
 @($apps) | ConvertTo-Json -Compress
 "#;
 
-        let output = std::process::Command::new("powershell.exe")
-            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        let mut cmd = std::process::Command::new("powershell.exe");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", script]);
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+        let output = cmd
             .output()
             .map_err(|error| format!("Could not list Microsoft Store apps: {error}"))?;
 
@@ -300,8 +335,9 @@ $apps = @(Get-StartApps | ForEach-Object {
 
         let json = String::from_utf8(output.stdout)
             .map_err(|error| format!("Could not read Microsoft Store app list: {error}"))?;
-        serde_json::from_str(&json)
-            .map_err(|error| format!("Could not parse Microsoft Store app list: {error}"))
+        let parsed: OneOrMany<StoreApp> = serde_json::from_str(&json)
+            .map_err(|error| format!("Could not parse Microsoft Store app list: {error}"))?;
+        Ok(parsed.into_vec())
     }
 
     #[cfg(not(target_os = "windows"))]

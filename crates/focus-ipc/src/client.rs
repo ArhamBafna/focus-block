@@ -63,6 +63,12 @@ mod imp {
             client.flush().await?;
 
             let len = client.read_u32_le().await? as usize;
+            if len > crate::codec::MAX_IPC_MESSAGE_BYTES {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("IPC response length {len} exceeds limit of {}", crate::codec::MAX_IPC_MESSAGE_BYTES),
+                ));
+            }
             let mut buf = vec![0u8; len];
             client.read_exact(&mut buf).await?;
             serde_json::from_slice(&buf).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))

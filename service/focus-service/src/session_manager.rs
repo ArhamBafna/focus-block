@@ -68,13 +68,16 @@ impl SessionManager {
         };
 
         match active_session {
-            Some(session) if session.is_expired() => {
+            Some(mut session) if session.is_expired() => {
                 // Do not mark complete until app enforcement is cleared.
                 mgr.app_enforcer.clear()?;
-                let mut completed = session;
-                completed.status = SessionStatus::Completed;
-                completed.ended_at = Some(Utc::now());
-                mgr.store.save_session(&completed)?;
+                let planned_end = session
+                    .started_at
+                    .checked_add_signed(Duration::seconds(session.planned_duration_sec as i64))
+                    .unwrap_or_else(Utc::now);
+                session.end(focus_core::session::SessionEndReason::Completed);
+                session.ended_at = Some(planned_end);
+                mgr.store.save_session(&session)?;
             }
             Some(session) => {
                 // Keep state if enforcement restore fails; the 1s service tick
@@ -344,6 +347,7 @@ impl SessionManager {
                         } else {
                             let _ = self.stop_session();
                             self.schedule_suppressed_until.remove(&schedule.id);
+                            self.persist_suppressions();
                         }
                     }
                 }
@@ -411,8 +415,7 @@ impl SessionManager {
                     );
                     self.app_enforcer.clear()?;
                     let mut old = active.clone();
-                    old.status = SessionStatus::Stopped;
-                    old.ended_at = Some(Utc::now());
+                    old.end(focus_core::session::SessionEndReason::Stopped);
                     self.store.save_session(&old)?;
                     self.active_session = None;
                 }
@@ -435,8 +438,7 @@ impl SessionManager {
                 if let Err(error) = self.app_enforcer.apply(&session.app_block_targets_snapshot) {
                     tracing::error!("App enforcement for scheduled session failed: {error}");
                     let mut failed = session;
-                    failed.status = SessionStatus::Stopped;
-                    failed.ended_at = Some(Utc::now());
+                    failed.end(focus_core::session::SessionEndReason::Stopped);
                     let _ = self.store.save_session(&failed);
                     return Ok(());
                 }
@@ -499,6 +501,12 @@ impl SessionManager {
         if self.active_session.is_some() {
             return IpcResponse::Err {
                 message: "Session already active".into(),
+            };
+        }
+
+        if duration_minutes == 0 && preset_id.is_none() {
+            return IpcResponse::Err {
+                message: "Duration must be greater than zero".into(),
             };
         }
 
@@ -584,6 +592,7 @@ impl SessionManager {
             if session.scheduled_schedule_id.as_deref() == Some(id) {
                 let stop_resp = self.stop_session();
                 self.schedule_suppressed_until.remove(id);
+                self.persist_suppressions();
                 if let IpcResponse::Err { message } = stop_resp {
                     return IpcResponse::Err { message };
                 }
@@ -620,8 +629,7 @@ impl SessionManager {
             self.persist_suppressions();
         }
 
-        session.status = SessionStatus::Stopped;
-        session.ended_at = Some(Utc::now());
+        session.end(focus_core::session::SessionEndReason::Stopped);
         match self.store.save_session(&session) {
             Ok(()) => {
                 self.active_session = None;
@@ -644,8 +652,7 @@ impl SessionManager {
         info!("Session expired; removing enforcement");
         self.app_enforcer.clear()?;
         let mut completed = session;
-        completed.status = SessionStatus::Completed;
-        completed.ended_at = Some(Utc::now());
+        completed.end(focus_core::session::SessionEndReason::Completed);
         self.store.save_session(&completed)?;
         self.active_session = None;
         Ok(())

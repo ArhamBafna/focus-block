@@ -19,10 +19,12 @@ mod imp {
 
     impl PipeSecurity {
         fn new() -> io::Result<Self> {
-            // SDDL granting Generic All to Everyone (WD): D:(A;;GA;;;WD)
-            // Allows non-elevated desktop UI and browser native messaging host
-            // to connect to the pipe created by an elevated/system service process.
-            let sddl: Vec<u16> = "D:(A;;GA;;;WD)\0".encode_utf16().collect();
+            // SDDL granting Generic Read/Write (GRGW) to Authenticated Users (AU) & Interactive Users (IU),
+            // and Generic All (GA) to Local System (SY) & Built-in Administrators (BA).
+            // Prevents unprivileged callers from modifying pipe security descriptors or ownership (WRITE_DAC/WRITE_OWNER).
+            let sddl: Vec<u16> = "D:(A;;GA;;;SY)(A;;GA;;;BA)(A;;GRGW;;;IU)(A;;GRGW;;;AU)\0"
+                .encode_utf16()
+                .collect();
             let mut sd = std::ptr::null_mut();
             const SDDL_REVISION_1: u32 = 1;
             unsafe {
@@ -91,13 +93,35 @@ mod imp {
 
             loop {
                 // Wait for a client to connect to the current pending instance.
-                pending.connect().await?;
+                if let Err(e) = pending.connect().await {
+                    tracing::warn!("Transient pipe connect error: {e}");
+                    // Re-create the pending instance and continue listening
+                    match sec.create_pipe(false) {
+                        Ok(new_pipe) => {
+                            pending = new_pipe;
+                        }
+                        Err(err) => {
+                            tracing::error!("Failed to recreate pipe: {err}");
+                            tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        }
+                    }
+                    continue;
+                }
                 let connected = pending;
 
                 // Immediately create the NEXT instance so it's waiting before
                 // we hand off the connected one — eliminates the accept-gap that
                 // caused OS error 231 (all pipe instances busy).
-                pending = sec.create_pipe(false)?;
+                match sec.create_pipe(false) {
+                    Ok(new_pipe) => {
+                        pending = new_pipe;
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to create next pipe instance: {e}");
+                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+                        pending = sec.create_pipe(false)?;
+                    }
+                }
 
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {

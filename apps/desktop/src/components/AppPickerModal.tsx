@@ -73,8 +73,6 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     };
   }, [apps.length]);
 
-  if (!isOpen) return null;
-
   const filteredApps = apps.filter((app) =>
     app.displayName.toLowerCase().includes(search.toLowerCase())
   );
@@ -85,10 +83,15 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     return blockedApps.some((b: any) => {
       const bTarget = b.target || b;
       if (app.target.kind === "executable" && bTarget.kind === "executable") {
-        return app.target.path === bTarget.path;
+        return (
+          app.target.path.toLowerCase() === bTarget.path.toLowerCase()
+        );
       }
       if (app.target.kind === "package" && bTarget.kind === "package") {
-        return app.target.package_family_name === bTarget.package_family_name;
+        return (
+          app.target.package_family_name.toLowerCase() ===
+          bTarget.package_family_name.toLowerCase()
+        );
       }
       return false;
     });

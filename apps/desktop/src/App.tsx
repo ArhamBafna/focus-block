@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { HashRouter as Router, Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
 import { Timer } from "@phosphor-icons/react/Timer";
 import { Shield } from "@phosphor-icons/react/Shield";
@@ -119,6 +119,7 @@ function AppContent() {
   const navigate = useNavigate();
   const [blockedEvent, setBlockedEvent] = useState<BlockedAppEvent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const dismissedTimestampRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -127,8 +128,10 @@ function AppContent() {
         const envelope = await ipc.getStatusSafe();
         if (envelope.ok && envelope.data.last_blocked_app && isMounted) {
           const next = envelope.data.last_blocked_app;
-          setBlockedEvent(next);
-          setIsModalOpen(true);
+          if (dismissedTimestampRef.current !== next.timestamp) {
+            setBlockedEvent(next);
+            setIsModalOpen(true);
+          }
         }
       } catch {
         // Quiet poll error
@@ -144,6 +147,9 @@ function AppContent() {
   }, []);
 
   const handleDismiss = useCallback(() => {
+    if (blockedEvent?.timestamp) {
+      dismissedTimestampRef.current = blockedEvent.timestamp;
+    }
     setIsModalOpen(false);
     setBlockedEvent(null);
     try {
@@ -151,9 +157,12 @@ function AppContent() {
     } catch {
       // ignore
     }
-  }, []);
+  }, [blockedEvent]);
 
   const handleBackToFocus = useCallback(() => {
+    if (blockedEvent?.timestamp) {
+      dismissedTimestampRef.current = blockedEvent.timestamp;
+    }
     setIsModalOpen(false);
     setBlockedEvent(null);
     try {
@@ -162,7 +171,7 @@ function AppContent() {
       // ignore
     }
     navigate("/");
-  }, [navigate]);
+  }, [blockedEvent, navigate]);
 
   return (
     <div

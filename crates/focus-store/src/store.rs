@@ -538,12 +538,13 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
     let started_at: String = row.get(3)?;
     let ended_at: Option<String> = row.get(4)?;
 
-    let blocklist: Vec<String> = serde_json::from_str(&row.get::<_, String>(7)?)
-        .map_err(|e| StoreError::CorruptRow(format!("blocklist JSON parse error: {e}")))?;
-    let whitelist: Vec<String> = serde_json::from_str(&row.get::<_, String>(8)?)
-        .map_err(|e| StoreError::CorruptRow(format!("whitelist JSON parse error: {e}")))?;
+    let blocklist = codec::parse_domain_list(&row.get::<_, String>(7)?);
+    let whitelist = codec::parse_domain_list(&row.get::<_, String>(8)?);
     let app_block_targets: Vec<AppBlockTarget> = serde_json::from_str(&row.get::<_, String>(9)?)
-        .map_err(|e| StoreError::CorruptRow(format!("app_block_targets JSON parse error: {e}")))?;
+        .unwrap_or_else(|e| {
+            tracing::warn!("unparseable app_block_targets JSON in database ({e}), using empty list");
+            Vec::new()
+        });
 
     let id = codec::parse_id(&row.get::<_, String>(0)?)
         .map_err(|e| StoreError::CorruptRow(e.to_string()))?;
