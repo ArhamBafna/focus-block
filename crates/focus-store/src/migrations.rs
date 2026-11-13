@@ -66,6 +66,11 @@ pub const SEED_PRESETS: &[(&str, &str, u32, &str)] = &[
         25,
         r#"["youtube.com","reddit.com","instagram.com","twitter.com","tiktok.com"]"#,
     ),
-    ("Study", "blocklist", 50, r#"["youtube.com","reddit.com","instagram.com"]"#),
+    (
+        "Study",
+        "blocklist",
+        50,
+        r#"["youtube.com","reddit.com","instagram.com"]"#,
+    ),
     ("Offline Focus", "lockdown", 30, "[]"),
 ];

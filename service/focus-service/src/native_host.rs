@@ -4,9 +4,7 @@
 #[cfg(windows)]
 mod windows_host {
     use chrono::Utc;
-    use focus_core::{
-        BlockingPolicySnapshot, IpcRequest, IpcResponse, ResponseData,
-    };
+    use focus_core::{BlockingPolicySnapshot, IpcRequest, IpcResponse, ResponseData};
     use focus_ipc::IpcClient;
     use serde::Deserialize;
     use std::io::{self, Read, Write};
@@ -49,14 +47,17 @@ mod windows_host {
 
             match request {
                 NativeRequest::GetActivePolicy => {
-                    let response = runtime.block_on(IpcClient::request(IpcRequest::GetActivePolicy));
+                    let response =
+                        runtime.block_on(IpcClient::request(IpcRequest::GetActivePolicy));
                     let policy = match response {
                         Ok(IpcResponse::Ok {
                             data: ResponseData::Policy(policy),
                         }) => policy,
                         Ok(IpcResponse::Err { message }) => inactive_policy(Some(message)),
                         Ok(_) => inactive_policy(Some("unexpected service policy response".into())),
-                        Err(error) => inactive_policy(Some(format!("service unavailable: {error}"))),
+                        Err(error) => {
+                            inactive_policy(Some(format!("service unavailable: {error}")))
+                        }
                     };
                     write_native_message(&mut output, &policy)?;
                 }
@@ -87,7 +88,10 @@ mod windows_host {
             return Ok(());
         }
         let expected = format!("chrome-extension://{extension_id}/");
-        if std::env::args().skip(1).any(|argument| argument == expected) {
+        if std::env::args()
+            .skip(1)
+            .any(|argument| argument == expected)
+        {
             Ok(())
         } else {
             Err("native host origin did not match FOCUSBLOCK_EXTENSION_ID".into())
@@ -152,7 +156,10 @@ mod windows_host {
         Ok(Some(payload))
     }
 
-    fn write_native_message(value: &mut impl Write, message: &impl serde::Serialize) -> Result<(), String> {
+    fn write_native_message(
+        value: &mut impl Write,
+        message: &impl serde::Serialize,
+    ) -> Result<(), String> {
         let payload = serde_json::to_vec(message).map_err(|error| error.to_string())?;
         if payload.len() > MAX_NATIVE_MESSAGE_BYTES {
             return Err("native response exceeds size limit".into());

@@ -49,7 +49,10 @@ impl FocusStore {
         self.add_sessions_app_target_snapshot_column()?;
         self.add_sessions_scheduled_schedule_id_column()?;
         // Migrate and purge legacy folder targets so only executable and package remain
-        let _ = self.conn.execute("DELETE FROM app_block_targets WHERE target_kind = 'folder'", []);
+        let _ = self.conn.execute(
+            "DELETE FROM app_block_targets WHERE target_kind = 'folder'",
+            [],
+        );
 
         let count: i64 = self
             .conn
@@ -126,7 +129,9 @@ impl FocusStore {
     // the IPC surface are untouched.
 
     fn list_domains_in(&self, table: &'static str) -> Result<Vec<DomainEntry>, StoreError> {
-        let mut stmt = self.conn.prepare(&format!("SELECT id, domain FROM {table} ORDER BY domain"))?;
+        let mut stmt = self
+            .conn
+            .prepare(&format!("SELECT id, domain FROM {table} ORDER BY domain"))?;
         let mut rows = stmt.query([])?;
         let mut entries = Vec::new();
         while let Some(row) = rows.next()? {
@@ -145,7 +150,15 @@ impl FocusStore {
             &format!("INSERT OR IGNORE INTO {table} (domain) VALUES (?1)"),
             params![domain],
         )?;
-        Ok(self.conn.last_insert_rowid())
+        // INSERT OR IGNORE keeps the previous last_insert_rowid on a duplicate,
+        // which may be an unrelated row from another table. The id the caller
+        // gets must always be the id of the row that carries this domain.
+        let id: i64 = self.conn.query_row(
+            &format!("SELECT id FROM {table} WHERE domain = ?1"),
+            params![domain],
+            |row| row.get(0),
+        )?;
+        Ok(id)
     }
 
     fn remove_domain_from(&self, table: &'static str, id: i64) -> Result<(), StoreError> {
@@ -167,9 +180,9 @@ impl FocusStore {
     }
 
     pub fn list_app_block_targets(&self) -> Result<Vec<AppBlockEntry>, StoreError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT id, target_kind, target_value FROM app_block_targets ORDER BY id",
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT id, target_kind, target_value FROM app_block_targets ORDER BY id")?;
         let rows = stmt.query_map([], |row| {
             let id: i64 = row.get(0)?;
             let kind: String = row.get(1)?;
@@ -178,7 +191,10 @@ impl FocusStore {
                 rusqlite::Error::FromSqlConversionFailure(
                     1,
                     rusqlite::types::Type::Text,
-                    Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, message)),
+                    Box::new(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        message,
+                    )),
                 )
             })?;
             Ok(AppBlockEntry { id, target })
@@ -202,11 +218,13 @@ impl FocusStore {
             params![kind, value],
         )?;
 
-        self.conn.query_row(
-            "SELECT id FROM app_block_targets WHERE target_kind = ?1 AND target_value = ?2",
-            params![kind, value],
-            |row| row.get(0),
-        ).map_err(StoreError::from)
+        self.conn
+            .query_row(
+                "SELECT id FROM app_block_targets WHERE target_kind = ?1 AND target_value = ?2",
+                params![kind, value],
+                |row| row.get(0),
+            )
+            .map_err(StoreError::from)
     }
 
     pub fn remove_app_block_target(&self, id: i64) -> Result<(), StoreError> {
@@ -312,10 +330,7 @@ impl FocusStore {
     }
 
     pub fn get_preset(&self, id: Uuid) -> Result<Option<Preset>, StoreError> {
-        Ok(self
-            .list_presets()?
-            .into_iter()
-            .find(|p| p.id == id))
+        Ok(self.list_presets()?.into_iter().find(|p| p.id == id))
     }
 
     pub fn save_session(&self, session: &Session) -> Result<(), StoreError> {
@@ -379,7 +394,8 @@ impl FocusStore {
     }
 
     pub fn clear_history(&self) -> Result<(), StoreError> {
-        self.conn.execute("DELETE FROM sessions WHERE status != 'active'", [])?;
+        self.conn
+            .execute("DELETE FROM sessions WHERE status != 'active'", [])?;
         Ok(())
     }
 
@@ -437,13 +453,17 @@ impl FocusStore {
             ],
         )?;
         if rows_affected == 0 {
-            return Err(StoreError::Message(format!("schedule not found: {}", schedule.id)));
+            return Err(StoreError::Message(format!(
+                "schedule not found: {}",
+                schedule.id
+            )));
         }
         Ok(())
     }
 
     pub fn delete_schedule(&self, id: &str) -> Result<(), StoreError> {
-        self.conn.execute("DELETE FROM schedules WHERE id = ?1", params![id])?;
+        self.conn
+            .execute("DELETE FROM schedules WHERE id = ?1", params![id])?;
         Ok(())
     }
 
@@ -465,10 +485,12 @@ impl FocusStore {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
 
-        if !columns.iter().any(|column| column == "scheduled_schedule_id") {
-            self.conn.execute_batch(
-                "ALTER TABLE sessions ADD COLUMN scheduled_schedule_id TEXT;",
-            )?;
+        if !columns
+            .iter()
+            .any(|column| column == "scheduled_schedule_id")
+        {
+            self.conn
+                .execute_batch("ALTER TABLE sessions ADD COLUMN scheduled_schedule_id TEXT;")?;
         }
         Ok(())
     }
@@ -479,14 +501,16 @@ impl FocusStore {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
 
-        if !columns.iter().any(|column| column == "app_block_targets_snapshot") {
+        if !columns
+            .iter()
+            .any(|column| column == "app_block_targets_snapshot")
+        {
             self.conn.execute_batch(
                 "ALTER TABLE sessions ADD COLUMN app_block_targets_snapshot TEXT NOT NULL DEFAULT '[]';",
             )?;
         }
         Ok(())
     }
-
 }
 
 /// Ok(session) for a good row; Err(CorruptRow) marks a row that should be
@@ -580,7 +604,10 @@ mod tests {
         };
         store.create_schedule(&schedule).expect("create_schedule");
 
-        let loaded = store.get_schedule("sched-1").expect("get_schedule").expect("exists");
+        let loaded = store
+            .get_schedule("sched-1")
+            .expect("get_schedule")
+            .expect("exists");
         assert_eq!(loaded, schedule);
 
         let mut updated = schedule.clone();
@@ -627,11 +654,43 @@ mod tests {
     fn lockdown_preset_survives_round_trip() {
         let store = memory_store();
         let created = store
-            .create_preset("Locked", SessionMode::Lockdown, 45, vec![], vec!["mail.com".into()])
+            .create_preset(
+                "Locked",
+                SessionMode::Lockdown,
+                45,
+                vec![],
+                vec!["mail.com".into()],
+            )
             .expect("create");
         let loaded = store.get_preset(created.id).expect("get").expect("exists");
         assert_eq!(loaded.mode, SessionMode::Lockdown);
         assert_eq!(loaded.whitelist, vec!["mail.com".to_string()]);
+    }
+
+    #[test]
+    fn duplicate_domain_add_reports_the_row_that_carries_it() {
+        let store = memory_store();
+        let first = store.add_blocklist("youtube.com").expect("first add");
+        let second = store
+            .add_blocklist("https://www.YouTube.com/watch?v=1")
+            .expect("second add");
+        assert_eq!(
+            first, second,
+            "a duplicate add must return the existing row's id"
+        );
+
+        let listed = store.list_blocklist().expect("list");
+        assert_eq!(
+            listed.len(),
+            1,
+            "a duplicate add must not create a second row"
+        );
+        assert_eq!(listed[0].id, first);
+        assert_eq!(listed[0].domain, "youtube.com");
+
+        // A later insert of a different domain must still get a fresh, distinct id.
+        let other = store.add_blocklist("reddit.com").expect("other add");
+        assert_ne!(other, first);
     }
 
     #[test]
@@ -711,14 +770,18 @@ mod tests {
     fn settings_default_declared_once_and_reads_propagate() {
         let store = memory_store();
         // Fresh database: declared default applies without a row existing.
-        let enabled = store.get_setting_bool("os_allowlist_enabled").expect("read ok");
+        let enabled = store
+            .get_setting_bool("os_allowlist_enabled")
+            .expect("read ok");
         assert!(enabled);
 
         // Explicit value overrides default and persists.
         store
             .set_setting("os_allowlist_enabled", "false")
             .expect("write ok");
-        let enabled = store.get_setting_bool("os_allowlist_enabled").expect("read ok");
+        let enabled = store
+            .get_setting_bool("os_allowlist_enabled")
+            .expect("read ok");
         assert!(!enabled);
 
         // Unknown key with no declared default reads as false.

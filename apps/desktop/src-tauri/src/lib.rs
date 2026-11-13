@@ -14,7 +14,9 @@ struct StoreApp {
 fn icon_cache_dir() -> PathBuf {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
-    let dir = PathBuf::from(local_app_data).join("FocusBlock").join("IconCache");
+    let dir = PathBuf::from(local_app_data)
+        .join("FocusBlock")
+        .join("IconCache");
     let _ = std::fs::create_dir_all(&dir);
     dir
 }
@@ -22,7 +24,9 @@ fn icon_cache_dir() -> PathBuf {
 fn target_cache_key(target: &AppBlockTarget) -> String {
     let raw = match target {
         AppBlockTarget::Executable { path } => format!("exe_{}", path.to_lowercase()),
-        AppBlockTarget::Package { package_family_name } => {
+        AppBlockTarget::Package {
+            package_family_name,
+        } => {
             format!("pkg_{}", package_family_name.to_lowercase())
         }
     };
@@ -92,7 +96,9 @@ if (Test-Path $exe) {{
                 powershell_single_quoted(path)
             )
         }
-        AppBlockTarget::Package { package_family_name } => {
+        AppBlockTarget::Package {
+            package_family_name,
+        } => {
             format!(
                 r#"
 $ErrorActionPreference = 'SilentlyContinue'
@@ -161,11 +167,9 @@ async fn ipc_request(request: IpcRequest) -> Result<IpcResponse, String> {
 async fn get_app_icon(target: AppBlockTarget) -> Result<Option<String>, String> {
     #[cfg(target_os = "windows")]
     {
-        let icon = tauri::async_runtime::spawn_blocking(move || {
-            extract_app_icon_native(&target)
-        })
-        .await
-        .map_err(|e| format!("Icon task failed: {e}"))?;
+        let icon = tauri::async_runtime::spawn_blocking(move || extract_app_icon_native(&target))
+            .await
+            .map_err(|e| format!("Icon task failed: {e}"))?;
         Ok(icon)
     }
 

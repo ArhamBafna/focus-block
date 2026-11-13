@@ -5,7 +5,7 @@ Procedure to run and test FocusBlock locally on Windows.
 ## 1. Prerequisites
 
 Install:
-- **Rust**: [rustup.rs](https://rustup.rs/) (1.70+)
+- **Rust**: [rustup.rs](https://rustup.rs/) (1.82+)
 - **Node.js**: 18+ from [nodejs.org](https://nodejs.org/)
 
 Verify in PowerShell:

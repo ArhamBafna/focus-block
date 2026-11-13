@@ -63,7 +63,7 @@ Runs tests. Color-coded status (exits `0` = ok, `1` = fail):
 
 ### Prerequisites
 
-- **Rust**: [Install Rust](https://rustup.rs/) (1.70+)
+- **Rust**: [Install Rust](https://rustup.rs/) (1.82+)
 - **Node.js**: 18+ (npm/pnpm)
 - **For Desktop**: Tauri CLI, WebView2 (Windows) / system webview (macOS/Linux)
 - **For Extension**: Chrome/Chromium

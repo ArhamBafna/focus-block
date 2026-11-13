@@ -1,5 +1,5 @@
-use chrono::{DateTime, Utc};
 use crate::AppBlockTarget;
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -209,7 +209,9 @@ mod tests {
     #[test]
     fn fresh_session_has_positive_remaining_within_planned() {
         let session = sample_session();
-        let remaining = session.remaining_sec().expect("planned > 0 must yield remaining");
+        let remaining = session
+            .remaining_sec()
+            .expect("planned > 0 must yield remaining");
         assert!(remaining > 0 && remaining <= 60);
         assert!(!session.is_expired());
     }

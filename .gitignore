@@ -66,4 +66,5 @@ graphify-out/cost.json
 graphify-out/manifest.json
 
 # Temp
-demo-vid/
+/demo-vid/
+/scratch/

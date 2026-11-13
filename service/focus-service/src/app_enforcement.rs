@@ -130,18 +130,12 @@ mod windows {
             if let Some(pfn) = package_family_name {
                 let pfn_lower = pfn.to_ascii_lowercase();
                 if self.package_families.contains(&pfn_lower) {
-                    let display_name = pfn
-                        .split('_')
-                        .next()
-                        .unwrap_or(pfn)
-                        .replace('.', " ");
+                    let display_name = pfn.split('_').next().unwrap_or(pfn).replace('.', " ");
                     return Some(display_name);
                 }
             }
 
-            let Some(image_path) = image_path else {
-                return None;
-            };
+            let image_path = image_path?;
 
             let file_name = image_path.file_name()?.to_string_lossy().to_string();
             let file_name_lower = file_name.to_ascii_lowercase();
@@ -236,7 +230,8 @@ mod windows {
             let mut has_entry = Process32FirstW(snapshot, &mut entry) != 0;
             while has_entry {
                 if entry.th32ProcessID != GetCurrentProcessId() && entry.th32ProcessID > 4 {
-                    if let Some(event) = inspect_and_terminate_process(entry.th32ProcessID, matchers)
+                    if let Some(event) =
+                        inspect_and_terminate_process(entry.th32ProcessID, matchers)
                     {
                         events.push(event);
                     }
@@ -297,15 +292,16 @@ mod windows {
                 return Ok(());
             }
 
-            let locator: IWbemLocator = match CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER) {
-                Ok(loc) => loc,
-                Err(e) => {
-                    let err = format!("Failed to create IWbemLocator: {e}");
-                    let _ = ready_tx.send(Err(err.clone()));
-                    CoUninitialize();
-                    return Err(err);
-                }
-            };
+            let locator: IWbemLocator =
+                match CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER) {
+                    Ok(loc) => loc,
+                    Err(e) => {
+                        let err = format!("Failed to create IWbemLocator: {e}");
+                        let _ = ready_tx.send(Err(err.clone()));
+                        CoUninitialize();
+                        return Err(err);
+                    }
+                };
 
             if stop_flag.load(Ordering::Relaxed) {
                 CoUninitialize();
@@ -358,7 +354,8 @@ mod windows {
             ) {
                 Ok(en) => en,
                 Err(e) => {
-                    let err = format!("ExecNotificationQuery on Win32_ProcessStartTrace failed: {e}");
+                    let err =
+                        format!("ExecNotificationQuery on Win32_ProcessStartTrace failed: {e}");
                     let _ = ready_tx.send(Err(err.clone()));
                     return Err(err);
                 }
@@ -391,7 +388,9 @@ mod windows {
 
                             if pid > 4 && pid != current_pid {
                                 let matchers_guard = matchers.read().unwrap();
-                                if let Some(event) = inspect_and_terminate_process(pid, &matchers_guard) {
+                                if let Some(event) =
+                                    inspect_and_terminate_process(pid, &matchers_guard)
+                                {
                                     let mut blocked_guard = last_blocked.lock().unwrap();
                                     if let Some(existing) = blocked_guard.as_mut() {
                                         if existing.app_name == event.app_name {
@@ -451,7 +450,9 @@ mod windows {
                             .extension()
                             .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"))
                     {
-                        return Err("executable target must resolve to an existing .exe file".into());
+                        return Err(
+                            "executable target must resolve to an existing .exe file".into()
+                        );
                     }
                     let path_str = path.to_string_lossy();
                     Ok(AppBlockTarget::Executable {
@@ -559,7 +560,7 @@ mod windows {
                 let now = Instant::now();
                 if self
                     .last_fallback_poll
-                    .map_or(true, |last| now.duration_since(last) >= FALLBACK_POLL_INTERVAL)
+                    .is_none_or(|last| now.duration_since(last) >= FALLBACK_POLL_INTERVAL)
                 {
                     self.last_fallback_poll = Some(now);
                     let matchers_guard = self.matchers.read().unwrap();
@@ -703,7 +704,9 @@ mod windows {
         loop {
             let mut length = buffer.len() as u32;
             if QueryFullProcessImageNameW(process, 0, buffer.as_mut_ptr(), &mut length) != 0 {
-                return Some(PathBuf::from(OsString::from_wide(&buffer[..length as usize])));
+                return Some(PathBuf::from(OsString::from_wide(
+                    &buffer[..length as usize],
+                )));
             }
 
             if GetLastError() != ERROR_INSUFFICIENT_BUFFER {
@@ -732,8 +735,15 @@ mod windows {
         if GetPackageFamilyName(process, &mut length, buffer.as_mut_ptr()) != 0 {
             return None;
         }
-        let length = buffer.iter().position(|&ch| ch == 0).unwrap_or(length as usize);
-        Some(OsString::from_wide(&buffer[..length]).to_string_lossy().into_owned())
+        let length = buffer
+            .iter()
+            .position(|&ch| ch == 0)
+            .unwrap_or(length as usize);
+        Some(
+            OsString::from_wide(&buffer[..length])
+                .to_string_lossy()
+                .into_owned(),
+        )
     }
 
     #[cfg(test)]
@@ -777,18 +787,31 @@ mod windows {
             let matchers = ProcessMatchers::from_targets(&targets);
 
             // Should match the launcher's own filename
-            assert!(matchers.matches(Some(Path::new(r"C:\AnyFolder\Update.exe")), None).is_some());
+            assert!(matchers
+                .matches(Some(Path::new(r"C:\AnyFolder\Update.exe")), None)
+                .is_some());
 
             // Should match parent directory name inferred executable (Discord.exe)
-            assert!(matchers.matches(Some(Path::new(r"C:\Users\User\AppData\Local\Discord\app-1.0.9013\Discord.exe")), None).is_some());
+            assert!(matchers
+                .matches(
+                    Some(Path::new(
+                        r"C:\Users\User\AppData\Local\Discord\app-1.0.9013\Discord.exe"
+                    )),
+                    None
+                )
+                .is_some());
 
             // Non-blocked executable should pass through
-            assert_eq!(matchers.matches(Some(Path::new(r"C:\AnyFolder\notepad.exe")), None), None);
+            assert_eq!(
+                matchers.matches(Some(Path::new(r"C:\AnyFolder\notepad.exe")), None),
+                None
+            );
         }
 
         #[test]
         fn test_process_matchers_long_paths() {
-            let long_folder = r"C:\".to_string() + &"very_long_folder_name_that_takes_up_space\\".repeat(50);
+            let long_folder =
+                r"C:\".to_string() + &"very_long_folder_name_that_takes_up_space\\".repeat(50);
             let long_path = long_folder + "custom_app.exe";
 
             let targets = vec![AppBlockTarget::Executable {
@@ -796,7 +819,9 @@ mod windows {
             }];
 
             let matchers = ProcessMatchers::from_targets(&targets);
-            assert!(matchers.matches(Some(Path::new(&long_path)), None).is_some());
+            assert!(matchers
+                .matches(Some(Path::new(&long_path)), None)
+                .is_some());
         }
 
         #[test]
@@ -807,7 +832,10 @@ mod windows {
             let matchers = ProcessMatchers::from_targets(&targets);
 
             assert!(matchers
-                .matches(None, Some("Microsoft.WindowsCommunicationsApps_8wekyb3d8bbwe"))
+                .matches(
+                    None,
+                    Some("Microsoft.WindowsCommunicationsApps_8wekyb3d8bbwe")
+                )
                 .is_some());
             assert_eq!(
                 matchers.matches(None, Some("Microsoft.WindowsCalculator_8wekyb3d8bbwe")),
@@ -817,10 +845,10 @@ mod windows {
     }
 }
 
-#[cfg(windows)]
-pub use windows::AppEnforcer;
 #[cfg(all(windows, test))]
 pub use windows::process_running;
+#[cfg(windows)]
+pub use windows::AppEnforcer;
 
 // Real-enforcement prerequisite checks compile on every test platform, even
 // though they fail fast before querying processes off Windows.

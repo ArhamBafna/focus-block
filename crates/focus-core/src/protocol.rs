@@ -12,14 +12,26 @@ pub enum IpcRequest {
     Health,
     GetStatus,
     ListBlocklist,
-    AddBlocklist { domain: String },
-    RemoveBlocklist { id: i64 },
+    AddBlocklist {
+        domain: String,
+    },
+    RemoveBlocklist {
+        id: i64,
+    },
     ListAppBlockTargets,
-    AddAppBlockTarget { target: AppBlockTarget },
-    RemoveAppBlockTarget { id: i64 },
+    AddAppBlockTarget {
+        target: AppBlockTarget,
+    },
+    RemoveAppBlockTarget {
+        id: i64,
+    },
     ListWhitelist,
-    AddWhitelist { domain: String },
-    RemoveWhitelist { id: i64 },
+    AddWhitelist {
+        domain: String,
+    },
+    RemoveWhitelist {
+        id: i64,
+    },
     ListPresets,
     CreatePreset {
         name: String,
@@ -28,27 +40,40 @@ pub enum IpcRequest {
         blocklist: Vec<String>,
         whitelist: Vec<String>,
     },
-    DeletePreset { id: Uuid },
+    DeletePreset {
+        id: Uuid,
+    },
     StartSession {
         mode: SessionMode,
         duration_minutes: u32,
         preset_id: Option<Uuid>,
     },
     StopSession,
-    ListHistory { limit: u32 },
+    ListHistory {
+        limit: u32,
+    },
     ClearHistory,
     GetSettings,
-    UpdateSettings { os_allowlist_enabled: bool },
+    UpdateSettings {
+        os_allowlist_enabled: bool,
+    },
     /// Canonical, service-owned browser policy used by the native-messaging host.
     GetActivePolicy,
     /// Clear the most recent blocked application notification after user dismisses it.
     ClearLastBlockedApp,
     ListSchedules,
-    CreateSchedule { schedule: Schedule },
-    UpdateSchedule { schedule: Schedule },
-    DeleteSchedule { id: String },
+    CreateSchedule {
+        schedule: Schedule,
+    },
+    UpdateSchedule {
+        schedule: Schedule,
+    },
+    DeleteSchedule {
+        id: String,
+    },
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum IpcResponse {
@@ -105,9 +130,13 @@ impl AppBlockTarget {
                 if path.is_empty() || !path.to_ascii_lowercase().ends_with(".exe") {
                     return Err("executable target must be a .exe path".into());
                 }
-                Ok(Self::Executable { path: path.to_string() })
+                Ok(Self::Executable {
+                    path: path.to_string(),
+                })
             }
-            Self::Package { package_family_name } => {
+            Self::Package {
+                package_family_name,
+            } => {
                 let package_family_name = package_family_name.trim();
                 if package_family_name.is_empty()
                     || !package_family_name.contains('_')
@@ -125,7 +154,9 @@ impl AppBlockTarget {
     pub fn storage_parts(&self) -> (&'static str, &str) {
         match self {
             Self::Executable { path } => ("executable", path),
-            Self::Package { package_family_name } => ("package", package_family_name),
+            Self::Package {
+                package_family_name,
+            } => ("package", package_family_name),
         }
     }
 
@@ -236,14 +267,20 @@ mod tests {
     /// round-trip as itself, or responses silently decode as the wrong type.
     #[test]
     fn every_response_variant_round_trips_to_itself() {
-        let health = ServiceHealth { running: true, version: "0.0.0".into() };
+        let health = ServiceHealth {
+            running: true,
+            version: "0.0.0".into(),
+        };
         let status = ServiceStatus {
             health: health.clone(),
             active_session: None,
             last_blocked_app: None,
             enforcement_mode: EnforcementMode::PollingFallback,
         };
-        let domain = DomainEntry { id: 1, domain: "a.com".into() };
+        let domain = DomainEntry {
+            id: 1,
+            domain: "a.com".into(),
+        };
         let preset = Preset {
             id: Uuid::nil(),
             name: "p".into(),
@@ -252,14 +289,7 @@ mod tests {
             blocklist: vec![],
             whitelist: vec![],
         };
-        let session = Session::new(
-            SessionMode::Blocklist,
-            60,
-            vec![],
-            vec![],
-            vec![],
-            None,
-        );
+        let session = Session::new(SessionMode::Blocklist, 60, vec![], vec![], vec![], None);
         // Overwrite generated fields so equality is exact.
         let session = Session {
             id: Uuid::nil(),
@@ -276,15 +306,39 @@ mod tests {
             days_of_week: vec![1, 2, 3],
             ends_on: None,
         };
+        let policy = BlockingPolicySnapshot {
+            active: true,
+            mode: Some(SessionMode::Lockdown),
+            blocklist: vec!["a.com".into()],
+            whitelist: vec!["b.com".into()],
+            blocked_domains: vec!["a.com".into()],
+            allowed_domains: vec!["b.com".into()],
+            version: "0.0.0".into(),
+            expires_at: None,
+            error: None,
+        };
         let cases: Vec<ResponseData> = vec![
-            ResponseData::Schedules(ScheduleList { schedules: vec![sched] }),
+            ResponseData::Schedules(ScheduleList {
+                schedules: vec![sched],
+            }),
             ResponseData::Unit(()),
             ResponseData::Health(health),
             ResponseData::Status(status),
             ResponseData::Domains(vec![domain]),
+            ResponseData::AppTargets(AppBlockTargetList {
+                targets: vec![AppBlockEntry {
+                    id: 7,
+                    target: AppBlockTarget::Package {
+                        package_family_name: "AppLtd.Package_abc123".into(),
+                    },
+                }],
+            }),
+            ResponseData::Policy(policy),
             ResponseData::Presets(vec![preset]),
             ResponseData::Sessions(vec![session]),
-            ResponseData::Settings(AppSettings { os_allowlist_enabled: true }),
+            ResponseData::Settings(AppSettings {
+                os_allowlist_enabled: true,
+            }),
             ResponseData::Id(42),
         ];
 
@@ -296,6 +350,8 @@ mod tests {
                 (ResponseData::Health(a), ResponseData::Health(b)) => assert_eq!(a, b),
                 (ResponseData::Status(a), ResponseData::Status(b)) => assert_eq!(a, b),
                 (ResponseData::Domains(a), ResponseData::Domains(b)) => assert_eq!(a, b),
+                (ResponseData::AppTargets(a), ResponseData::AppTargets(b)) => assert_eq!(a, b),
+                (ResponseData::Policy(a), ResponseData::Policy(b)) => assert_eq!(a, b),
                 (ResponseData::Presets(a), ResponseData::Presets(b)) => assert_eq!(a, b),
                 (ResponseData::Sessions(a), ResponseData::Sessions(b)) => assert_eq!(a, b),
                 (ResponseData::Settings(a), ResponseData::Settings(b)) => assert_eq!(a, b),
@@ -374,7 +430,8 @@ mod tests {
             })
         );
 
-        let roundtrip: DiscoveredApp = serde_json::from_value(json).expect("deserialize discovered app");
+        let roundtrip: DiscoveredApp =
+            serde_json::from_value(json).expect("deserialize discovered app");
         assert_eq!(roundtrip, app);
     }
 }

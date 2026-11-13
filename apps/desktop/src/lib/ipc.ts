@@ -13,6 +13,8 @@ export interface Session {
   status: SessionStatus;
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
+  /** App targets frozen at session start; sent by the service, absent in old rows. */
+  app_block_targets_snapshot?: AppBlockTarget[];
   scheduled_schedule_id?: string | null;
 }
 
@@ -66,6 +68,8 @@ export interface ServiceStatus {
   health: ServiceHealth;
   active_session: ActiveSessionView | null;
   last_blocked_app?: BlockedAppEvent | null;
+  /** How app blocking is enforced right now; absent in replies from older services. */
+  enforcement_mode?: "inactive" | "kernel_events" | "polling_fallback";
 }
 
 export interface AppSettings {
@@ -614,9 +618,3 @@ export const ipc = {
   deleteSchedule: (id: string) => request<null>("DeleteSchedule", { id }).then(unwrap),
 
 };
-
-export function setMockBlockedApp(event: BlockedAppEvent | null): void {
-  if (typeof window !== "undefined") {
-    localStorage.setItem("mock_last_blocked_app", JSON.stringify(event));
-  }
-}

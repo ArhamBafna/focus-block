@@ -1,24 +1,34 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { ipc, Preset, SessionMode } from "../lib/ipc";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { Plus } from "@phosphor-icons/react/Plus";
 import { X } from "@phosphor-icons/react/X";
 import { Clock } from "@phosphor-icons/react/Clock";
 import { Shield } from "@phosphor-icons/react/Shield";
+import { Play } from "@phosphor-icons/react/Play";
 
 type NewPresetForm = {
   name: string;
   mode: SessionMode;
   duration_minutes: number;
+  domains: string;
 };
 
-const EMPTY_FORM: NewPresetForm = { name: "", mode: "blocklist", duration_minutes: 25 };
+const EMPTY_FORM: NewPresetForm = { name: "", mode: "blocklist", duration_minutes: 25, domains: "" };
+
+/** Split a free-text domain list on commas or whitespace, dropping empties. */
+function parseDomains(text: string): string[] {
+  return text.split(/[\s,]+/).filter(Boolean);
+}
 
 export default function Presets() {
+  const navigate = useNavigate();
   const [presets, setPresets] = useState<Preset[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<NewPresetForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [startingId, setStartingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const fetchPresets = async () => {
@@ -41,7 +51,13 @@ export default function Presets() {
     setSaving(true);
     setError(null);
     try {
-      await ipc.createPreset(form.name.trim(), form.mode, form.duration_minutes, [], []);
+      await ipc.createPreset(
+        form.name.trim(),
+        form.mode,
+        form.duration_minutes,
+        parseDomains(form.domains),
+        []
+      );
       setForm(EMPTY_FORM);
       setShowForm(false);
       fetchPresets();
@@ -49,6 +65,30 @@ export default function Presets() {
       setError(err instanceof Error ? err.message : "Could not create preset.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleStart = async (preset: Preset) => {
+    if (startingId) return;
+    setStartingId(preset.id);
+    setError(null);
+    try {
+      await ipc.startSession(preset.mode, preset.duration_minutes, preset.id);
+      navigate("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not start session.");
+    } finally {
+      setStartingId(null);
+    }
+  };
+
+  const handleDelete = async (preset: Preset) => {
+    setError(null);
+    try {
+      await ipc.deletePreset(preset.id);
+      fetchPresets();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete preset.");
     }
   };
 
@@ -193,6 +233,37 @@ export default function Presets() {
               </div>
             </div>
 
+            {form.mode === "blocklist" && (
+              <div>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "var(--color-neutral-600)", marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Domains (optional, comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={form.domains}
+                  onChange={(e) => setForm((f) => ({ ...f, domains: e.target.value }))}
+                  placeholder="e.g. youtube.com, instagram.com"
+                  style={{
+                    width: "100%",
+                    padding: "9px 12px",
+                    fontSize: "14px",
+                    fontFamily: "var(--font-sans)",
+                    border: "1.5px solid var(--color-lumen-dark)",
+                    borderRadius: "8px",
+                    background: "var(--color-background)",
+                    color: "var(--color-vast)",
+                    outline: "none",
+                    boxSizing: "border-box",
+                  }}
+                  onFocus={(e) => ((e.target as HTMLElement).style.borderColor = "var(--color-fathom)")}
+                  onBlur={(e) => ((e.target as HTMLElement).style.borderColor = "var(--color-lumen-dark)")}
+                />
+                <p style={{ margin: "4px 0 0", fontSize: "11px", color: "var(--color-neutral-400)" }}>
+                  Leave empty to use whatever is in your blocklist when you press Start.
+                </p>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "4px" }}>
               <button
                 type="button"
@@ -267,27 +338,66 @@ export default function Presets() {
                     <Clock size={12} />
                     {p.duration_minutes}m
                   </span>
+                  <span style={{ fontSize: "12px", color: "var(--color-neutral-500)" }}>
+                    {p.mode === "blocklist"
+                      ? p.blocklist.length > 0
+                        ? `${p.blocklist.length} site${p.blocklist.length === 1 ? "" : "s"}`
+                        : "Uses current blocklist"
+                      : "Everything"}
+                  </span>
                 </div>
               </div>
-              <button
-                onClick={async () => { await ipc.deletePreset(p.id); fetchPresets(); }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: "4px",
-                  borderRadius: "6px",
-                  color: "var(--color-neutral-400)",
-                  display: "flex",
-                  alignItems: "center",
-                  flexShrink: 0,
-                  transition: "color 0.15s",
-                }}
-                onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#e05c5c")}
-                onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--color-neutral-400)")}
-              >
-                <Trash size={15} />
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+                <button
+                  type="button"
+                  disabled={startingId !== null}
+                  onClick={() => handleStart(p)}
+                  aria-label={`Start preset ${p.name}`}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "5px",
+                    padding: "5px 10px",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    fontFamily: "var(--font-sans)",
+                    background: p.mode === "lockdown" ? "var(--color-pulse)" : "var(--color-fathom)",
+                    color: "var(--color-lumen)",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: startingId ? "not-allowed" : "pointer",
+                    opacity: startingId && startingId !== p.id ? 0.6 : 1,
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.opacity = "0.9")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.opacity = "1")}
+                >
+                  <Play size={11} weight="fill" />
+                  {startingId === p.id ? "Starting…" : "Start"}
+                </button>
+                <button
+                  type="button"
+                  disabled={startingId !== null}
+                  onClick={() => handleDelete(p)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    cursor: startingId ? "not-allowed" : "pointer",
+                    padding: "4px",
+                    borderRadius: "6px",
+                    color: "var(--color-neutral-400)",
+                    display: "flex",
+                    alignItems: "center",
+                    flexShrink: 0,
+                    transition: "color 0.15s",
+                  }}
+                  onMouseEnter={(e) => ((e.currentTarget as HTMLElement).style.color = "#e05c5c")}
+                  onMouseLeave={(e) => ((e.currentTarget as HTMLElement).style.color = "var(--color-neutral-400)")}
+                  aria-label={`Delete preset ${p.name}`}
+                >
+                  <Trash size={15} />
+                </button>
+              </div>
             </div>
           </div>
         ))}

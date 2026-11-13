@@ -22,7 +22,8 @@ mod imp {
         }
 
         pub async fn ping() -> bool {
-            Self::request(IpcRequest::Ping).await
+            Self::request(IpcRequest::Ping)
+                .await
                 .map(|r| matches!(r, IpcResponse::Ok { .. }))
                 .unwrap_or(false)
         }
@@ -42,7 +43,10 @@ mod imp {
             let mut client = loop {
                 match ClientOptions::new().open(PIPE_NAME) {
                     Ok(c) => break c,
-                    Err(e) if e.kind() == io::ErrorKind::WouldBlock || e.raw_os_error() == Some(231) => {
+                    Err(e)
+                        if e.kind() == io::ErrorKind::WouldBlock
+                            || e.raw_os_error() == Some(231) =>
+                    {
                         if Instant::now() >= deadline {
                             return Err(timeout_error());
                         }

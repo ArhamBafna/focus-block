@@ -47,9 +47,7 @@ pub fn requested_tier() -> Option<Tier> {
         "" => None,
         "tier-a" | "a" => Some(Tier::A),
         "tier-b" | "b" => Some(Tier::B),
-        other => panic!(
-            "{OPT_IN_ENV}={other:?} is not a tier; use \"tier-a\" or \"tier-b\""
-        ),
+        other => panic!("{OPT_IN_ENV}={other:?} is not a tier; use \"tier-a\" or \"tier-b\""),
     }
 }
 
@@ -444,7 +442,9 @@ impl GuardedRun {
         );
 
         dummy_exe();
-        self.record("prerequisites: Windows, elevation, no existing install, kernel subscription active");
+        self.record(
+            "prerequisites: Windows, elevation, no existing install, kernel subscription active",
+        );
     }
 }
 
@@ -507,7 +507,14 @@ pub fn service_exe() -> PathBuf {
 
 pub fn service_install() -> String {
     let exe = service_exe();
-    let output = sc(&["create", SERVICE_NAME, "binPath=", &exe.to_string_lossy(), "start=", "demand"]);
+    let output = sc(&[
+        "create",
+        SERVICE_NAME,
+        "binPath=",
+        &exe.to_string_lossy(),
+        "start=",
+        "demand",
+    ]);
     assert!(
         output.status.success(),
         "installing the test-owned service failed: {}",

@@ -17,8 +17,7 @@ fn main() {
         .with_env_filter(
             EnvFilter::from_default_env()
                 .add_directive("focus_service=info".parse().unwrap())
-                .add_directive("focus_ipc=info".parse().unwrap())
-                .add_directive("focus_dns=info".parse().unwrap())
+                .add_directive("focus_ipc=info".parse().unwrap()),
         )
         .init();
 

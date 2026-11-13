@@ -77,8 +77,14 @@ mod tests {
 
     #[test]
     fn mode_round_trip_preserves_lockdown() {
-        assert_eq!(parse_mode(encode_mode(SessionMode::Lockdown)), SessionMode::Lockdown);
-        assert_eq!(parse_mode(encode_mode(SessionMode::Blocklist)), SessionMode::Blocklist);
+        assert_eq!(
+            parse_mode(encode_mode(SessionMode::Lockdown)),
+            SessionMode::Lockdown
+        );
+        assert_eq!(
+            parse_mode(encode_mode(SessionMode::Blocklist)),
+            SessionMode::Blocklist
+        );
     }
 
     #[test]
@@ -91,7 +97,10 @@ mod tests {
     fn corrupt_status_never_resurrects_active() {
         assert_eq!(parse_status("weird"), SessionStatus::Stopped);
         assert_eq!(parse_status(""), SessionStatus::Stopped);
-        assert_eq!(parse_status(encode_status(SessionStatus::Completed)), SessionStatus::Completed);
+        assert_eq!(
+            parse_status(encode_status(SessionStatus::Completed)),
+            SessionStatus::Completed
+        );
     }
 
     #[test]
@@ -104,9 +113,6 @@ mod tests {
     #[test]
     fn corrupt_domain_json_degrades_to_empty() {
         assert!(parse_domain_list("{not json").is_empty());
-        assert_eq!(
-            parse_domain_list(r#"["a.com"]"#),
-            vec!["a.com".to_string()]
-        );
+        assert_eq!(parse_domain_list(r#"["a.com"]"#), vec!["a.com".to_string()]);
     }
 }

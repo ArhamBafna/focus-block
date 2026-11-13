@@ -3,50 +3,26 @@ import { ipc, DomainEntry } from "../lib/ipc";
 import { Trash } from "@phosphor-icons/react/Trash";
 import { Plus } from "@phosphor-icons/react/Plus";
 
-/** Which list a DomainListPage instance edits. */
-export type DomainListKind = "blocklist" | "whitelist";
-
-const LIST_COPY: Record<
-  DomainListKind,
-  {
-    title: string;
-    subtitle: string;
-    placeholder: string;
-    empty: string;
-    list: () => Promise<DomainEntry[]>;
-    add: (domain: string) => Promise<number>;
-    remove: (id: number) => Promise<unknown>;
-  }
-> = {
-  blocklist: {
-    title: "Blocklists",
-    subtitle: "Sites blocked during every focus session.",
-    placeholder: "e.g. youtube.com or https://reddit.com/",
-    empty: "No domains added yet. Add one above to get started.",
-    list: () => ipc.listBlocklist(),
-    add: (domain) => ipc.addBlocklist(domain),
-    remove: (id) => ipc.removeBlocklist(id),
-  },
-  whitelist: {
-    title: "Whitelist",
-    subtitle: "Sites always allowed, even during Lockdown mode.",
-    placeholder: "e.g. github.com or https://notion.so/",
-    empty: "No domains whitelisted. Sites added here bypass Lockdown mode.",
-    list: () => ipc.listWhitelist(),
-    add: (domain) => ipc.addWhitelist(domain),
-    remove: (id) => ipc.removeWhitelist(id),
-  },
+/**
+ * Shared domain-list editor. Today only the whitelist page exists (the
+ * Blocklists page has its own richer layout with app targets), so the copy
+ * below is whitelist-specific until a second list needs this component.
+ */
+const COPY = {
+  title: "Whitelist",
+  subtitle: "Sites always allowed, even during Lockdown mode.",
+  placeholder: "e.g. github.com or https://notion.so/",
+  empty: "No domains whitelisted. Sites added here bypass Lockdown mode.",
 };
 
-export default function DomainListPage({ kind }: { kind: DomainListKind }) {
-  const copy = LIST_COPY[kind];
+export default function DomainListPage() {
   const [domains, setDomains] = useState<DomainEntry[]>([]);
   const [newDomain, setNewDomain] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const fetchDomains = async () => {
     try {
-      const list = await copy.list();
+      const list = await ipc.listWhitelist();
       setDomains(Array.isArray(list) ? list : []);
     } catch (e) {
       console.error(e);
@@ -63,7 +39,7 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
     if (!newDomain.trim()) return;
     setError(null);
     try {
-      await copy.add(newDomain);
+      await ipc.addWhitelist(newDomain);
       setNewDomain("");
       fetchDomains();
     } catch (e: any) {
@@ -84,10 +60,10 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
             letterSpacing: "-0.4px",
           }}
         >
-          {copy.title}
+          {COPY.title}
         </h1>
         <p style={{ margin: "6px 0 0", fontSize: "14px", color: "var(--color-neutral-500)" }}>
-          {copy.subtitle}
+          {COPY.subtitle}
         </p>
       </div>
 
@@ -97,7 +73,7 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
           type="text"
           value={newDomain}
           onChange={(e) => { setNewDomain(e.target.value); setError(null); }}
-          placeholder={copy.placeholder}
+          placeholder={COPY.placeholder}
           style={{
             flex: 1,
             padding: "10px 14px",
@@ -176,7 +152,7 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
             </span>
             <button
               onClick={async () => {
-                await copy.remove(d.id);
+                await ipc.removeWhitelist(d.id);
                 fetchDomains();
               }}
               style={{
@@ -206,7 +182,7 @@ export default function DomainListPage({ kind }: { kind: DomainListKind }) {
               fontSize: "14px",
             }}
           >
-            {copy.empty}
+            {COPY.empty}
           </div>
         )}
       </div>

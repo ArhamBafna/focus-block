@@ -52,9 +52,9 @@ pub fn run_windows_service() {
 
     fn my_service_main(_arguments: Vec<OsString>) {
         let (stop_tx, stop_rx) = watch::channel(false);
-        let status_handle = Arc::new(StdMutex::new(None::<
-            service_control_handler::ServiceStatusHandle,
-        >));
+        let status_handle = Arc::new(StdMutex::new(
+            None::<service_control_handler::ServiceStatusHandle>,
+        ));
         let status_for_handler = Arc::clone(&status_handle);
         let event_handler = move |control_event| -> ServiceControlHandlerResult {
             match control_event {
@@ -103,7 +103,10 @@ pub fn run_windows_service() {
 
         let result = tokio::runtime::Runtime::new()
             .map_err(|error| error.to_string())
-            .and_then(|rt| rt.block_on(run_async(Some(stop_rx))).map_err(|error| error.to_string()));
+            .and_then(|rt| {
+                rt.block_on(run_async(Some(stop_rx)))
+                    .map_err(|error| error.to_string())
+            });
         let exit_code = match result {
             Ok(()) => 0,
             Err(error) => {
@@ -113,10 +116,7 @@ pub fn run_windows_service() {
         };
 
         {
-            let handle = status_handle
-                .lock()
-                .map_err(|_| ())
-                .ok();
+            let handle = status_handle.lock().map_err(|_| ()).ok();
             if let Some(handle) = handle.as_ref().and_then(|handle| handle.as_ref()) {
                 let _ = handle.set_service_status(service_status(
                     ServiceState::Stopped,
@@ -140,10 +140,13 @@ fn configure_service_recovery() -> Result<(), String> {
         ChangeServiceConfig2W, CloseServiceHandle, OpenSCManagerW, OpenServiceW, SC_ACTION,
         SC_ACTION_RESTART, SC_MANAGER_CONNECT, SERVICE_CHANGE_CONFIG,
         SERVICE_CONFIG_FAILURE_ACTIONS, SERVICE_CONFIG_FAILURE_ACTIONS_FLAG,
-        SERVICE_FAILURE_ACTIONS_FLAG, SERVICE_FAILURE_ACTIONSW,
+        SERVICE_FAILURE_ACTIONSW, SERVICE_FAILURE_ACTIONS_FLAG,
     };
 
-    let service_name: Vec<u16> = SERVICE_NAME.encode_utf16().chain(std::iter::once(0)).collect();
+    let service_name: Vec<u16> = SERVICE_NAME
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
     unsafe {
         let scm = OpenSCManagerW(ptr::null(), ptr::null(), SC_MANAGER_CONNECT);
         if scm.is_null() {

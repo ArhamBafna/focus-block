@@ -78,7 +78,9 @@ fn tier_a_dummy_launch_is_terminated_with_kernel_events() {
         "a cleanup kill satisfied the blocking assertion"
     );
 
-    enforcer.clear().expect("releasing enforcement must succeed");
+    enforcer
+        .clear()
+        .expect("releasing enforcement must succeed");
     run.record(format!(
         "tier-a: dummy terminated on launch in {observed:?} (deadline {BLOCK_DEADLINE:?})"
     ));

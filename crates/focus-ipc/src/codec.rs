@@ -13,11 +13,10 @@ pub async fn write_message<W: AsyncWriteExt + Unpin>(
     writer: &mut W,
     response: &IpcResponse,
 ) -> io::Result<()> {
-    let buf = serde_json::to_vec(response).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+    let buf =
+        serde_json::to_vec(response).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
     writer.write_u32_le(buf.len() as u32).await?;
     writer.write_all(&buf).await?;
     writer.flush().await?;
     Ok(())
 }
-
-

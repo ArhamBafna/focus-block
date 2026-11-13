@@ -10,9 +10,8 @@ mod imp {
     use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
     use tracing::{error, info};
 
-    pub type RequestHandler = Arc<
-        dyn Fn(IpcRequest) -> Pin<Box<dyn Future<Output = IpcResponse> + Send>> + Send + Sync,
-    >;
+    pub type RequestHandler =
+        Arc<dyn Fn(IpcRequest) -> Pin<Box<dyn Future<Output = IpcResponse> + Send>> + Send + Sync>;
 
     struct PipeSecurity {
         sd: *mut std::ffi::c_void,
@@ -42,7 +41,8 @@ mod imp {
 
         fn create_pipe(&self, first: bool) -> io::Result<NamedPipeServer> {
             let mut sa = windows_sys::Win32::Security::SECURITY_ATTRIBUTES {
-                nLength: std::mem::size_of::<windows_sys::Win32::Security::SECURITY_ATTRIBUTES>() as u32,
+                nLength: std::mem::size_of::<windows_sys::Win32::Security::SECURITY_ATTRIBUTES>()
+                    as u32,
                 lpSecurityDescriptor: self.sd,
                 bInheritHandle: 0,
             };
@@ -102,7 +102,9 @@ mod imp {
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {
                     if let Err(e) = handle_connection(connected, handler).await {
-                        if e.raw_os_error() == Some(232) || e.kind() == std::io::ErrorKind::UnexpectedEof {
+                        if e.raw_os_error() == Some(232)
+                            || e.kind() == std::io::ErrorKind::UnexpectedEof
+                        {
                             tracing::debug!("client closed ipc connection early: {e}");
                         } else {
                             error!("ipc connection error: {e}");
@@ -132,9 +134,8 @@ mod imp {
     use std::pin::Pin;
     use std::sync::Arc;
 
-    pub type RequestHandler = Arc<
-        dyn Fn(IpcRequest) -> Pin<Box<dyn Future<Output = IpcResponse> + Send>> + Send + Sync,
-    >;
+    pub type RequestHandler =
+        Arc<dyn Fn(IpcRequest) -> Pin<Box<dyn Future<Output = IpcResponse> + Send>> + Send + Sync>;
 
     pub struct IpcServer {
         _handler: RequestHandler,
