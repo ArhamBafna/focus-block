@@ -162,7 +162,10 @@ mod imp {
         };
         match tokio::time::timeout(tokio::time::Duration::from_secs(10), fut).await {
             Ok(res) => res,
-            Err(_) => Err(io::Error::new(io::ErrorKind::TimedOut, "IPC request timed out")),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "IPC request timed out",
+            )),
         }
     }
 }

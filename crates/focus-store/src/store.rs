@@ -546,7 +546,9 @@ fn row_to_session(row: &rusqlite::Row<'_>) -> Result<Session, StoreError> {
     let whitelist = codec::parse_domain_list(&row.get::<_, String>(8)?);
     let app_block_targets: Vec<AppBlockTarget> = serde_json::from_str(&row.get::<_, String>(9)?)
         .unwrap_or_else(|e| {
-            tracing::warn!("unparseable app_block_targets JSON in database ({e}), using empty list");
+            tracing::warn!(
+                "unparseable app_block_targets JSON in database ({e}), using empty list"
+            );
             Vec::new()
         });
 

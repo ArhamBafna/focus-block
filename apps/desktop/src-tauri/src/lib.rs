@@ -27,6 +27,16 @@ impl<T> OneOrMany<T> {
     }
 }
 
+/// PowerShell prints nothing at all when a pipeline has no objects, and prints a
+/// bare object (not an array) when it has exactly one. Both shapes mean "here is
+/// the list"; neither is a parse failure.
+fn parse_app_list<T: serde::de::DeserializeOwned>(json: &str) -> Result<Vec<T>, serde_json::Error> {
+    if json.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    serde_json::from_str::<OneOrMany<T>>(json).map(OneOrMany::into_vec)
+}
+
 fn icon_cache_dir() -> PathBuf {
     let local_app_data = std::env::var("LOCALAPPDATA")
         .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
@@ -268,10 +278,8 @@ $allApps = $storeApps + $win32Apps | Sort-Object displayName
 
         let json = String::from_utf8(output.stdout)
             .map_err(|error| format!("Could not read installed app list: {error}"))?;
-        let parsed: OneOrMany<DiscoveredApp> = serde_json::from_str(&json)
+        let mut apps = parse_app_list::<DiscoveredApp>(&json)
             .map_err(|error| format!("Could not parse installed app list: {error}"))?;
-        let mut apps = parsed.into_vec();
-
         let cache_dir = icon_cache_dir();
         for app in &mut apps {
             if app.icon_data_uri.is_none() {
@@ -335,9 +343,8 @@ $apps = @(Get-StartApps | ForEach-Object {
 
         let json = String::from_utf8(output.stdout)
             .map_err(|error| format!("Could not read Microsoft Store app list: {error}"))?;
-        let parsed: OneOrMany<StoreApp> = serde_json::from_str(&json)
-            .map_err(|error| format!("Could not parse Microsoft Store app list: {error}"))?;
-        Ok(parsed.into_vec())
+        parse_app_list::<StoreApp>(&json)
+            .map_err(|error| format!("Could not parse Microsoft Store app list: {error}"))
     }
 
     #[cfg(not(target_os = "windows"))]
@@ -416,5 +423,29 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn app_list_json_accepts_zero_one_or_many_entries() {
+        use super::parse_app_list;
+
+        // PowerShell prints nothing for an empty pipeline result.
+        assert!(parse_app_list::<StoreApp>("").unwrap().is_empty());
+        assert!(parse_app_list::<StoreApp>(" \r\n").unwrap().is_empty());
+        assert!(parse_app_list::<StoreApp>("[]").unwrap().is_empty());
+
+        // One object is printed bare, not wrapped in an array.
+        let single = parse_app_list::<StoreApp>(
+            r#"{"displayName":"Calculator","packageFamilyName":"Fam_1"}"#,
+        )
+        .expect("a single bare object is a list of one");
+        assert_eq!(single.len(), 1);
+        assert_eq!(single[0].display_name, "Calculator");
+
+        let many = parse_app_list::<StoreApp>(
+            r#"[{"displayName":"A","packageFamilyName":"F1"},{"displayName":"B","packageFamilyName":"F2"}]"#,
+        )
+        .expect("an array is a list");
+        assert_eq!(many.len(), 2);
     }
 }

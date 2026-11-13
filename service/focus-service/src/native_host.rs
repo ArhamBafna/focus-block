@@ -119,14 +119,6 @@ mod windows_host {
                 | IpcRequest::ClearHistory
                 | IpcRequest::GetSettings
                 | IpcRequest::UpdateSettings { .. }
-                | IpcRequest::ListSchedules
-                | IpcRequest::CreateSchedule { .. }
-                | IpcRequest::UpdateSchedule { .. }
-                | IpcRequest::DeleteSchedule { .. }
-                | IpcRequest::ListAppBlockTargets
-                | IpcRequest::AddAppBlockTarget { .. }
-                | IpcRequest::RemoveAppBlockTarget { .. }
-                | IpcRequest::ClearLastBlockedApp
         )
     }
 

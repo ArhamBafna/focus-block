@@ -43,7 +43,11 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
 
   useEffect(() => {
     if (apps.length === 0) return;
-    const missing = filteredApps.filter((a) => !a.iconDataUri).slice(0, 25);
+    // Every visible app gets an icon: a hard cap would leave everything past the
+    // first batch with a letter placeholder forever, because this effect only
+    // re-runs when the app list or the search term changes. Batching keeps the
+    // UI responsive instead of capping the work.
+    const missing = filteredApps.filter((a) => !a.iconDataUri);
     if (missing.length === 0) return;
 
     let isMounted = true;

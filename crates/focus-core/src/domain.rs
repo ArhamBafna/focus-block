@@ -74,10 +74,7 @@ mod tests {
             normalize_domain("https://youtube.com./"),
             Some("youtube.com".into())
         );
-        assert_eq!(
-            normalize_domain("www.com"),
-            Some("www.com".into())
-        );
+        assert_eq!(normalize_domain("www.com"), Some("www.com".into()));
     }
 
     #[test]

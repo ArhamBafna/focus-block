@@ -66,7 +66,10 @@ mod imp {
             if len > crate::codec::MAX_IPC_MESSAGE_BYTES {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidData,
-                    format!("IPC response length {len} exceeds limit of {}", crate::codec::MAX_IPC_MESSAGE_BYTES),
+                    format!(
+                        "IPC response length {len} exceeds limit of {}",
+                        crate::codec::MAX_IPC_MESSAGE_BYTES
+                    ),
                 ));
             }
             let mut buf = vec![0u8; len];

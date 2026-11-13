@@ -88,7 +88,17 @@ mod windows {
     ];
 
     const GENERIC_FOLDER_NAMES: &[&str] = &[
-        "bin", "app", "application", "current", "release", "debug", "x64", "x86", "dist", "build", "src",
+        "bin",
+        "app",
+        "application",
+        "current",
+        "release",
+        "debug",
+        "x64",
+        "x86",
+        "dist",
+        "build",
+        "src",
     ];
 
     #[derive(Default, Clone)]
@@ -125,7 +135,8 @@ mod windows {
                                         }
                                     }
                                     if let Some(parent_name) = p.file_name() {
-                                        let parent_lower = parent_name.to_string_lossy().to_ascii_lowercase();
+                                        let parent_lower =
+                                            parent_name.to_string_lossy().to_ascii_lowercase();
                                         if !GENERIC_FOLDER_NAMES.contains(&parent_lower.as_str()) {
                                             let mut inferred_exe = parent_lower;
                                             inferred_exe.push_str(".exe");
