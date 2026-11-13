@@ -59,8 +59,6 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
       (a) => !a.iconDataUri && !attemptedIcons.current.has(iconKey(a))
     );
     if (missing.length === 0) return;
-    // Mark before awaiting so overlapping runs never queue the same target twice.
-    for (const app of missing) attemptedIcons.current.add(iconKey(app));
 
     let isMounted = true;
     (async () => {
@@ -70,11 +68,17 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
         const chunk = missing.slice(i, i + chunkSize);
         const results = await Promise.all(
           chunk.map(async (app) => {
+            // Marked only once the attempt resolves: a keystroke that aborts the
+            // loop mid-chunk must not make the untouched apps look "tried", or
+            // they would never get an icon.
+            const key = iconKey(app);
             try {
               const iconUri = await getAppIcon(app.target);
               return { app, iconUri };
             } catch {
               return { app, iconUri: null };
+            } finally {
+              attemptedIcons.current.add(key);
             }
           })
         );

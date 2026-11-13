@@ -90,12 +90,45 @@ fn save_cached_icon(cache_dir: &Path, key: &str, data: &str) {
     let _ = std::fs::write(file, data);
 }
 
+/// How long a failed extraction is remembered. Without a marker the app picker
+/// re-runs PowerShell for every app whose icon can never be extracted (many UWP
+/// packages) on each open.
+const ICON_MISS_TTL: std::time::Duration = std::time::Duration::from_secs(7 * 24 * 60 * 60);
+
+fn icon_miss_marker(cache_dir: &Path, key: &str) -> PathBuf {
+    cache_dir.join(format!("{key}.miss"))
+}
+
+/// A missing-icon marker only counts while it is younger than the TTL, so an
+/// app that gains a usable icon later still gets one without a reinstall.
+fn icon_miss_is_fresh(cache_dir: &Path, key: &str) -> bool {
+    let modified = std::fs::metadata(icon_miss_marker(cache_dir, key))
+        .and_then(|meta| meta.modified())
+        .ok();
+    miss_marker_is_fresh(modified)
+}
+
+/// `modified` is when the marker was written; `None` means there is no marker.
+fn miss_marker_is_fresh(modified: Option<std::time::SystemTime>) -> bool {
+    matches!(
+        modified.and_then(|time| time.elapsed().ok()),
+        Some(age) if age < ICON_MISS_TTL
+    )
+}
+
+fn save_icon_miss(cache_dir: &Path, key: &str) {
+    let _ = std::fs::write(icon_miss_marker(cache_dir, key), b"");
+}
+
 #[cfg(target_os = "windows")]
 fn extract_app_icon_native(target: &AppBlockTarget) -> Option<String> {
     let cache_dir = icon_cache_dir();
     let key = target_cache_key(target);
     if let Some(cached) = get_cached_icon(&cache_dir, &key) {
         return Some(cached);
+    }
+    if icon_miss_is_fresh(&cache_dir, &key) {
+        return None;
     }
 
     let script = match target {
@@ -177,6 +210,10 @@ if ($pkg -and $pkg.InstallLocation) {{
             return Some(b64);
         }
     }
+
+    // The extraction ran and produced no icon: remember it so the next open does
+    // not pay for PowerShell again.
+    save_icon_miss(&cache_dir, &key);
     None
 }
 
@@ -447,5 +484,57 @@ mod tests {
         )
         .expect("an array is a list");
         assert_eq!(many.len(), 2);
+    }
+
+    #[test]
+    fn icon_cache_separates_saved_icons_from_remembered_failures() {
+        use super::{
+            get_cached_icon, icon_miss_is_fresh, save_cached_icon, save_icon_miss,
+        };
+
+        let dir = std::env::temp_dir().join(format!(
+            "focusblock-icon-cache-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // Cold cache: nothing remembered, so the caller may extract.
+        assert!(!icon_miss_is_fresh(&dir, "key"));
+        assert_eq!(get_cached_icon(&dir, "key"), None);
+
+        // A failed extraction is remembered, which is the point of the marker.
+        save_icon_miss(&dir, "key");
+        assert!(icon_miss_is_fresh(&dir, "key"));
+
+        // Saved icons are returned and are not confused with failure markers.
+        save_cached_icon(&dir, "icon", "data:image/png;base64,AAA");
+        assert_eq!(
+            get_cached_icon(&dir, "icon").as_deref(),
+            Some("data:image/png;base64,AAA")
+        );
+        assert!(!icon_miss_is_fresh(&dir, "icon"));
+
+        // An empty cache file is not usable data.
+        save_cached_icon(&dir, "empty", "  ");
+        assert_eq!(get_cached_icon(&dir, "empty"), None);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn expired_icon_failure_markers_are_retried() {
+        use super::{miss_marker_is_fresh, ICON_MISS_TTL};
+
+        assert!(!miss_marker_is_fresh(None), "no marker means no memory");
+        assert!(miss_marker_is_fresh(Some(std::time::SystemTime::now())));
+
+        let stale = std::time::SystemTime::now()
+            .checked_sub(ICON_MISS_TTL + std::time::Duration::from_secs(60))
+            .expect("the clock is later than 1970");
+        assert!(!miss_marker_is_fresh(Some(stale)));
     }
 }

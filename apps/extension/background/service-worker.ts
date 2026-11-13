@@ -22,6 +22,12 @@ interface SessionBase {
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
   scheduled_schedule_id?: string | null;
+  /**
+   * Mirrored desktop sessions only: the desktop session's real end time, or
+   * null when it has none. `planned_duration_sec` cannot express "no end"
+   * because it doubles as the expiry fallback for a dead mirror.
+   */
+  ends_at?: string | null;
 }
 
 /** A live session occupying the active slot. */
@@ -562,7 +568,7 @@ async function activateScheduledSession(schedule: Schedule, now: Date): Promise<
   if (mirrorSession(active)) {
     // A desktop mirror is only a view of the service session, so dropping it
     // must not invent an extension history entry.
-    await storageSet("active_session", null);
+    await clearMirror();
   } else if (active) {
     // Superseded by the new scheduled session.
     await finalizeActiveSession("stopped");
@@ -607,7 +613,7 @@ export async function expireSession(): Promise<void> {
   // elapsed check above because the popup asks the worker to expire on every
   // status read, and an unconditional clear would unblock Chrome mid-session.
   if (mirrorSession(session)) {
-    await storageSet("active_session", null);
+    await clearMirror();
     await clearAllRules();
     await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
     return;
@@ -655,7 +661,11 @@ export async function applyBlockingState(): Promise<void> {
   // Reads also migrate any stray terminal record out of the active slot.
   let session = await migrateStrayActiveSession();
 
-  if (currentSchedule) {
+  // The desktop policy is the enforcement authority: while a mirror holds the
+  // slot, a schedule window does not take it back. The window resumes as soon
+  // as the desktop session ends and the mirror is cleared.
+  const mirrored = mirrorSession(session);
+  if (currentSchedule && !mirrored) {
     if (!session || session.scheduled_schedule_id !== currentSchedule.id) {
       session = await activateScheduledSession(currentSchedule, new Date());
     } else {
@@ -859,7 +869,7 @@ export const NATIVE_MIRROR_ID_PREFIX = "service-sync-";
  * of blocking Chrome forever. The same grace covers desktop sessions that have
  * no planned end, because the extension cannot represent "no duration".
  */
-const NATIVE_MIRROR_REFRESH_GRACE_SEC = 180;
+const NATIVE_MIRROR_REFRESH_GRACE_SEC = 600;
 
 interface NativePolicy {
   active?: boolean;
@@ -874,6 +884,16 @@ function mirrorSession(
   session: ActiveSessionRecord | null | undefined
 ): ActiveSessionRecord | null {
   return session && session.id.startsWith(NATIVE_MIRROR_ID_PREFIX) ? session : null;
+}
+
+/**
+ * Drops the mirror without archiving anything: the session it mirrors already
+ * lives in the service database, so inventing an extension history row would
+ * double-count it. Any stop challenge shown for it ends with it.
+ */
+async function clearMirror(): Promise<void> {
+  await storageSet("active_session", null);
+  await setIfChanged("active_challenge", null);
 }
 
 function sameDomains(a: string[], b: string[]): boolean {
@@ -907,25 +927,19 @@ function mirrorFromPolicy(policy: NativePolicy): ActiveSessionRecord {
     blocklist_snapshot: policy.blocklist ?? [],
     whitelist_snapshot: policy.whitelist ?? [],
     ended_at: null,
+    ends_at: policy.expires_at ?? null,
   };
-}
-
-/** The extension schedule window that currently owns the session slot, if any. */
-async function activeScheduleWindow(): Promise<Schedule | null> {
-  const suppressedUntil = await storageGet("schedule_suppressed_until");
-  if (typeof suppressedUntil === "number" && suppressedUntil > Date.now()) return null;
-  const schedules = (await storageGet("schedules")) ?? [];
-  return getCurrentSchedule(schedules);
 }
 
 /**
  * Reconcile one desktop policy snapshot into the extension's session slot.
  *
  * The desktop service is the enforcement authority, so an active desktop
- * policy replaces a popup-started session. A mirror is cleared as soon as the
- * desktop policy goes inactive, which is what keeps Chrome from staying blocked
- * after the desktop session ends. Mirrors never reach the extension history:
- * they are a view of a session that already lives in the service database.
+ * policy replaces whatever holds the slot — a popup-started session or a live
+ * schedule window. Those are archived honestly instead of being overwritten in
+ * place, and the schedule resumes on its own once the mirror is cleared. A
+ * mirror is cleared as soon as the desktop policy goes inactive, which is what
+ * keeps Chrome from staying blocked after the desktop session ends.
  */
 export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   const current = await storageGet("active_session");
@@ -936,7 +950,7 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
     await withLock(async () => {
       const latest = mirrorSession(await storageGet("active_session"));
       if (!latest) return;
-      await storageSet("active_session", null);
+      await clearMirror();
       await applyBlockingState();
     });
     return;
@@ -945,25 +959,13 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   const blocklist = Array.isArray(policy.blocklist) ? policy.blocklist : [];
   const whitelist = Array.isArray(policy.whitelist) ? policy.whitelist : [];
 
-  // An extension schedule window owns the slot while it runs. Both writers
-  // trying to own it would flip the slot every minute and record a bogus
-  // history row on each flip.
-  if (await activeScheduleWindow()) {
-    if (!mirror) return;
-    await withLock(async () => {
-      const latest = mirrorSession(await storageGet("active_session"));
-      if (!latest) return;
-      await storageSet("active_session", null);
-      await applyBlockingState();
-    });
-    return;
-  }
-
   if (mirror) {
     const planned = mirrorPlannedDuration(policy, Date.parse(mirror.started_at));
+    const endsAt = policy.expires_at ?? null;
     const unchanged =
       mirror.mode === policy.mode &&
       mirror.planned_duration_sec === planned &&
+      (mirror.ends_at ?? null) === endsAt &&
       sameDomains(mirror.blocklist_snapshot, blocklist) &&
       sameDomains(mirror.whitelist_snapshot, whitelist);
     if (unchanged) return;
@@ -976,6 +978,7 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
         planned_duration_sec: planned,
         blocklist_snapshot: blocklist,
         whitelist_snapshot: whitelist,
+        ends_at: endsAt,
       };
       await storageSet("active_session", refreshed);
       await applyBlockingState();
@@ -986,13 +989,9 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   await withLock(async () => {
     const latest = await storageGet("active_session");
     if (mirrorSession(latest)) return;
-    // A scheduled session is reconciled by applyBlockingState; leave it to finish.
-    if (latest?.scheduled_schedule_id) return;
-    // The schedule window can open between the check above and this lock.
-    if (await activeScheduleWindow()) return;
-    // A session the user started in the popup loses to the desktop policy, but
-    // it is archived honestly instead of being overwritten in place.
     if (latest) {
+      // A popup session or a schedule window loses to the desktop policy, but it
+      // is archived honestly instead of being overwritten in place.
       await finalizeActiveSession("stopped");
       // Its stop challenge belonged to that session and must not outlive it.
       await setIfChanged("active_challenge", null);

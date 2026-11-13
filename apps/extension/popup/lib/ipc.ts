@@ -18,6 +18,8 @@ import {
   SettingsRecord,
 } from "./storage";
 
+export { isMirrorSession, NATIVE_MIRROR_ID_PREFIX } from "./storage";
+
 // ── Types ────────────────────────────────────────────────────────────────────
 //
 // Stored-entity shapes are owned by ./storage and re-exported here under the

@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import { ipc, ServiceStatus, AppSettings, shouldTriggerStopChallenge } from "../lib/ipc";
+import {
+  ipc,
+  isMirrorSession,
+  ServiceStatus,
+  AppSettings,
+  shouldTriggerStopChallenge,
+} from "../lib/ipc";
 import { Play, Stop, ShieldCheck, Warning } from "@phosphor-icons/react";
 import { ChallengeGate } from "../components/ChallengeGate";
 
@@ -204,15 +210,25 @@ export default function Home() {
 
   const active = status?.active_session;
   const challenge = status?.active_challenge;
+  // A session the desktop app started shows here so the same rules are visible,
+  // but only the desktop app can end it.
+  const mirrored = isMirrorSession(active?.session ?? null);
 
   // Live countdown computed from the session start time; no service-worker round trip.
   let remainingSec: number | null = null;
   if (active) {
-    const elapsed = Math.floor((Date.now() - new Date(active.session.started_at).getTime()) / 1000);
-    remainingSec = Math.max(0, active.session.planned_duration_sec - elapsed);
+    if (mirrored) {
+      // The mirror's own duration is only a keep-alive; the desktop session's
+      // real end is `ends_at`, and null there means it has no planned end.
+      const endsAt = active.session.ends_at ? Date.parse(active.session.ends_at) : Number.NaN;
+      remainingSec = Number.isFinite(endsAt) ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000)) : null;
+    } else {
+      const elapsed = Math.floor((Date.now() - new Date(active.session.started_at).getTime()) / 1000);
+      remainingSec = Math.max(0, active.session.planned_duration_sec - elapsed);
+    }
   }
 
-  if (challenge && challenge.status === "pending" && settings) {
+  if (!mirrored && challenge && challenge.status === "pending" && settings) {
     return (
       <ChallengeGate
         challengeType={challenge.type}
@@ -326,30 +342,46 @@ export default function Home() {
             </div>
           )}
 
-          <button
-            onClick={stopSession}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "11px 28px",
-              fontSize: "15px",
-              fontWeight: 600,
-              fontFamily: "var(--font-sans)",
-              background: "var(--color-vast)",
-              color: "var(--color-lumen)",
-              border: "none",
-              borderRadius: "100px",
-              cursor: "pointer",
-              transition: "opacity 0.15s",
-              boxShadow: "0 2px 12px rgba(26,26,26,0.15)",
-            }}
-            onMouseEnter={(event) => ((event.currentTarget as HTMLElement).style.opacity = "0.85")}
-            onMouseLeave={(event) => ((event.currentTarget as HTMLElement).style.opacity = "1")}
-          >
-            <Stop weight="fill" size={17} />
-            Stop Session
-          </button>
+          {mirrored ? (
+            <div
+              style={{
+                padding: "11px 24px",
+                borderRadius: "100px",
+                background: "var(--color-surface)",
+                border: "1px solid var(--color-neutral-200)",
+                fontSize: "13px",
+                color: "var(--color-neutral-500)",
+                maxWidth: "320px",
+              }}
+            >
+              Started in the Focus Block app. End it there.
+            </div>
+          ) : (
+            <button
+              onClick={stopSession}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                padding: "11px 28px",
+                fontSize: "15px",
+                fontWeight: 600,
+                fontFamily: "var(--font-sans)",
+                background: "var(--color-vast)",
+                color: "var(--color-lumen)",
+                border: "none",
+                borderRadius: "100px",
+                cursor: "pointer",
+                transition: "opacity 0.15s",
+                boxShadow: "0 2px 12px rgba(26,26,26,0.15)",
+              }}
+              onMouseEnter={(event) => ((event.currentTarget as HTMLElement).style.opacity = "0.85")}
+              onMouseLeave={(event) => ((event.currentTarget as HTMLElement).style.opacity = "1")}
+            >
+              <Stop weight="fill" size={17} />
+              Stop Session
+            </button>
+          )}
         </>
       ) : sessionInputMode ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "12px", alignItems: "center" }}>

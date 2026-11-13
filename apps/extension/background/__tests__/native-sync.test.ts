@@ -97,17 +97,23 @@ function freezeMidday(): void {
 
 describe("desktop policy mirror", () => {
   it("blocks Chrome while the desktop session runs and unblocks when it ends", async () => {
-    await sw.syncNativePolicy(activeDesktopPolicy());
+    const policy = activeDesktopPolicy();
+    await sw.syncNativePolicy(policy);
 
     const mirrored = rawGet<ActiveSessionRecord>("active_session");
     expect(mirrored).toBeDefined();
     expect(mirrored?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
     expect(mirrored?.blocklist_snapshot).toEqual(["news.com"]);
+    // The real end time travels with the mirror so the popup can show it.
+    expect(mirrored?.ends_at).toBe(policy.expires_at);
     expect(rulesMention("news.com")).toBe(true);
 
+    // A stop challenge the popup opened for the mirror dies with the mirror.
+    rawSet("active_challenge", { type: "math", status: "pending" });
     await sw.syncNativePolicy({ active: false });
 
     expect(rawGet("active_session")).toBeNull();
+    expect(rawGet("active_challenge")).toBeNull();
     expect(mock.dnrRules).toHaveLength(0);
   });
 
@@ -126,6 +132,9 @@ describe("desktop policy mirror", () => {
   it("keeps an indefinite desktop session alive across refreshes", async () => {
     const indefinite = { ...activeDesktopPolicy(), expires_at: null };
     await sw.syncNativePolicy(indefinite);
+
+    // "No end" is carried as a null end time, not as a fake deadline.
+    expect(rawGet<ActiveSessionRecord>("active_session")?.ends_at).toBeNull();
 
     // Pretend the mirror has been alive for longer than its grace window.
     const mirrored = rawGet<ActiveSessionRecord>("active_session")!;
@@ -211,30 +220,60 @@ describe("desktop policy mirror", () => {
     expect(mock.dnrRules).toHaveLength(0);
   });
 
-  it("does not mirror into a live extension schedule window", async () => {
+  it("keeps the desktop session in front of a live schedule window", async () => {
     freezeMidday();
     rawSet("schedules", [scheduleCoveringNow()]);
 
     await sw.syncNativePolicy(activeDesktopPolicy());
-    expect(rawGet("active_session") ?? null).toBeNull();
 
-    await sw.applyBlockingState();
     const active = rawGet<ActiveSessionRecord>("active_session");
-    expect(active?.scheduled_schedule_id).toBe("sched-1");
+    expect(active?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
+    expect(rulesMention("news.com")).toBe(true);
+
+    // The worker's own reconcile must not hand the slot back to the window.
+    await sw.applyBlockingState();
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toBe(active?.id);
+    expect(rulesMention("news.com")).toBe(true);
     expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
   });
 
-  it("drops a mirror without history when a schedule window opens", async () => {
+  it("hands the slot back to the schedule when the desktop session ends", async () => {
     freezeMidday();
+    rawSet("schedules", [scheduleCoveringNow()]);
     await sw.syncNativePolicy(activeDesktopPolicy());
-    expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toContain(
+      sw.NATIVE_MIRROR_ID_PREFIX
+    );
 
+    await sw.syncNativePolicy({ active: false });
+
+    // The mirror is a view, not a session: nothing is archived, and the window
+    // that was live the whole time simply resumes.
+    const resumed = rawGet<ActiveSessionRecord>("active_session");
+    expect(resumed?.scheduled_schedule_id).toBe("sched-1");
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("archives a live scheduled session when the desktop policy takes the slot", async () => {
+    freezeMidday();
     rawSet("schedules", [scheduleCoveringNow()]);
     await sw.applyBlockingState();
 
+    const scheduled = rawGet<ActiveSessionRecord>("active_session");
+    expect(scheduled?.scheduled_schedule_id).toBe("sched-1");
+    rawSet("active_challenge", { type: "math", status: "pending" });
+
+    await sw.syncNativePolicy(activeDesktopPolicy());
+
     const active = rawGet<ActiveSessionRecord>("active_session");
-    expect(active?.scheduled_schedule_id).toBe("sched-1");
-    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+    expect(active?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
+    // The schedule's own session really did end, so history says so.
+    const history = rawGet<ArchivedSessionRecord[]>("history") ?? [];
+    expect(history).toHaveLength(1);
+    expect(history[0].id).toBe(scheduled?.id);
+    expect(history[0].status).toBe("stopped");
+    // A challenge for the replaced session must not survive it.
+    expect(rawGet("active_challenge")).toBeNull();
   });
 
   it("keeps blocking when the native host reports an error instead of a policy", async () => {

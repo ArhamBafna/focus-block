@@ -54,6 +54,19 @@ interface SessionBase {
   blocklist_snapshot: string[];
   whitelist_snapshot: string[];
   scheduled_schedule_id?: string | null;
+  /** Mirrored desktop sessions only: real end time, or null when it has none. */
+  ends_at?: string | null;
+}
+
+/** Session ids the service worker reserves for desktop-policy mirrors. */
+export const NATIVE_MIRROR_ID_PREFIX = "service-sync-";
+
+/**
+ * True for a session that mirrors a desktop session. The popup cannot end one:
+ * the desktop app owns that session and its stop challenge.
+ */
+export function isMirrorSession(session: Pick<SessionBase, "id"> | null | undefined): boolean {
+  return Boolean(session && session.id.startsWith(NATIVE_MIRROR_ID_PREFIX));
 }
 
 /** Any session record, live or archived. */
