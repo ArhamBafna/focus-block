@@ -91,6 +91,8 @@ mod imp {
             // Pre-create the first instance so we're ready before the loop.
             let mut pending = sec.create_pipe(true)?;
 
+            let conn_limit = Arc::new(tokio::sync::Semaphore::new(32));
+
             loop {
                 // Wait for a client to connect to the current pending instance.
                 if let Err(e) = pending.connect().await {
@@ -122,8 +124,18 @@ mod imp {
                     }
                 };
 
+                let permit = match conn_limit.clone().try_acquire_owned() {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Max concurrent IPC connections reached, rejecting");
+                        drop(connected);
+                        continue;
+                    }
+                };
+
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {
+                    let _guard = permit;
                     if let Err(e) = handle_connection(connected, handler).await {
                         if e.raw_os_error() == Some(232)
                             || e.kind() == std::io::ErrorKind::UnexpectedEof

@@ -138,13 +138,32 @@ function AppContent() {
       }
     };
 
+    // Perform initial check immediately
     checkStatus();
-    const interval = setInterval(checkStatus, 2000);
+
+    const unsub = ipc.subscribeStatus?.((status) => {
+      if (status.last_blocked_app && isMounted) {
+        const next = status.last_blocked_app;
+        if (dismissedTimestampRef.current !== next.timestamp) {
+          setBlockedEvent(next);
+          setIsModalOpen(true);
+        }
+      }
+    });
+
+    // When away from the Home page (which polls continuously every 1s),
+    // keep a gentle 2.5s poll active so blocked app interception is still detected.
+    let interval: any = null;
+    if (location.pathname !== "/") {
+      interval = setInterval(checkStatus, 2500);
+    }
+
     return () => {
       isMounted = false;
-      clearInterval(interval);
+      unsub?.();
+      if (interval) clearInterval(interval);
     };
-  }, []);
+  }, [location.pathname]);
 
   const handleDismiss = useCallback(() => {
     if (blockedEvent?.timestamp) {

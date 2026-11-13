@@ -48,26 +48,39 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
 
     let isMounted = true;
     (async () => {
-      for (const app of missing) {
+      const chunkSize = 4;
+      for (let i = 0; i < missing.length; i += chunkSize) {
         if (!isMounted) break;
-        try {
-          const iconUri = await getAppIcon(app.target);
-          if (iconUri && isMounted) {
-            setApps((prev) =>
-              prev.map((item) => {
-                const match =
+        const chunk = missing.slice(i, i + chunkSize);
+        const results = await Promise.all(
+          chunk.map(async (app) => {
+            try {
+              const iconUri = await getAppIcon(app.target);
+              return { app, iconUri };
+            } catch {
+              return { app, iconUri: null };
+            }
+          })
+        );
+        if (!isMounted) break;
+        const updates = results.filter(
+          (r): r is { app: DiscoveredApp; iconUri: string } => !!r.iconUri
+        );
+        if (updates.length > 0) {
+          setApps((prev) =>
+            prev.map((item) => {
+              const found = updates.find(
+                (u) =>
                   (item.target.kind === "executable" &&
-                    app.target.kind === "executable" &&
-                    item.target.path === app.target.path) ||
+                    u.app.target.kind === "executable" &&
+                    item.target.path === u.app.target.path) ||
                   (item.target.kind === "package" &&
-                    app.target.kind === "package" &&
-                    item.target.package_family_name === app.target.package_family_name);
-                return match ? { ...item, iconDataUri: iconUri } : item;
-              })
-            );
-          }
-        } catch {
-          // Ignore individual icon extraction failures
+                    u.app.target.kind === "package" &&
+                    item.target.package_family_name === u.app.target.package_family_name)
+              );
+              return found ? { ...item, iconDataUri: found.iconUri } : item;
+            })
+          );
         }
       }
     })();

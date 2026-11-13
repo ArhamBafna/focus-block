@@ -503,13 +503,36 @@ function unwrap<T>(envelope: BridgeEnvelope<T>): Promise<T> {
   return Promise.reject(error);
 }
 
+type StatusListener = (status: ServiceStatus) => void;
+const statusListeners = new Set<StatusListener>();
+
+export function subscribeStatus(listener: StatusListener): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
 export const ipc = {
   ping: () => request<null>("Ping").then(unwrap),
   getHealth: () => request<ServiceHealth>("Health").then(unwrap),
   getStatus: () => request<ServiceStatus>("GetStatus").then(unwrap),
 
   /** Envelope-returning status probe: daemon-down is an arm, never a throw. */
-  getStatusSafe: () => request<ServiceStatus>("GetStatus"),
+  getStatusSafe: () =>
+    request<ServiceStatus>("GetStatus").then((envelope) => {
+      if (envelope.ok) {
+        statusListeners.forEach((listener) => {
+          try {
+            listener(envelope.data);
+          } catch {
+            // ignore listener exceptions
+          }
+        });
+      }
+      return envelope;
+    }),
+  subscribeStatus,
   
   listBlocklist: () => request<DomainEntry[]>("ListBlocklist").then(unwrap),
   addBlocklist: (domain: string) => {

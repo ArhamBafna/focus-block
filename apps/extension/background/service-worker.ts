@@ -69,6 +69,7 @@ interface StorageData {
 const ALARM_SESSION_EXPIRY = "focus_session_expiry";
 const ALARM_SCHEDULE_BOUNDARY = "focus_schedule_boundary";
 const ALARM_TEMP_ALLOW_EXPIRY = "focus_temp_allow_expiry";
+const ALARM_NATIVE_SYNC = "focus_native_sync";
 // Rule IDs start at 1. We use IDs 1..N for blocked domains.
 // We reserve no IDs for anything else.
 const BASE_RULE_ID = 1;
@@ -869,6 +870,7 @@ export async function checkNativePolicy(): Promise<void> {
 // On install / update
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[FocusBlocker] Extension installed/updated. Applying state.");
+  chrome.alarms.create(ALARM_NATIVE_SYNC, { periodInMinutes: 1 });
   void checkNativePolicy();
   void requestReconcile();
 });
@@ -876,6 +878,7 @@ chrome.runtime.onInstalled.addListener(() => {
 // On browser startup (service worker restarts)
 chrome.runtime.onStartup.addListener(() => {
   console.log("[FocusBlocker] Browser started. Applying state.");
+  chrome.alarms.create(ALARM_NATIVE_SYNC, { periodInMinutes: 1 });
   void checkNativePolicy();
   void requestReconcile();
 });
@@ -905,5 +908,8 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === ALARM_TEMP_ALLOW_EXPIRY) {
     console.log("[FocusBlocker] Temporary allow expired.");
     void requestReconcile();
+  }
+  if (alarm.name === ALARM_NATIVE_SYNC) {
+    void checkNativePolicy();
   }
 });
