@@ -819,17 +819,64 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true; // async sendResponse
 });
 
+const NATIVE_HOST_NAME = "com.focusblock.bridge";
+
+export async function checkNativePolicy(): Promise<void> {
+  if (typeof chrome === "undefined" || !chrome.runtime?.sendNativeMessage) {
+    return;
+  }
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendNativeMessage(
+        NATIVE_HOST_NAME,
+        { type: "get-active-policy" },
+        async (response: any) => {
+          if (chrome.runtime.lastError || !response) {
+            resolve();
+            return;
+          }
+          if (response.active && response.mode) {
+            const localSession = await storageGet("active_session");
+            if (!localSession || localSession.status !== "active") {
+              const activeRecord: ActiveSessionRecord = {
+                id: "service-sync-" + Date.now(),
+                preset_id: null,
+                mode: response.mode,
+                status: "active",
+                started_at: new Date().toISOString(),
+                planned_duration_sec: response.expires_at
+                  ? Math.max(0, Math.floor((new Date(response.expires_at).getTime() - Date.now()) / 1000))
+                  : 1800,
+                blocklist_snapshot: response.blocklist || [],
+                whitelist_snapshot: response.whitelist || [],
+                ended_at: null,
+              };
+              await storageSet("active_session", activeRecord);
+              void requestReconcile();
+            }
+          }
+          resolve();
+        }
+      );
+    } catch {
+      resolve();
+    }
+  });
+}
+
 // ── Event listeners ──────────────────────────────────────────────────────────
 
 // On install / update
 chrome.runtime.onInstalled.addListener(() => {
   console.log("[FocusBlocker] Extension installed/updated. Applying state.");
+  void checkNativePolicy();
   void requestReconcile();
 });
 
 // On browser startup (service worker restarts)
 chrome.runtime.onStartup.addListener(() => {
   console.log("[FocusBlocker] Browser started. Applying state.");
+  void checkNativePolicy();
   void requestReconcile();
 });
 

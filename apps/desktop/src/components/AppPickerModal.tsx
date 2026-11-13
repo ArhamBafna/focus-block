@@ -37,9 +37,13 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     }
   }, [isOpen]);
 
+  const filteredApps = apps.filter((app) =>
+    app.displayName.toLowerCase().includes(search.toLowerCase())
+  );
+
   useEffect(() => {
     if (apps.length === 0) return;
-    const missing = apps.filter((a) => !a.iconDataUri);
+    const missing = filteredApps.filter((a) => !a.iconDataUri).slice(0, 25);
     if (missing.length === 0) return;
 
     let isMounted = true;
@@ -71,11 +75,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     return () => {
       isMounted = false;
     };
-  }, [apps.length]);
-
-  const filteredApps = apps.filter((app) =>
-    app.displayName.toLowerCase().includes(search.toLowerCase())
-  );
+  }, [apps.length, search]);
 
   const categories = Array.from(new Set(filteredApps.map((a) => a.category))).sort();
 

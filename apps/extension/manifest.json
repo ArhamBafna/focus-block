@@ -31,7 +31,8 @@
   "permissions": [
     "declarativeNetRequest",
     "storage",
-    "alarms"
+    "alarms",
+    "nativeMessaging"
   ],
 
   "host_permissions": [

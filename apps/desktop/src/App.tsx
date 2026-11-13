@@ -139,7 +139,7 @@ function AppContent() {
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 1000);
+    const interval = setInterval(checkStatus, 2000);
     return () => {
       isMounted = false;
       clearInterval(interval);

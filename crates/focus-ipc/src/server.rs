@@ -112,16 +112,15 @@ mod imp {
                 // Immediately create the NEXT instance so it's waiting before
                 // we hand off the connected one — eliminates the accept-gap that
                 // caused OS error 231 (all pipe instances busy).
-                match sec.create_pipe(false) {
-                    Ok(new_pipe) => {
-                        pending = new_pipe;
+                pending = loop {
+                    match sec.create_pipe(false) {
+                        Ok(new_pipe) => break new_pipe,
+                        Err(e) => {
+                            tracing::error!("Failed to create next pipe instance: {e}; retrying");
+                            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        }
                     }
-                    Err(e) => {
-                        tracing::error!("Failed to create next pipe instance: {e}");
-                        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-                        pending = sec.create_pipe(false)?;
-                    }
-                }
+                };
 
                 let handler = Arc::clone(&self.handler);
                 tokio::spawn(async move {
@@ -143,10 +142,16 @@ mod imp {
         mut pipe: NamedPipeServer,
         handler: RequestHandler,
     ) -> io::Result<()> {
-        let req = read_message(&mut pipe).await?;
-        let response = handler(req).await;
-        write_message(&mut pipe, &response).await?;
-        Ok(())
+        let fut = async {
+            let req = read_message(&mut pipe).await?;
+            let response = handler(req).await;
+            write_message(&mut pipe, &response).await?;
+            Ok(())
+        };
+        match tokio::time::timeout(tokio::time::Duration::from_secs(10), fut).await {
+            Ok(res) => res,
+            Err(_) => Err(io::Error::new(io::ErrorKind::TimedOut, "IPC request timed out")),
+        }
     }
 }
 

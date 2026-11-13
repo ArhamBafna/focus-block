@@ -21,7 +21,12 @@ pub fn normalize_domain(input: &str) -> Option<String> {
     if let Some((host, _)) = domain.split_once(':') {
         domain = host.to_string();
     }
-    domain = domain.trim_start_matches("www.").to_string();
+    domain = domain.trim_end_matches('.').to_string();
+    if let Some(stripped) = domain.strip_prefix("www.") {
+        if stripped.contains('.') {
+            domain = stripped.to_string();
+        }
+    }
     if domain.is_empty() || domain.contains(' ') || !domain.contains('.') {
         return None;
     }
@@ -64,6 +69,14 @@ mod tests {
         assert_eq!(
             normalize_domain("www.telepathy.com"),
             Some("telepathy.com".into())
+        );
+        assert_eq!(
+            normalize_domain("https://youtube.com./"),
+            Some("youtube.com".into())
+        );
+        assert_eq!(
+            normalize_domain("www.com"),
+            Some("www.com".into())
         );
     }
 

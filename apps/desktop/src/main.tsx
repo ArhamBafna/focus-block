@@ -15,9 +15,11 @@ class ErrorBoundary extends React.Component<{children: React.ReactNode}, {hasErr
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: 20, color: "red", background: "white", height: "100vh", overflow: "auto" }}>
-          <h1>React Crashed!</h1>
-          <pre>{String(this.state.error?.stack || this.state.error)}</pre>
+        <div style={{ padding: 24, color: "#f87171", background: "#0f172a", height: "100vh", boxSizing: "border-box", display: "flex", flexDirection: "column", gap: 12, fontFamily: "sans-serif" }}>
+          <h2 style={{ margin: 0, color: "#f1f5f9" }}>Something went wrong</h2>
+          <p style={{ color: "#94a3b8", margin: 0 }}>An unexpected error occurred in the desktop UI.</p>
+          <pre style={{ padding: 12, background: "#1e293b", borderRadius: 6, overflow: "auto", fontSize: 12, flex: 1 }}>{String(this.state.error?.stack || this.state.error)}</pre>
+          <button onClick={() => window.location.reload()} style={{ padding: "8px 16px", background: "#3b82f6", color: "white", border: "none", borderRadius: 6, cursor: "pointer", alignSelf: "flex-start" }}>Reload App</button>
         </div>
       );
     }

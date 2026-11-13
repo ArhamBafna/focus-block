@@ -108,17 +108,30 @@ mod windows {
                         matchers.executable_paths.insert(normalize_path(path_obj));
 
                         if let Some(file_name) = path_obj.file_name() {
-                            matchers
-                                .executable_names
-                                .insert(file_name.to_string_lossy().to_ascii_lowercase());
-                        }
-                        if let Some(parent) = path_obj.parent() {
-                            if let Some(parent_name) = parent.file_name() {
-                                let parent_lower = parent_name.to_string_lossy().to_ascii_lowercase();
-                                if !GENERIC_FOLDER_NAMES.contains(&parent_lower.as_str()) {
-                                    let mut inferred_exe = parent_lower;
-                                    inferred_exe.push_str(".exe");
-                                    matchers.executable_names.insert(inferred_exe);
+                            let fname_lower = file_name.to_string_lossy().to_ascii_lowercase();
+                            matchers.executable_names.insert(fname_lower.clone());
+
+                            // Only infer app name from parent directory for known updater stubs
+                            // (e.g. Squirrel's Update.exe) to prevent collateral process kills
+                            // of developer tools or parent folders.
+                            if fname_lower == "update.exe" || fname_lower == "squirrel.exe" {
+                                if let Some(parent) = path_obj.parent() {
+                                    let mut p = parent;
+                                    if let Some(name) = p.file_name() {
+                                        if name.to_string_lossy().starts_with("app-") {
+                                            if let Some(grandparent) = p.parent() {
+                                                p = grandparent;
+                                            }
+                                        }
+                                    }
+                                    if let Some(parent_name) = p.file_name() {
+                                        let parent_lower = parent_name.to_string_lossy().to_ascii_lowercase();
+                                        if !GENERIC_FOLDER_NAMES.contains(&parent_lower.as_str()) {
+                                            let mut inferred_exe = parent_lower;
+                                            inferred_exe.push_str(".exe");
+                                            matchers.executable_names.insert(inferred_exe);
+                                        }
+                                    }
                                 }
                             }
                         }

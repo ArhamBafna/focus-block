@@ -2,7 +2,7 @@ use focus_core::{IpcRequest, IpcResponse};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-pub const MAX_IPC_MESSAGE_BYTES: usize = 16 * 1024 * 1024; // 16 MB
+pub const MAX_IPC_MESSAGE_BYTES: usize = 2 * 1024 * 1024; // 2 MB
 
 pub async fn read_message<R: AsyncReadExt + Unpin>(reader: &mut R) -> io::Result<IpcRequest> {
     let len = reader.read_u32_le().await? as usize;

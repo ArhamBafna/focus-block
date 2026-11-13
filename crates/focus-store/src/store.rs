@@ -25,7 +25,11 @@ impl FocusStore {
             std::fs::create_dir_all(parent)?;
         }
         let conn = Connection::open(path.as_ref())?;
-        conn.execute_batch("PRAGMA foreign_keys = ON;")?;
+        conn.execute_batch(
+            "PRAGMA foreign_keys = ON;
+             PRAGMA journal_mode = WAL;
+             PRAGMA busy_timeout = 5000;",
+        )?;
         let store = Self {
             conn,
             path: path.as_ref().to_path_buf(),
