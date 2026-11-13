@@ -1,17 +1,17 @@
-﻿/**
- * Focus Blocker â€” Chrome Extension Service Worker
+/**
+ * Focus Blocker — Chrome Extension Service Worker
  *
  * Responsibilities:
  * 1. Listen for changes in chrome.storage.local (blocklist + active_session)
  * 2. When a session is active: install declarativeNetRequest dynamic rules
- *    that redirect all blocked domains â†’ the extension's blocked page.
+ *    that redirect all blocked domains → the extension's blocked page.
  * 3. When a session ends / stops: remove all dynamic blocking rules.
  * 4. Handle chrome.alarms for session auto-expiry.
  *
  * NO UI dependencies. Pure background logic.
  */
 
-// â”€â”€ Types (owned by popup/lib/storage; mirrored here for the worker bundle) â”€
+// ── Types (owned by popup/lib/storage; mirrored here for the worker bundle) ─
 
 interface SessionBase {
   id: string;
@@ -64,7 +64,7 @@ interface StorageData {
   active_challenge: ActiveChallenge | null;
 }
 
-// â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Constants ────────────────────────────────────────────────────────────────
 
 const ALARM_SESSION_EXPIRY = "focus_session_expiry";
 const ALARM_SCHEDULE_BOUNDARY = "focus_schedule_boundary";
@@ -75,7 +75,7 @@ const ALARM_NATIVE_SYNC = "focus_native_sync";
 const BASE_RULE_ID = 1;
 const BLOCKED_PAGE_PATH = "blocked/index.html";
 
-// â”€â”€ Storage helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Storage helpers ──────────────────────────────────────────────────────────
 
 function storageGet<K extends keyof StorageData>(key: K): Promise<StorageData[K] | undefined> {
   return new Promise((resolve) => {
@@ -106,7 +106,7 @@ async function setIfChanged<K extends keyof StorageData>(key: K, value: StorageD
   return true;
 }
 
-// â”€â”€ Mutation lock â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Mutation lock ────────────────────────────────────────────────────────────
 //
 // All state-mutating work (reconcile passes, session start/stop/expire from the
 // popup) runs inside one serialized queue. Overlapping triggers coalesce into a
@@ -142,7 +142,7 @@ export function requestReconcile(): Promise<void> {
   });
 }
 
-// â”€â”€ Rule management â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Rule management ──────────────────────────────────────────────────────────
 
 /**
  * Same contract as the popup's normalizeDomain validator: only plain domains
@@ -372,7 +372,7 @@ async function scheduleTemporaryAllowExpiry(entries: { expires_at: number }[]): 
   }
 }
 
-// â”€â”€ Recurring schedule helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Recurring schedule helpers ──────────────────────────────────────────────
 
 export function timeToMinutes(value: string): number | null {
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(value)) return null;
@@ -469,7 +469,7 @@ async function scheduleNextBoundaryAlarm(schedules: Schedule[]): Promise<void> {
   }
 }
 
-// â”€â”€ Session finalize (the one shared transition) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Session finalize (the one shared transition) ─────────────────────────────
 //
 // Expiry, manual stop, and schedule supersede all end a session through
 // finalizeActiveSession. There is exactly one way to move a record from the
@@ -559,7 +559,11 @@ export async function migrateStrayActiveSession(): Promise<ActiveSessionRecord |
 
 async function activateScheduledSession(schedule: Schedule, now: Date): Promise<ActiveSessionRecord> {
   const active = await storageGet("active_session");
-  if (active) {
+  if (mirrorSession(active)) {
+    // A desktop mirror is only a view of the service session, so dropping it
+    // must not invent an extension history entry.
+    await storageSet("active_session", null);
+  } else if (active) {
     // Superseded by the new scheduled session.
     await finalizeActiveSession("stopped");
   }
@@ -585,26 +589,28 @@ async function activateScheduledSession(schedule: Schedule, now: Date): Promise<
   return session;
 }
 
-// â”€â”€ Session expiry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Session expiry ───────────────────────────────────────────────────────────
 
 export async function expireSession(): Promise<void> {
   const session = await storageGet("active_session");
   if (!session) return;
-
-  // A mirror is only a view of a desktop session, so its expiry is not a real
-  // session end: clear it without inventing a history entry.
-  if (mirrorSession(session)) {
-    await storageSet("active_session", null);
-    await clearAllRules();
-    await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
-    return;
-  }
 
   // A manual session started after this expiry was scheduled must survive.
   // Stale alarms racing a fresh start are no-ops; real expiry still fires.
   if (!session.scheduled_schedule_id) {
     const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
     if (elapsed < session.planned_duration_sec) return;
+  }
+
+  // A mirror is only a view of a desktop session, so its expiry is not a real
+  // session end: clear it without inventing a history entry. This runs after the
+  // elapsed check above because the popup asks the worker to expire on every
+  // status read, and an unconditional clear would unblock Chrome mid-session.
+  if (mirrorSession(session)) {
+    await storageSet("active_session", null);
+    await clearAllRules();
+    await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
+    return;
   }
 
   // A scheduled session whose schedule was deleted mid-session is cancelled,
@@ -627,7 +633,7 @@ async function scheduledSessionOutcome(scheduledId: string | null): Promise<Arch
   return schedules.some((schedule) => schedule.id === scheduledId) ? "completed" : "cancelled";
 }
 
-// â”€â”€ Core: apply state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Core: apply state ────────────────────────────────────────────────────────
 
 /**
  * Read current storage state and apply blocking rules accordingly.
@@ -672,7 +678,7 @@ export async function applyBlockingState(): Promise<void> {
   }
 
   if (!session) {
-    // No active session â€” clear all rules
+    // No active session — clear all rules
     await clearAllRules();
     await chrome.alarms.clear(ALARM_SESSION_EXPIRY);
     return;
@@ -724,7 +730,7 @@ export async function applyBlockingState(): Promise<void> {
   );
 }
 
-// â”€â”€ Popup-driven session mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Popup-driven session mutations ───────────────────────────────────────────
 //
 // The popup no longer mutates active_session/history directly. Every mutation
 // runs inside the mutation lock here, so rapid clicks and expiry alarms
@@ -768,7 +774,9 @@ export async function stopSessionLocked(): Promise<null> {
   if (active) {
     if (mirrorSession(active)) {
       // Ending the desktop session from Chrome would be a free bypass of the
-      // desktop app's stop challenge.
+      // desktop app's stop challenge. Clear the challenge this stop started so
+      // the popup does not get stuck re-showing it.
+      await setIfChanged("active_challenge", null);
       throw new Error("This session was started in the Focus Block app. End it there.");
     }
     if (active.scheduled_schedule_id) {
@@ -833,6 +841,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     });
   return true; // async sendResponse
 });
+
+// ── Desktop policy mirror ────────────────────────────────────────────────────
 
 const NATIVE_HOST_NAME = "com.focusblock.bridge";
 
@@ -900,6 +910,14 @@ function mirrorFromPolicy(policy: NativePolicy): ActiveSessionRecord {
   };
 }
 
+/** The extension schedule window that currently owns the session slot, if any. */
+async function activeScheduleWindow(): Promise<Schedule | null> {
+  const suppressedUntil = await storageGet("schedule_suppressed_until");
+  if (typeof suppressedUntil === "number" && suppressedUntil > Date.now()) return null;
+  const schedules = (await storageGet("schedules")) ?? [];
+  return getCurrentSchedule(schedules);
+}
+
 /**
  * Reconcile one desktop policy snapshot into the extension's session slot.
  *
@@ -926,6 +944,20 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
 
   const blocklist = Array.isArray(policy.blocklist) ? policy.blocklist : [];
   const whitelist = Array.isArray(policy.whitelist) ? policy.whitelist : [];
+
+  // An extension schedule window owns the slot while it runs. Both writers
+  // trying to own it would flip the slot every minute and record a bogus
+  // history row on each flip.
+  if (await activeScheduleWindow()) {
+    if (!mirror) return;
+    await withLock(async () => {
+      const latest = mirrorSession(await storageGet("active_session"));
+      if (!latest) return;
+      await storageSet("active_session", null);
+      await applyBlockingState();
+    });
+    return;
+  }
 
   if (mirror) {
     const planned = mirrorPlannedDuration(policy, Date.parse(mirror.started_at));
@@ -954,6 +986,10 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   await withLock(async () => {
     const latest = await storageGet("active_session");
     if (mirrorSession(latest)) return;
+    // A scheduled session is reconciled by applyBlockingState; leave it to finish.
+    if (latest?.scheduled_schedule_id) return;
+    // The schedule window can open between the check above and this lock.
+    if (await activeScheduleWindow()) return;
     // A session the user started in the popup loses to the desktop policy, but
     // it is archived honestly instead of being overwritten in place.
     if (latest) {
@@ -995,7 +1031,7 @@ export async function checkNativePolicy(): Promise<void> {
   await syncNativePolicy(policy);
 }
 
-// â”€â”€ Event listeners â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Event listeners ──────────────────────────────────────────────────────────
 
 // On install / update
 chrome.runtime.onInstalled.addListener(() => {
@@ -1013,7 +1049,7 @@ chrome.runtime.onStartup.addListener(() => {
   void requestReconcile();
 });
 
-// React to storage changes (popup writes to storage â†’ service worker reacts)
+// React to storage changes (popup writes to storage → service worker reacts)
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area !== "local") return;
 

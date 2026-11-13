@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { X } from "@phosphor-icons/react/X";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,6 +19,14 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
   const [apps, setApps] = useState<DiscoveredApp[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Icons that cannot be extracted (UWP packages often can't) must not be
+  // retried on every keystroke: each attempt is a PowerShell process.
+  const attemptedIcons = useRef<Set<string>>(new Set());
+
+  const iconKey = (app: DiscoveredApp) =>
+    app.target.kind === "executable"
+      ? app.target.path.toLowerCase()
+      : app.target.package_family_name.toLowerCase();
 
   useEffect(() => {
     if (isOpen && apps.length === 0) {
@@ -47,8 +55,12 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     // first batch with a letter placeholder forever, because this effect only
     // re-runs when the app list or the search term changes. Batching keeps the
     // UI responsive instead of capping the work.
-    const missing = filteredApps.filter((a) => !a.iconDataUri);
+    const missing = filteredApps.filter(
+      (a) => !a.iconDataUri && !attemptedIcons.current.has(iconKey(a))
+    );
     if (missing.length === 0) return;
+    // Mark before awaiting so overlapping runs never queue the same target twice.
+    for (const app of missing) attemptedIcons.current.add(iconKey(app));
 
     let isMounted = true;
     (async () => {

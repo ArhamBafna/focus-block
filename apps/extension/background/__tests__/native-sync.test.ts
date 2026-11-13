@@ -3,22 +3,33 @@
  *
  * The service worker mirrors an active desktop session into the popup's
  * `active_session` slot so the same DNR rules apply in the browser. These tests
- * pin the two failure modes that matter: a mirror that outlives the desktop
- * session (Chrome blocked forever) and a mirror that can be stopped from the
- * browser (free bypass of the desktop stop challenge).
+ * pin the failure modes that matter: a mirror that outlives the desktop
+ * session (Chrome blocked forever), a mirror that can be stopped or expired
+ * from the browser (free bypass of the desktop stop challenge), and two owners
+ * fighting over the session slot every minute.
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installChromeMock, type ChromeMockHandles } from "./chrome-mock";
-import type { ActiveSessionRecord, ArchivedSessionRecord } from "../service-worker";
+import type {
+  ActiveSessionRecord,
+  ArchivedSessionRecord,
+  Schedule,
+} from "../service-worker";
 
 let mock: ChromeMockHandles;
 let sw: typeof import("../service-worker");
+
+const ALARM_SESSION_EXPIRY = "focus_session_expiry";
 
 beforeEach(async () => {
   vi.resetModules();
   mock = installChromeMock();
   sw = await import("../service-worker");
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 function rawGet<T>(key: string): T | undefined {
@@ -58,6 +69,30 @@ function rulesMention(domain: string): boolean {
   // Redirect rules use regexFilter, so dots arrive escaped (`news\.com`).
   // Strip escapes before matching so the assertion reads as the domain itself.
   return mock.dnrRules.some((rule) => JSON.stringify(rule).split("\\").join("").includes(domain));
+}
+
+/** A schedule window that is live right now, without crossing midnight. */
+function scheduleCoveringNow(id = "sched-1"): Schedule {
+  const now = new Date();
+  const minutes = now.getHours() * 60 + now.getMinutes();
+  const startMinutes = Math.max(0, minutes - 1);
+  const endMinutes = Math.min(1439, minutes + 60);
+  const clock = (value: number) =>
+    `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
+  return {
+    id,
+    start_time: clock(startMinutes),
+    end_time: clock(endMinutes),
+    mode: "blocklist",
+    days_of_week: [now.getDay()],
+    ends_on: null,
+  };
+}
+
+/** Freeze the clock at midday so a same-day schedule window always fits. */
+function freezeMidday(): void {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-03-10T12:00:00"));
 }
 
 describe("desktop policy mirror", () => {
@@ -108,6 +143,11 @@ describe("desktop policy mirror", () => {
       (Date.now() - new Date(refreshed!.started_at).getTime()) / 1000
     );
     expect(refreshed!.planned_duration_sec).toBeGreaterThan(elapsed);
+
+    // The expiry alarm, not just the stored number, has to move past the grace.
+    const alarm = mock.createdAlarms.filter((entry) => entry.name === ALARM_SESSION_EXPIRY).at(-1);
+    const when = (alarm?.info as { when?: number } | undefined)?.when ?? 0;
+    expect(when - Date.now()).toBeGreaterThan(120 * 1000);
   });
 
   it("leaves a popup-started session alone while the desktop is idle", async () => {
@@ -135,8 +175,22 @@ describe("desktop policy mirror", () => {
 
   it("refuses to end a mirrored session from the popup", async () => {
     await sw.syncNativePolicy(activeDesktopPolicy());
+    rawSet("active_challenge", { type: "math", status: "pending" });
 
     await expect(sw.stopSessionLocked()).rejects.toThrow(/Focus Block app/);
+
+    expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
+    expect(rulesMention("news.com")).toBe(true);
+    // The challenge this stop started must not be left dangling on screen.
+    expect(rawGet("active_challenge")).toBeNull();
+  });
+
+  it("does not clear a live mirror when the popup asks the worker to expire", async () => {
+    await sw.syncNativePolicy(activeDesktopPolicy());
+
+    // The popup sends session:expire on every status read.
+    await sw.expireSession();
+
     expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
     expect(rulesMention("news.com")).toBe(true);
   });
@@ -157,7 +211,34 @@ describe("desktop policy mirror", () => {
     expect(mock.dnrRules).toHaveLength(0);
   });
 
-  it("keeps blocking when the native host reports an error instead of a policy", async () => {    await sw.syncNativePolicy(activeDesktopPolicy());
+  it("does not mirror into a live extension schedule window", async () => {
+    freezeMidday();
+    rawSet("schedules", [scheduleCoveringNow()]);
+
+    await sw.syncNativePolicy(activeDesktopPolicy());
+    expect(rawGet("active_session") ?? null).toBeNull();
+
+    await sw.applyBlockingState();
+    const active = rawGet<ActiveSessionRecord>("active_session");
+    expect(active?.scheduled_schedule_id).toBe("sched-1");
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("drops a mirror without history when a schedule window opens", async () => {
+    freezeMidday();
+    await sw.syncNativePolicy(activeDesktopPolicy());
+    expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
+
+    rawSet("schedules", [scheduleCoveringNow()]);
+    await sw.applyBlockingState();
+
+    const active = rawGet<ActiveSessionRecord>("active_session");
+    expect(active?.scheduled_schedule_id).toBe("sched-1");
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("keeps blocking when the native host reports an error instead of a policy", async () => {
+    await sw.syncNativePolicy(activeDesktopPolicy());
 
     const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
     chromeLike.runtime.sendNativeMessage = (
