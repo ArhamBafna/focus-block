@@ -16,6 +16,7 @@ path = "src/native_host.rs"
 [[example]]
 name = "focus-test-dummy"
 path = "examples/focus_test_dummy.rs"
+test = false
 
 [dependencies]
 focus-core = { workspace = true }

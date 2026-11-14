@@ -215,25 +215,100 @@ fn sidecar_paths(path: &Path) -> Vec<PathBuf> {
 // Dummy executable
 // ---------------------------------------------------------------------------
 
-pub fn dummy_exe() -> PathBuf {
-    let current = std::env::current_exe().expect("locate test executable");
-    let deps = current.parent().expect("test executable directory");
-    let name = format!("focus-test-dummy{}", std::env::consts::EXE_SUFFIX);
-    let mut candidates = Vec::new();
-    for dir in [Some(deps), deps.parent()] {
-        let Some(dir) = dir else { continue };
-        candidates.push(dir.join(&name));
-        candidates.push(dir.join("examples").join(&name));
+pub fn find_target_executable(base_name: &str) -> Option<PathBuf> {
+    let name = format!("{base_name}{}", std::env::consts::EXE_SUFFIX);
+    let mut search_dirs = Vec::new();
+
+    // 1. Ancestors of current_exe()
+    if let Ok(current) = std::env::current_exe() {
+        for ancestor in current.ancestors() {
+            search_dirs.push(ancestor.to_path_buf());
+            search_dirs.push(ancestor.join("examples"));
+            search_dirs.push(ancestor.join("deps"));
+
+            let target_sub = if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
+                Some(ancestor.to_path_buf())
+            } else if ancestor.join("target").is_dir() {
+                Some(ancestor.join("target"))
+            } else {
+                None
+            };
+
+            if let Some(target) = target_sub {
+                for profile in ["debug", "release"] {
+                    search_dirs.push(target.join(profile));
+                    search_dirs.push(target.join(profile).join("examples"));
+                    search_dirs.push(target.join(profile).join("deps"));
+                }
+                if let Ok(entries) = fs::read_dir(&target) {
+                    for entry in entries.flatten() {
+                        let path = entry.path();
+                        if path.is_dir() {
+                            for profile in ["debug", "release"] {
+                                search_dirs.push(path.join(profile));
+                                search_dirs.push(path.join(profile).join("examples"));
+                                search_dirs.push(path.join(profile).join("deps"));
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-    candidates
-        .into_iter()
-        .find(|candidate| candidate.is_file())
-        .unwrap_or_else(|| {
-            panic!(
-                "dedicated test executable {name} not found; it is built by `cargo test` \
-                 (see service/focus-service/examples/)"
-            )
-        })
+
+    // 2. CARGO_TARGET_DIR if set
+    if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
+        let p = PathBuf::from(target_dir);
+        for profile in ["debug", "release"] {
+            search_dirs.push(p.join(profile));
+            search_dirs.push(p.join(profile).join("examples"));
+            search_dirs.push(p.join(profile).join("deps"));
+        }
+    }
+
+    // 3. Compile-time CARGO_MANIFEST_DIR ancestors (repo root)
+    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
+    for ancestor in manifest_dir.ancestors() {
+        let target = ancestor.join("target");
+        if target.is_dir() {
+            for profile in ["debug", "release"] {
+                search_dirs.push(target.join(profile));
+                search_dirs.push(target.join(profile).join("examples"));
+                search_dirs.push(target.join(profile).join("deps"));
+            }
+            if let Ok(entries) = fs::read_dir(&target) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        for profile in ["debug", "release"] {
+                            search_dirs.push(path.join(profile));
+                            search_dirs.push(path.join(profile).join("examples"));
+                            search_dirs.push(path.join(profile).join("deps"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    for dir in search_dirs {
+        let candidate = dir.join(&name);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+pub fn dummy_exe() -> PathBuf {
+    find_target_executable("focus-test-dummy").unwrap_or_else(|| {
+        let name = format!("focus-test-dummy{}", std::env::consts::EXE_SUFFIX);
+        panic!(
+            "dedicated test executable {name} not found; it is built by `cargo test` \
+             (see service/focus-service/examples/)"
+        )
+    })
 }
 
 pub struct ChildGuard {
@@ -488,21 +563,14 @@ pub fn service_exists() -> bool {
 }
 
 pub fn service_exe() -> PathBuf {
-    let current = std::env::current_exe().expect("locate test executable");
-    let deps = current.parent().expect("test executable directory");
-    let name = format!("focus-service{}", std::env::consts::EXE_SUFFIX);
-    for dir in [Some(deps), deps.parent()] {
-        let Some(dir) = dir else { continue };
-        let candidate = dir.join(&name);
-        if candidate.is_file() {
-            return candidate;
-        }
-    }
-    panic!(
-        "{name} not found next to the test executable; `cargo test` builds test \
-         harnesses and examples but not the service binary, so build it first \
-         with `cargo build -p focus-service`"
-    );
+    find_target_executable("focus-service").unwrap_or_else(|| {
+        let name = format!("focus-service{}", std::env::consts::EXE_SUFFIX);
+        panic!(
+            "{name} not found next to the test executable; `cargo test` builds test \
+             harnesses and examples but not the service binary, so build it first \
+             with `cargo build -p focus-service`"
+        )
+    })
 }
 
 pub fn service_install() -> String {
