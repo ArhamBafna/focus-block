@@ -410,6 +410,57 @@ describe("desktop policy mirror", () => {
     expect(rawGet("mirror_unverified_since")).toBeNull();
   });
 
+  it("does not unblock a mirror whose lease ran out just before the pass", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+    // The renewal check ran a moment before the lease ran out, so this pass sees
+    // a spent lease with no fresh answer. Time alone must not lift blocking.
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      planned_duration_sec: 600,
+    });
+
+    await sw.applyBlockingState();
+
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toBe(mirror.id);
+    expect(rulesMention("news.com")).toBe(true);
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("never extends the failure grace past the bound", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+    const unverifiedStart = Date.now() - 9 * 60 * 1000;
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(unverifiedStart - 60 * 1000).toISOString(),
+      planned_duration_sec: 660,
+    });
+    rawSet("mirror_unverified_since", unverifiedStart);
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = { message: "native host has exited" };
+      callback(undefined);
+    };
+
+    await sw.checkNativePolicy();
+
+    const active = rawGet<ActiveSessionRecord>("active_session")!;
+    const leaseEndsAt = Date.parse(active.started_at) + active.planned_duration_sec * 1000;
+    // Nine minutes into a ten-minute bound, the last extension may only be the
+    // minute that is left: the mirror must not outlive the bound.
+    expect(leaseEndsAt).toBeLessThanOrEqual(unverifiedStart + 10 * 60 * 1000 + 1000);
+    expect(rawGet("active_session")).not.toBeNull();
+  });
+
   it("gives up on a mirror when the service is unreachable past the bound", async () => {
     const indefinite = { ...activeDesktopPolicy(), expires_at: null };
     await sw.syncNativePolicy(indefinite);

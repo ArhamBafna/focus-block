@@ -101,15 +101,16 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
             }
           })
         );
-        // The answers belong to the app, not to this render, so they are kept
-        // even when the run was aborted; only the visible state is skipped.
+        // The answers belong to the app, not to this render, so they are kept and
+        // applied even when the run was aborted by a keystroke: dropping them
+        // would leave a visible app on a letter placeholder until something else
+        // happened to re-render. Only starting the next chunk is skipped.
         for (const { app, iconUri } of results) {
           const key = iconKey(app);
           inFlight.delete(key);
           if (iconUri) iconCache.set(key, iconUri);
           else noIcon.add(key);
         }
-        if (!isMounted) break;
         const updates = results.filter(
           (r): r is { app: DiscoveredApp; iconUri: string } => !!r.iconUri
         );

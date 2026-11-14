@@ -139,7 +139,7 @@ export async function requestReconcile(): Promise<void> {
   // desktop session gets one chance to renew its mirror lease first.
   await renewMirrorLeaseIfExpired();
   reconcileRequested = true;
-  return withLock(async () => {
+  await withLock(async () => {
     while (reconcileRequested) {
       reconcileRequested = false;
       try {
@@ -151,6 +151,11 @@ export async function requestReconcile(): Promise<void> {
       }
     }
   });
+  // A lease can run out between the check above and the pass itself, and the
+  // pass refuses to unblock Chrome on a mirror without a fresh answer. Ask again
+  // here rather than leaving a live desktop session unprotected until the next
+  // minute-long tick.
+  await renewMirrorLeaseIfExpired();
 }
 
 // ── Rule management ──────────────────────────────────────────────────────────
@@ -737,14 +742,30 @@ async function applyBlockingStateUnlocked(): Promise<void> {
     return;
   }
 
-  // Check if session has already expired. A mirror has no schedule, so its
-  // lease is the only liveness signal: requestReconcile and the popup's expiry
-  // request both ask the service to renew it before this pass runs, so reaching
-  // here with an expired lease means the desktop really is gone or silent.
+  // Check if session has already expired. A mirror has no schedule, and its
+  // stored duration is only a keep-alive lease, so time alone must never end it:
+  // the lease can run out between the renewal check and this pass, and unblocking
+  // Chrome on that stale decision would let the desktop session run unprotected.
+  // A mirror is ended by a verified answer (inactive policy) or by the bounded
+  // silence window, both of which happen outside this pass; the alarm below is
+  // re-armed for one second so the next attempt lands immediately.
   const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
-  if (!session.scheduled_schedule_id && elapsed >= session.planned_duration_sec) {
-    await expireSessionUnlocked();
-    return;
+  const leaseSpent = !session.scheduled_schedule_id && elapsed >= session.planned_duration_sec;
+  if (leaseSpent) {
+    if (!mirrorSession(session)) {
+      await expireSessionUnlocked();
+      return;
+    }
+    // A mirror only ends on time once the service has been silent for the whole
+    // bound; before that, the next renewal is what decides.
+    const unverifiedSince = await storageGet("mirror_unverified_since");
+    if (
+      typeof unverifiedSince === "number" &&
+      Date.now() - unverifiedSince >= NATIVE_MIRROR_MAX_UNVERIFIED_SEC * 1000
+    ) {
+      await expireSessionUnlocked();
+      return;
+    }
   }
 
   const extensionId = chrome.runtime.id;
@@ -1002,13 +1023,19 @@ async function keepMirrorBlockingThroughNativeFailure(): Promise<void> {
     const now = Date.now();
     const unverifiedSince = await storageGet("mirror_unverified_since");
     const startedAt = typeof unverifiedSince === "number" ? unverifiedSince : now;
-    if (now - startedAt >= NATIVE_MIRROR_MAX_UNVERIFIED_SEC * 1000) return;
+    const boundMs = NATIVE_MIRROR_MAX_UNVERIFIED_SEC * 1000;
+    if (now - startedAt >= boundMs) return;
 
     await setIfChanged("mirror_unverified_since", startedAt);
     const elapsed = Math.max(0, Math.floor((now - new Date(mirror.started_at).getTime()) / 1000));
+    // The extension must never reach past the bound: extending by a full grace
+    // window on the last tick would keep Chrome blocked for nearly twice as long
+    // as documented.
+    const extendableSec = Math.max(0, Math.ceil((startedAt + boundMs - now) / 1000));
     await storageSet("active_session", {
       ...mirror,
-      planned_duration_sec: elapsed + NATIVE_MIRROR_REFRESH_GRACE_SEC,
+      planned_duration_sec:
+        elapsed + Math.min(NATIVE_MIRROR_REFRESH_GRACE_SEC, extendableSec),
     });
     await applyBlockingStateUnlocked();
   });
@@ -1083,9 +1110,19 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
     if (mirror) {
       const planned = mirrorPlannedDuration(policy, Date.parse(mirror.started_at));
       const endsAt = policy.expires_at ?? null;
+      const elapsed = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(mirror.started_at).getTime()) / 1000)
+      );
+      // A lease is renewed with the same "elapsed + grace" value every tick, so
+      // strict equality would rewrite the record and trigger a storage-driven
+      // reconcile every single minute. Anything more than half a grace window
+      // ahead is fresh enough to leave alone.
+      const leaseIsFresh =
+        mirror.planned_duration_sec - elapsed > NATIVE_MIRROR_REFRESH_GRACE_SEC / 2;
       const unchanged =
         mirror.mode === policy.mode &&
-        mirror.planned_duration_sec === planned &&
+        (mirror.planned_duration_sec === planned || leaseIsFresh) &&
         (mirror.ends_at ?? null) === endsAt &&
         sameDomains(mirror.blocklist_snapshot, blocklist) &&
         sameDomains(mirror.whitelist_snapshot, whitelist);

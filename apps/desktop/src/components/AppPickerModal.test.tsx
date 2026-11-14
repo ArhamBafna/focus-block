@@ -62,13 +62,10 @@ describe("AppPickerModal icon loading", () => {
       fireEvent.change(search, { target: { value: "Al" } });
     });
 
-    // The extraction finishes after the teardown. Its answer must survive.
+    // The extraction finishes after the teardown. Its answer must still reach the
+    // list the user is looking at, with no further typing.
     await act(async () => {
       pending.resolve("data:image/png;base64,AAAA");
-    });
-
-    await act(async () => {
-      fireEvent.change(search, { target: { value: "" } });
     });
 
     await waitFor(() => {
