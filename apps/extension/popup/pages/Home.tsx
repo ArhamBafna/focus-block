@@ -338,8 +338,11 @@ export default function Home() {
                   : formatTime(0)}
           </div>
           <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", marginBottom: "24px" }}>
-            {active.session.blocklist_snapshot.length} site
-            {active.session.blocklist_snapshot.length !== 1 ? "s" : ""} blocked
+            {active.session.mode === "lockdown"
+              ? "All sites blocked except your allowlist"
+              : `${active.session.blocklist_snapshot.length} site${
+                  active.session.blocklist_snapshot.length !== 1 ? "s" : ""
+                } blocked`}
           </div>
 
           {actionError && (

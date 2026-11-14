@@ -148,6 +148,46 @@ describe("getStatusSafe raw envelope", () => {
       kind: "unavailable",
     });
   });
+
+  const mirror = (overrides: Record<string, unknown>) => ({
+    id: "service-sync-1",
+    preset_id: null,
+    mode: "blocklist",
+    started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+    planned_duration_sec: 600,
+    status: "active",
+    ended_at: null,
+    blocklist_snapshot: ["news.com"],
+    whitelist_snapshot: [],
+    ...overrides,
+  });
+
+  it("counts a mirrored session down to its real end, not to the keep-alive lease", async () => {
+    fakeSendMessage(() => ({ response: { ok: true, result: null } }));
+    const endsAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    mock.data.set("active_session", mirror({ ends_at: endsAt }));
+
+    const envelope = await ipc.getStatusSafe();
+
+    expect(envelope.ok).toBe(true);
+    if (!envelope.ok) return;
+    const remaining = envelope.data.active_session?.remaining_sec ?? -1;
+    // The lease ran out half an hour ago, yet the desktop session has ten
+    // minutes left: showing the lease would read as "0:00" and end nothing.
+    expect(remaining).toBeGreaterThan(590);
+    expect(remaining).toBeLessThanOrEqual(600);
+  });
+
+  it("shows a mirrored session with no planned end as indefinite", async () => {
+    fakeSendMessage(() => ({ response: { ok: true, result: null } }));
+    mock.data.set("active_session", mirror({ ends_at: null }));
+
+    const envelope = await ipc.getStatusSafe();
+
+    expect(envelope.ok).toBe(true);
+    if (!envelope.ok) return;
+    expect(envelope.data.active_session?.remaining_sec).toBeNull();
+  });
 });
 
 describe("getSettings fallback handling", () => {

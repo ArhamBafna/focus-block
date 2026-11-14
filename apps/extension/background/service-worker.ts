@@ -68,6 +68,8 @@ interface StorageData {
   history: ArchivedSessionRecord[];
   schedule_suppressed_until: number | null;
   active_challenge: ActiveChallenge | null;
+  /** Epoch ms of the first native-host failure while a mirror was live. */
+  mirror_unverified_since: number | null;
 }
 
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -610,10 +612,12 @@ async function activateScheduledSession(
 /** Public entry point: serializes against every other mutation. */
 export async function expireSession(): Promise<void> {
   // The popup sends this on every open. A mirror's stored duration is only a
-  // keep-alive lease, so let a live desktop session renew it before the lease
-  // is allowed to end blocking; this is what stops a wake-from-sleep from
-  // unblocking Chrome while the desktop session is still running.
-  await renewMirrorLeaseIfExpired();
+  // keep-alive lease, so a live desktop session gets to renew it before the lease
+  // is allowed to end blocking; that is what stops a wake-from-sleep from
+  // unblocking Chrome while the desktop session is still running. The check is
+  // forced because the user is looking: a session the desktop already ended must
+  // not still be shown as running.
+  await renewMirrorLeaseIfExpired(true);
   return withLock(expireSessionUnlocked);
 }
 
@@ -937,6 +941,7 @@ function mirrorSession(
 async function clearMirror(): Promise<void> {
   await storageSet("active_session", null);
   await setIfChanged("active_challenge", null);
+  await setIfChanged("mirror_unverified_since", null);
 }
 
 /** True once a mirror's keep-alive lease has run out; the desktop may be gone. */
@@ -944,6 +949,13 @@ function mirrorLeaseExpired(mirror: ActiveSessionRecord): boolean {
   const elapsed = Math.floor((Date.now() - new Date(mirror.started_at).getTime()) / 1000);
   return elapsed >= mirror.planned_duration_sec;
 }
+
+/**
+ * How long a mirror may keep blocking while the native host cannot be reached.
+ * Long enough to ride out a service restart or a wake-from-sleep, short enough
+ * that an uninstalled or wedged service cannot block Chrome forever.
+ */
+const NATIVE_MIRROR_MAX_UNVERIFIED_SEC = 600;
 
 /**
  * A mirror's planned duration is a lease, not a deadline: every native-sync tick
@@ -954,11 +966,52 @@ function mirrorLeaseExpired(mirror: ActiveSessionRecord): boolean {
  * only a silent native host leaves the lease expired, and then the mirror really
  * does expire, because the extension must not block Chrome forever on a session
  * it cannot verify.
+ *
+ * `force` is for the popup: a user looking at the extension must not be shown a
+ * session the desktop app already ended, so that path verifies every time
+ * instead of waiting for the lease to run out.
  */
-async function renewMirrorLeaseIfExpired(): Promise<void> {
-  const mirror = mirrorSession(await storageGet("active_session"));
-  if (!mirror || !mirrorLeaseExpired(mirror)) return;
+async function renewMirrorLeaseIfExpired(force = false): Promise<void> {
+  // The decision is made under the lock so a session start or stop cannot slip
+  // between the read and the query; the query itself runs outside it, because
+  // the reconcile it triggers takes the lock.
+  const shouldVerify = await withLock(async () => {
+    const mirror = mirrorSession(await storageGet("active_session"));
+    return Boolean(mirror && (force || mirrorLeaseExpired(mirror)));
+  });
+  if (!shouldVerify) return;
   await checkNativePolicy();
+}
+
+/**
+ * A failed native query is "unknown", not "inactive": the service may be
+ * restarting, or the machine may have just woken up and the named pipe is not
+ * ready. Blocking is only lifted on a verified inactive answer, so a transient
+ * failure extends the mirror's lease instead of unblocking Chrome behind the
+ * user's back.
+ *
+ * The extension still must not block forever on a session it cannot verify, so
+ * the extension is bounded: after `NATIVE_MIRROR_MAX_UNVERIFIED_SEC` of
+ * consecutive failures the lease is allowed to run out.
+ */
+async function keepMirrorBlockingThroughNativeFailure(): Promise<void> {
+  await withLock(async () => {
+    const mirror = mirrorSession(await storageGet("active_session"));
+    if (!mirror) return;
+
+    const now = Date.now();
+    const unverifiedSince = await storageGet("mirror_unverified_since");
+    const startedAt = typeof unverifiedSince === "number" ? unverifiedSince : now;
+    if (now - startedAt >= NATIVE_MIRROR_MAX_UNVERIFIED_SEC * 1000) return;
+
+    await setIfChanged("mirror_unverified_since", startedAt);
+    const elapsed = Math.max(0, Math.floor((now - new Date(mirror.started_at).getTime()) / 1000));
+    await storageSet("active_session", {
+      ...mirror,
+      planned_duration_sec: elapsed + NATIVE_MIRROR_REFRESH_GRACE_SEC,
+    });
+    await applyBlockingStateUnlocked();
+  });
 }
 
 function sameDomains(a: string[], b: string[]): boolean {
@@ -1014,6 +1067,8 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   await withLock(async () => {
     const current = await storageGet("active_session");
     const mirror = mirrorSession(current);
+    // A verified answer arrived, so any past failure streak is over.
+    await setIfChanged("mirror_unverified_since", null);
 
     if (!policy.active || !policy.mode) {
       if (!mirror) return;
@@ -1052,9 +1107,11 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
       // A popup session or a schedule window loses to the desktop policy, but it
       // is archived honestly instead of being overwritten in place.
       await finalizeActiveSession("stopped");
-      // Its stop challenge belonged to that session and must not outlive it.
-      await setIfChanged("active_challenge", null);
     }
+    // A challenge can be pending with nothing in the slot yet. It belongs to an
+    // extension session that will never start now, so it must not outlive the
+    // switch to the desktop session either.
+    await setIfChanged("active_challenge", null);
     await storageSet("active_session", mirrorFromPolicy(policy));
     await applyBlockingStateUnlocked();
   });
@@ -1082,9 +1139,13 @@ export async function checkNativePolicy(): Promise<void> {
     }
   });
 
-  // A failed query means "unknown", not "inactive". Leave the current state
-  // alone so a transient IPC failure never lifts active blocking.
-  if (!policy || policy.error) return;
+  // A failed query means "unknown", not "inactive". Extending the mirror's
+  // lease keeps blocking through a transient IPC failure, bounded so a service
+  // that is really gone cannot hold Chrome hostage.
+  if (!policy || policy.error) {
+    await keepMirrorBlockingThroughNativeFailure();
+    return;
+  }
 
   await syncNativePolicy(policy);
 }

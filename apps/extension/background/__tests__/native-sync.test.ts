@@ -369,7 +369,7 @@ describe("desktop policy mirror", () => {
     expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
   });
 
-  it("lets an expired mirror lease end blocking when the desktop cannot confirm", async () => {
+  it("keeps blocking when the host fails right after a wake from sleep", async () => {
     const indefinite = { ...activeDesktopPolicy(), expires_at: null };
     await sw.syncNativePolicy(indefinite);
     const mirror = rawGet<ActiveSessionRecord>("active_session")!;
@@ -391,10 +391,107 @@ describe("desktop policy mirror", () => {
 
     await sw.expireSession();
 
-    // An unreachable host is not proof of a live session: the extension must
-    // never leave Chrome blocked forever on a session it cannot verify.
+    // A resume is exactly when the named pipe is not ready yet. One failed
+    // question must not unblock Chrome while the desktop session is running.
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toBe(mirror.id);
+    expect(rulesMention("news.com")).toBe(true);
+    expect(rawGet<number>("mirror_unverified_since")).toBeTypeOf("number");
+
+    // A live answer clears the failure streak again.
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = undefined;
+      callback(indefinite);
+    };
+    await sw.checkNativePolicy();
+    expect(rawGet("mirror_unverified_since")).toBeNull();
+  });
+
+  it("gives up on a mirror when the service is unreachable past the bound", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      planned_duration_sec: 600,
+    });
+    // The failures started long before now: this is an uninstalled or wedged
+    // service, not a resume.
+    rawSet("mirror_unverified_since", Date.now() - 60 * 60 * 1000);
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = { message: "native host has exited" };
+      callback(undefined);
+    };
+
+    await sw.expireSession();
+
+    // Bounded by design: the extension never blocks Chrome forever on a session
+    // it cannot verify.
     expect(rawGet("active_session")).toBeNull();
     expect(mock.dnrRules).toHaveLength(0);
+  });
+
+  it("verifies a live mirror every time the popup asks, not only when the lease runs out", async () => {
+    // A one-hour desktop session: the lease is still valid, so an expiry-only
+    // check would keep showing it after the user already stopped it in the app.
+    const endingLater = {
+      ...activeDesktopPolicy(),
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    };
+    await sw.syncNativePolicy(endingLater);
+    expect(rulesMention("news.com")).toBe(true);
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = undefined;
+      callback({ active: false, mode: null });
+    };
+
+    await sw.expireSession();
+
+    expect(rawGet("active_session")).toBeNull();
+    expect(mock.dnrRules).toHaveLength(0);
+  });
+
+  it("renews from the reconcile path too, without a popup open", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      planned_duration_sec: 600,
+    });
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = undefined;
+      callback(indefinite);
+    };
+
+    await sw.requestReconcile();
+
+    // An alarm-driven reconcile must reach the same verdict as a popup open.
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toBe(mirror.id);
+    expect(rulesMention("news.com")).toBe(true);
   });
 
   it("shares one mirror id prefix with the popup", async () => {

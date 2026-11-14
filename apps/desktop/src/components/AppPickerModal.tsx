@@ -7,10 +7,17 @@ import type { AppBlockEntry } from "../lib/ipc";
 
 export type { DiscoveredApp };
 
-// Icons that cannot be extracted (many UWP packages) must not be retried on
-// every keystroke or every time the picker reopens: each attempt is a process.
-// Module scope, not a ref, because AnimatePresence unmounts the modal on close.
-const attemptedIcons = new Set<string>();
+// Icon answers, kept at module scope because AnimatePresence unmounts the modal
+// on close and a keystroke aborts the effect that was filling the list. Without
+// this, an aborted batch would throw away icons it had already extracted and the
+// apps would be stuck on a letter placeholder.
+//
+//   iconCache  – a real icon, reused on reopen with no IPC at all
+//   noIcon     – extraction returned nothing; retrying is a process per keystroke
+//   inFlight   – keys a running batch is already working on
+const iconCache = new Map<string, string>();
+const noIcon = new Set<string>();
+const inFlight = new Set<string>();
 
 const iconKey = (app: DiscoveredApp) =>
   app.target.kind === "executable"
@@ -53,12 +60,28 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
 
   useEffect(() => {
     if (apps.length === 0) return;
+
+    // Icons extracted by a batch that a keystroke aborted are already in
+    // `iconCache`; apply them before deciding what still needs work.
+    if (apps.some((a) => !a.iconDataUri && iconCache.has(iconKey(a)))) {
+      setApps((prev) =>
+        prev.map((item) => {
+          const cached = iconCache.get(iconKey(item));
+          return !item.iconDataUri && cached ? { ...item, iconDataUri: cached } : item;
+        })
+      );
+    }
+
     // Every visible app gets an icon: a hard cap would leave everything past the
     // first batch with a letter placeholder forever, because this effect only
     // re-runs when the app list or the search term changes. Batching keeps the
     // UI responsive instead of capping the work.
     const missing = filteredApps.filter(
-      (a) => !a.iconDataUri && !attemptedIcons.has(iconKey(a))
+      (a) =>
+        !a.iconDataUri &&
+        !iconCache.has(iconKey(a)) &&
+        !noIcon.has(iconKey(a)) &&
+        !inFlight.has(iconKey(a))
     );
     if (missing.length === 0) return;
 
@@ -68,22 +91,24 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
       for (let i = 0; i < missing.length; i += chunkSize) {
         if (!isMounted) break;
         const chunk = missing.slice(i, i + chunkSize);
+        chunk.forEach((app) => inFlight.add(iconKey(app)));
         const results = await Promise.all(
           chunk.map(async (app) => {
-            // Marked only once the attempt resolves: a keystroke that aborts the
-            // loop mid-chunk must not make the untouched apps look "tried", or
-            // they would never get an icon.
-            const key = iconKey(app);
             try {
-              const iconUri = await getAppIcon(app.target);
-              return { app, iconUri };
+              return { app, iconUri: await getAppIcon(app.target) };
             } catch {
               return { app, iconUri: null };
-            } finally {
-              attemptedIcons.add(key);
             }
           })
         );
+        // The answers belong to the app, not to this render, so they are kept
+        // even when the run was aborted; only the visible state is skipped.
+        for (const { app, iconUri } of results) {
+          const key = iconKey(app);
+          inFlight.delete(key);
+          if (iconUri) iconCache.set(key, iconUri);
+          else noIcon.add(key);
+        }
         if (!isMounted) break;
         const updates = results.filter(
           (r): r is { app: DiscoveredApp; iconUri: string } => !!r.iconUri

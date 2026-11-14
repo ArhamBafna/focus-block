@@ -125,6 +125,8 @@ export interface StorageData {
   history: ArchivedSessionRecord[];
   schedule_suppressed_until: number | null;
   active_challenge: ChallengeRecord | null;
+  /** Epoch ms of the first native-host failure while a mirror was live. */
+  mirror_unverified_since: number | null;
   settings: SettingsRecord;
 }
 
@@ -137,6 +139,7 @@ const DEFAULTS: StorageData = {
   history: [],
   schedule_suppressed_until: null,
   active_challenge: null,
+  mirror_unverified_since: null,
   settings: {
     auto_start: false,
     block_windows_services: false,

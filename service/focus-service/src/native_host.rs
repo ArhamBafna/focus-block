@@ -99,6 +99,10 @@ mod windows_host {
     }
 
     fn native_request_allowed(request: &IpcRequest) -> bool {
+        // A browser client may read state and start a session. Anything that
+        // rewrites the desktop user's configuration or history stays out: the
+        // shipped extension only ever asks for the active policy, so this list
+        // is the smallest surface that still supports an extension-side bridge.
         matches!(
             request,
             IpcRequest::Ping
@@ -111,13 +115,9 @@ mod windows_host {
                 | IpcRequest::AddWhitelist { .. }
                 | IpcRequest::RemoveWhitelist { .. }
                 | IpcRequest::ListPresets
-                | IpcRequest::CreatePreset { .. }
-                | IpcRequest::DeletePreset { .. }
                 | IpcRequest::StartSession { .. }
                 | IpcRequest::ListHistory { .. }
-                | IpcRequest::ClearHistory
                 | IpcRequest::GetSettings
-                | IpcRequest::UpdateSettings { .. }
         )
     }
 
@@ -198,6 +198,23 @@ mod windows_host {
                 IpcRequest::DeleteSchedule { id: "s1".into() },
                 IpcRequest::ListAppBlockTargets,
                 IpcRequest::ClearLastBlockedApp,
+                // Anything that erases history or rewrites settings/presets is
+                // desktop-only as well; a browser origin must not be able to
+                // change how the desktop app behaves.
+                IpcRequest::ClearHistory,
+                IpcRequest::UpdateSettings {
+                    os_allowlist_enabled: false,
+                },
+                IpcRequest::CreatePreset {
+                    name: "p".into(),
+                    mode: focus_core::SessionMode::Blocklist,
+                    duration_minutes: 25,
+                    blocklist: Vec::new(),
+                    whitelist: Vec::new(),
+                },
+                IpcRequest::DeletePreset {
+                    id: uuid::Uuid::nil(),
+                },
             ] {
                 assert!(!native_request_allowed(&denied), "{denied:?}");
             }
