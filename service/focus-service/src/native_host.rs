@@ -170,6 +170,44 @@ mod windows_host {
             .and_then(|()| value.flush())
             .map_err(|error| format!("failed to write native response: {error}"))
     }
+
+    #[cfg(test)]
+    mod tests {
+        use super::native_request_allowed;
+        use focus_core::IpcRequest;
+
+        #[test]
+        fn browser_requests_cannot_rewrite_desktop_configuration() {
+            // The policy read has its own arm in `run()`, so it is deliberately
+            // not part of the passthrough allowlist.
+            assert!(!native_request_allowed(&IpcRequest::GetActivePolicy));
+
+            // Schedule and app-block management stay desktop-only: a browser
+            // client must not add, edit, or delete the desktop user's rules.
+            for denied in [
+                IpcRequest::ListSchedules,
+                IpcRequest::CreateSchedule {
+                    schedule: focus_core::Schedule {
+                        id: "s1".into(),
+                        start_time: "09:00".into(),
+                        end_time: "10:00".into(),
+                        mode: focus_core::SessionMode::Blocklist,
+                        days_of_week: vec![1],
+                        ends_on: None,
+                    },
+                },
+                IpcRequest::DeleteSchedule { id: "s1".into() },
+                IpcRequest::ListAppBlockTargets,
+                IpcRequest::ClearLastBlockedApp,
+            ] {
+                assert!(!native_request_allowed(&denied), "{denied:?}");
+            }
+
+            // Reading state and running a session is the designed bridge surface.
+            assert!(native_request_allowed(&IpcRequest::GetStatus));
+            assert!(native_request_allowed(&IpcRequest::StopSession));
+        }
+    }
 }
 
 #[cfg(windows)]

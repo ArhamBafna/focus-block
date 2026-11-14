@@ -293,4 +293,60 @@ describe("desktop policy mirror", () => {
     expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
     expect(rulesMention("news.com")).toBe(true);
   });
+
+  it("keeps blocking when the native port itself fails", async () => {
+    await sw.syncNativePolicy(activeDesktopPolicy());
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = { message: "native host has exited" };
+      callback(undefined);
+    };
+
+    await sw.checkNativePolicy();
+
+    // "Unknown" must never read as "the desktop session ended".
+    expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
+    expect(rulesMention("news.com")).toBe(true);
+  });
+
+  it("serializes overlapping syncs so the newest policy is the one applied", async () => {
+    // Two native-sync ticks can land in the same event-loop turn. The mutation
+    // lock makes the last one win; without it both could act on one stale read.
+    const first = sw.syncNativePolicy(activeDesktopPolicy(["news.com"]));
+    const second = sw.syncNativePolicy(activeDesktopPolicy(["news.com", "games.com"]));
+    await Promise.all([first, second]);
+
+    const active = rawGet<ActiveSessionRecord>("active_session");
+    expect(active?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
+    expect(active?.blocklist_snapshot).toEqual(["news.com", "games.com"]);
+    expect(rulesMention("games.com")).toBe(true);
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("survives an expiry and a policy sync racing each other", async () => {
+    // The popup asks for an expiry on every status read, so this overlap is the
+    // normal case, not a corner case.
+    await Promise.all([sw.expireSession(), sw.syncNativePolicy(activeDesktopPolicy())]);
+
+    const active = rawGet<ActiveSessionRecord>("active_session");
+    expect(active?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
+    expect(rulesMention("news.com")).toBe(true);
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("shares one mirror id prefix with the popup", async () => {
+    const popupStorage = await import("../../popup/lib/storage");
+
+    // A silent rename on either side would make the popup offer a Stop button
+    // for a session the worker refuses to stop.
+    expect(popupStorage.NATIVE_MIRROR_ID_PREFIX).toBe(sw.NATIVE_MIRROR_ID_PREFIX);
+    expect(popupStorage.isMirrorSession({ id: sw.NATIVE_MIRROR_ID_PREFIX + "1" })).toBe(true);
+    expect(popupStorage.isMirrorSession({ id: "session-1" })).toBe(false);
+    expect(popupStorage.isMirrorSession(null)).toBe(false);
+  });
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { X } from "@phosphor-icons/react/X";
 import { motion, AnimatePresence } from "framer-motion";
@@ -6,6 +6,16 @@ import { getAppIcon, listInstalledApps, type DiscoveredApp } from "../lib/app-pi
 import type { AppBlockEntry } from "../lib/ipc";
 
 export type { DiscoveredApp };
+
+// Icons that cannot be extracted (many UWP packages) must not be retried on
+// every keystroke or every time the picker reopens: each attempt is a process.
+// Module scope, not a ref, because AnimatePresence unmounts the modal on close.
+const attemptedIcons = new Set<string>();
+
+const iconKey = (app: DiscoveredApp) =>
+  app.target.kind === "executable"
+    ? app.target.path.toLowerCase()
+    : app.target.package_family_name.toLowerCase();
 
 interface Props {
   isOpen: boolean;
@@ -19,14 +29,6 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
   const [apps, setApps] = useState<DiscoveredApp[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Icons that cannot be extracted (UWP packages often can't) must not be
-  // retried on every keystroke: each attempt is a PowerShell process.
-  const attemptedIcons = useRef<Set<string>>(new Set());
-
-  const iconKey = (app: DiscoveredApp) =>
-    app.target.kind === "executable"
-      ? app.target.path.toLowerCase()
-      : app.target.package_family_name.toLowerCase();
 
   useEffect(() => {
     if (isOpen && apps.length === 0) {
@@ -56,7 +58,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     // re-runs when the app list or the search term changes. Batching keeps the
     // UI responsive instead of capping the work.
     const missing = filteredApps.filter(
-      (a) => !a.iconDataUri && !attemptedIcons.current.has(iconKey(a))
+      (a) => !a.iconDataUri && !attemptedIcons.has(iconKey(a))
     );
     if (missing.length === 0) return;
 
@@ -78,7 +80,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
             } catch {
               return { app, iconUri: null };
             } finally {
-              attemptedIcons.current.add(key);
+              attemptedIcons.add(key);
             }
           })
         );

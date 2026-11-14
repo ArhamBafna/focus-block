@@ -329,7 +329,13 @@ export default function Home() {
               fontFamily: "var(--font-sans)",
             }}
           >
-            {remainingSec !== null ? formatTime(remainingSec) : "∞"}
+            {remainingSec === null
+              ? "∞"
+              : remainingSec > 0
+                ? formatTime(remainingSec)
+                : mirrored
+                  ? "Ending…"
+                  : formatTime(0)}
           </div>
           <div style={{ fontSize: "13px", color: "var(--color-neutral-500)", marginBottom: "24px" }}>
             {active.session.blocklist_snapshot.length} site

@@ -537,4 +537,39 @@ mod tests {
             .expect("the clock is later than 1970");
         assert!(!miss_marker_is_fresh(Some(stale)));
     }
+
+    /// The cache key becomes a file name inside the icon cache directory, so it
+    /// must not contain path separators, and the same target must always map to
+    /// the same file whatever the case of the path.
+    #[test]
+    fn icon_cache_keys_are_safe_file_names_and_stable_per_target() {
+        use super::target_cache_key;
+        use focus_core::AppBlockTarget;
+
+        let exe = AppBlockTarget::Executable {
+            path: r"C:\Program Files\Discord\Discord.exe".into(),
+        };
+        let exe_other_case = AppBlockTarget::Executable {
+            path: r"c:\program files\discord\discord.exe".into(),
+        };
+        let package = AppBlockTarget::Package {
+            package_family_name: "Microsoft.WindowsCalculator_8wekyb3d8bbwe".into(),
+        };
+
+        let key = target_cache_key(&exe);
+        assert_eq!(key, target_cache_key(&exe_other_case));
+        assert_ne!(key, target_cache_key(&package));
+        assert_eq!(target_cache_key(&package), target_cache_key(&package));
+
+        for candidate in [key, target_cache_key(&package)] {
+            let stem = candidate.strip_suffix(".b64").expect("cache key ends in .b64");
+            assert!(
+                !stem.chars().any(|c| matches!(c, '/' | '\\' | ':' | '.')),
+                "{stem}"
+            );
+            assert!(!stem.is_empty(), "{candidate}");
+            assert_eq!(candidate.matches('.').count(), 1, "{candidate}");
+            assert!(candidate.len() < 120, "{candidate}");
+        }
+    }
 }
