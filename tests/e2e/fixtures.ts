@@ -11,8 +11,8 @@ export const test = base.extend<{
   extensionId: string;
   popupPage: Page;
 }>({
-  context: async ({}, use) => {
-    const isHeaded = Boolean(process.env.HEADED);
+  context: async ({ headless }, use) => {
+    const isHeaded = !headless;
     const context = await chromium.launchPersistentContext('', {
       headless: false,
       args: [

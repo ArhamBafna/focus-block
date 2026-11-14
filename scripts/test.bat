@@ -15,11 +15,6 @@ $ExtensionOnly = $cliArgs -match "(?i)(^|\s)(-e|--extension|-ExtensionOnly)($|\s
 $DesktopOnly = $cliArgs -match "(?i)(^|\s)(-d|--desktop|-DesktopOnly)($|\s)"
 $E2EOnly = $cliArgs -match "(?i)(^|\s)(-e2e|--e2e|-E2EOnly)($|\s)"
 $Headed = $cliArgs -match "(?i)(^|\s)(-headed|--headed|-Headed|-v)($|\s)"
-if ($Headed) {
-    $env:HEADED = "1"
-} else {
-    $env:HEADED = ""
-}
 $RunAll = -not ($RustOnly -or $ExtensionOnly -or $DesktopOnly -or $E2EOnly)
 
 Write-Host "==================================================" -ForegroundColor Cyan
@@ -89,7 +84,8 @@ if ($RunAll -or $E2EOnly) {
         Write-Host "Compiling latest extension build..." -ForegroundColor Cyan
         npm run build --prefix "$RepoRoot\apps\extension"
         if ($LASTEXITCODE -ne 0) { throw "Extension build failed before E2E tests" }
-        npx playwright test
+        $playwrightCmd = if ($Headed) { "npx playwright test --headed" } else { "npx playwright test" }
+        Invoke-Expression $playwrightCmd
     }
 }
 
