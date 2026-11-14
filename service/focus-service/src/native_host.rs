@@ -79,6 +79,16 @@ mod windows_host {
         }
     }
 
+    /// Normalizes an extension ID or origin to a canonical `chrome-extension://<id>/`.
+    pub fn normalize_origin(raw: &str) -> String {
+        let trimmed = raw.trim();
+        let without_prefix = trimmed
+            .strip_prefix("chrome-extension://")
+            .unwrap_or(trimmed);
+        let id = without_prefix.trim_matches('/');
+        format!("chrome-extension://{}/", id.to_ascii_lowercase())
+    }
+
     /// The origins the installed manifest allows, or the environment override.
     /// Chrome enforces `allowed_origins` before it starts this process, so this
     /// is the second lock on the same door; it must not be skipped merely
@@ -86,9 +96,9 @@ mod windows_host {
     fn configured_extension_origins() -> Vec<String> {
         let mut origins = Vec::new();
         if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
-            let id = id.trim().to_string();
-            if !id.is_empty() {
-                origins.push(format!("chrome-extension://{id}/"));
+            let normalized = normalize_origin(&id);
+            if normalized != "chrome-extension:///" {
+                origins.push(normalized);
             }
         }
         if let Ok(program_data) = std::env::var("ProgramData") {
@@ -100,9 +110,9 @@ mod windows_host {
                     if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
                         for item in arr {
                             if let Some(s) = item.as_str() {
-                                let origin = s.to_string();
-                                if !origins.contains(&origin) {
-                                    origins.push(origin);
+                                let normalized = normalize_origin(s);
+                                if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
+                                    origins.push(normalized);
                                 }
                             }
                         }
@@ -113,16 +123,17 @@ mod windows_host {
         origins
     }
 
-    /// Generic over the argument type so the caller can pass Chrome's `String`
-    /// arguments and a test can pass `&str` literals without a collect.
-    fn origin_matches<S: AsRef<str>, O: AsRef<str>>(
+    /// Strictly verifies that the origin passed by Chrome in argv[1] matches
+    /// one of the configured allowed origins.
+    fn origin_argument_matches<O: AsRef<str>>(
         allowed_origins: &[O],
-        mut arguments: impl Iterator<Item = S>,
+        origin_arg: Option<&str>,
     ) -> bool {
-        arguments.any(|argument| {
-            let arg = argument.as_ref();
-            allowed_origins.iter().any(|allowed| allowed.as_ref() == arg)
-        })
+        let Some(arg) = origin_arg else {
+            return false;
+        };
+        let normalized = normalize_origin(arg);
+        allowed_origins.iter().any(|allowed| allowed.as_ref() == normalized)
     }
 
     fn validate_origin() -> Result<(), String> {
@@ -132,7 +143,9 @@ mod windows_host {
             // refuse native requests rather than opening an unvalidated bridge.
             return Err("no allowed extension origins configured in manifest or environment".into());
         }
-        if origin_matches(&allowed, std::env::args().skip(1)) {
+        // Chrome strictly passes the caller's origin as the very first command line argument (argv[1]).
+        let first_arg = std::env::args().nth(1);
+        if origin_argument_matches(&allowed, first_arg.as_deref()) {
             Ok(())
         } else {
             Err("native host origin did not match any configured extension".into())
@@ -281,28 +294,39 @@ mod windows_host {
 
         #[test]
         fn origin_check_only_accepts_the_configured_extension() {
-            use super::origin_matches;
+            use super::{normalize_origin, origin_argument_matches};
 
             let allowed = [
                 "chrome-extension://abcdefghijklmnopabcdefghijklmnop/",
                 "chrome-extension://secondallowedextensionid000000000/",
             ];
-            assert!(origin_matches(
+            // Matches identical canonical origin
+            assert!(origin_argument_matches(
                 &allowed,
-                ["chrome-extension://abcdefghijklmnopabcdefghijklmnop/"].into_iter()
+                Some("chrome-extension://abcdefghijklmnopabcdefghijklmnop/")
             ));
-            assert!(origin_matches(
+            // Matches second allowed origin
+            assert!(origin_argument_matches(
                 &allowed,
-                ["chrome-extension://secondallowedextensionid000000000/"].into_iter()
+                Some("chrome-extension://secondallowedextensionid000000000/")
             ));
-            // A different extension, another app, or an empty argument list must
-            // not pass: Chrome passes the caller's origin as the first argument.
-            assert!(!origin_matches(
+            // Normalizes raw IDs without prefix or with mixed case/whitespace/slashes
+            assert!(origin_argument_matches(
                 &allowed,
-                ["chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/"].into_iter()
+                Some(" ABCDEFGHijklmnopABCDEFGHijklmnop/ ")
             ));
-            assert!(!origin_matches(&allowed, ["--parent-window=0"].into_iter()));
-            assert!(!origin_matches(&allowed, std::iter::empty::<&str>()));
+            assert_eq!(
+                normalize_origin("abcdef/"),
+                "chrome-extension://abcdef/"
+            );
+
+            // Rejects unknown extensions, non-origin arguments, and missing arguments
+            assert!(!origin_argument_matches(
+                &allowed,
+                Some("chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/")
+            ));
+            assert!(!origin_argument_matches(&allowed, Some("--parent-window=0")));
+            assert!(!origin_argument_matches(&allowed, None));
         }
     }
 }

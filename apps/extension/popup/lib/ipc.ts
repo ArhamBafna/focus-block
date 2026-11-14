@@ -245,10 +245,10 @@ function sendToBackground<T>(message: Record<string, unknown>): Promise<BridgeEn
 
     try {
       chrome.runtime.sendMessage(message, (response: BackgroundResponse | undefined) => {
+        const lastError = chrome.runtime.lastError;
         if (resolved) return;
         resolved = true;
         clearTimeout(timer);
-        const lastError = chrome.runtime.lastError;
         if (lastError) {
           resolve({
             ok: false,

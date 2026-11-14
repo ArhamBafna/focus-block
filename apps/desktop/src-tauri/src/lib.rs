@@ -203,15 +203,48 @@ if ($pkg -and $pkg.InstallLocation) {{
 
     let mut cmd = std::process::Command::new("powershell.exe");
     cmd.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::null());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
         cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
     }
-    let output = cmd.output().ok()?;
+    let mut child = cmd.spawn().ok()?;
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    let mut output_bytes = Vec::new();
+    let mut success = false;
 
-    if output.status.success() {
-        let b64 = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    loop {
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                if status.success() {
+                    if let Some(mut out) = child.stdout.take() {
+                        use std::io::Read;
+                        let _ = out.read_to_end(&mut output_bytes);
+                    }
+                    success = true;
+                }
+                break;
+            }
+            Ok(None) => {
+                if start.elapsed() >= timeout {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(40));
+            }
+            Err(_) => {
+                let _ = child.kill();
+                break;
+            }
+        }
+    }
+
+    if success {
+        let b64 = String::from_utf8_lossy(&output_bytes).trim().to_string();
         if !b64.is_empty() && b64.starts_with("data:image/png;base64,") {
             save_cached_icon(&cache_dir, &key, &b64);
             return Some(b64);

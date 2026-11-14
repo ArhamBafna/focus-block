@@ -563,7 +563,7 @@ describe("desktop policy mirror", () => {
     chromeLike.runtime.sendNativeMessage = vi.fn();
 
     const checkPromise = sw.checkNativePolicy();
-    await vi.advanceTimersByTimeAsync(3500);
+    await vi.advanceTimersByTimeAsync(6500);
     await checkPromise;
 
     expect(chromeLike.runtime.sendNativeMessage).toHaveBeenCalled();

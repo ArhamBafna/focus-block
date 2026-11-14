@@ -789,18 +789,23 @@ async function applyBlockingStateUnlocked(): Promise<void> {
   if (session.scheduled_schedule_id && currentSchedule?.id === session.scheduled_schedule_id) {
     const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
     remainingSec = end ? Math.max(1, Math.ceil((end.getTime() - Date.now()) / 1000)) : 1;
+    chrome.alarms.create(ALARM_SESSION_EXPIRY, {
+      when: Date.now() + remainingSec * 1000,
+    });
   } else {
-    // For mirrored desktop sessions whose expires_at has passed or lease has expired,
-    // enforce a 5-second minimum alarm delay to prevent 1-second busy loop alarm thrashing
-    // while waiting for the native desktop service to report inactive status.
     const isMirror = session.id.startsWith(NATIVE_MIRROR_ID_PREFIX);
-    const minDelay = isMirror ? 5 : 1;
-    remainingSec = Math.max(minDelay, session.planned_duration_sec - elapsed);
+    const remaining = session.planned_duration_sec - elapsed;
+    if (isMirror && remaining <= 0) {
+      // Lease has expired; do not schedule a fast busy-loop alarm.
+      // The periodic native sync alarm (every 1 min) or next popup open handles cleanup.
+      remainingSec = 0;
+    } else {
+      remainingSec = Math.max(1, remaining);
+      chrome.alarms.create(ALARM_SESSION_EXPIRY, {
+        when: Date.now() + remainingSec * 1000,
+      });
+    }
   }
-  const remainingMs = remainingSec * 1000;
-  chrome.alarms.create(ALARM_SESSION_EXPIRY, {
-    when: Date.now() + remainingMs,
-  });
 
   console.log(
     `[FocusBlocker] Session active (${session.mode}). Expires in ${Math.round(remainingSec / 60)}m.`
@@ -1165,17 +1170,18 @@ export async function checkNativePolicy(): Promise<void> {
         resolved = true;
         resolve(null);
       }
-    }, 3000);
+    }, 6000);
 
     try {
       chrome.runtime.sendNativeMessage(
         NATIVE_HOST_NAME,
         { type: "get-active-policy" },
         (response: NativePolicy) => {
+          const lastError = chrome.runtime.lastError;
           if (resolved) return;
           resolved = true;
           clearTimeout(timer);
-          if (chrome.runtime.lastError || !response) {
+          if (lastError || !response) {
             resolve(null);
             return;
           }
@@ -1201,7 +1207,18 @@ export async function checkNativePolicy(): Promise<void> {
   await syncNativePolicy(policy);
 }
 
-// ── Event listeners ──────────────────────────────────────────────────────────
+// ── Event listeners & worker lifecycle ────────────────────────────────────────
+
+export function ensureSyncAlarm(): void {
+  if (typeof chrome === "undefined" || !chrome.alarms?.get) return;
+  chrome.alarms.get(ALARM_NATIVE_SYNC, (alarm) => {
+    const _err = chrome.runtime.lastError;
+    if (!alarm) {
+      chrome.alarms.create(ALARM_NATIVE_SYNC, { periodInMinutes: 1 });
+    }
+  });
+}
+ensureSyncAlarm();
 
 // On install / update
 chrome.runtime.onInstalled.addListener(() => {

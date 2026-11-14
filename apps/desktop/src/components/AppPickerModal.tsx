@@ -16,17 +16,39 @@ export type { DiscoveredApp };
 //   noIconFailures  – extraction returned nothing; retried only after TTL expires
 //   inFlight        – keys a running batch is already working on
 const MAX_ICON_CACHE = 200;
+const MAX_FAILURES_CACHE = 200;
 const NO_ICON_TTL_MS = 5 * 60 * 1000;
 const iconCache = new Map<string, string>();
 const noIconFailures = new Map<string, number>();
 const inFlight = new Set<string>();
 
+function getCachedIcon(key: string): string | undefined {
+  const uri = iconCache.get(key);
+  if (uri !== undefined) {
+    iconCache.delete(key);
+    iconCache.set(key, uri);
+  }
+  return uri;
+}
+
 function cacheIcon(key: string, iconUri: string) {
-  if (iconCache.size >= MAX_ICON_CACHE) {
+  if (iconCache.has(key)) {
+    iconCache.delete(key);
+  } else if (iconCache.size >= MAX_ICON_CACHE) {
     const oldestKey = iconCache.keys().next().value;
     if (oldestKey) iconCache.delete(oldestKey);
   }
   iconCache.set(key, iconUri);
+}
+
+function recordNoIconFailure(key: string) {
+  if (noIconFailures.has(key)) {
+    noIconFailures.delete(key);
+  } else if (noIconFailures.size >= MAX_FAILURES_CACHE) {
+    const oldestKey = noIconFailures.keys().next().value;
+    if (oldestKey) noIconFailures.delete(oldestKey);
+  }
+  noIconFailures.set(key, Date.now());
 }
 
 function hasFreshNoIcon(key: string): boolean {
@@ -71,10 +93,12 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
       setError(null);
       listInstalledApps()
         .then((res) => {
+          if (!isComponentMounted.current) return;
           setApps(res);
           setLoading(false);
         })
         .catch((err) => {
+          if (!isComponentMounted.current) return;
           console.error("Failed to load apps:", err);
           setError(err instanceof Error ? err.message : String(err));
           setLoading(false);
@@ -94,7 +118,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     if (apps.some((a) => !a.iconDataUri && iconCache.has(iconKey(a)))) {
       setApps((prev) =>
         prev.map((item) => {
-          const cached = iconCache.get(iconKey(item));
+          const cached = getCachedIcon(iconKey(item));
           return !item.iconDataUri && cached ? { ...item, iconDataUri: cached } : item;
         })
       );
@@ -140,7 +164,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
             cacheIcon(key, iconUri);
             noIconFailures.delete(key);
           } else {
-            noIconFailures.set(key, Date.now());
+            recordNoIconFailure(key);
           }
         }
         const updates = results.filter(
