@@ -217,88 +217,64 @@ fn sidecar_paths(path: &Path) -> Vec<PathBuf> {
 
 pub fn find_target_executable(base_name: &str) -> Option<PathBuf> {
     let name = format!("{base_name}{}", std::env::consts::EXE_SUFFIX);
-    let mut search_dirs = Vec::new();
+    let mut target_dirs = Vec::new();
+    let mut profile = None;
 
-    // 1. Ancestors of current_exe()
+    // Cargo puts test executables somewhere below `<target>/<profile>`. Find
+    // the target root from this test executable, even when Cargo adds nested
+    // `build/<package>/<hash>/out` directories.
     if let Ok(current) = std::env::current_exe() {
-        for ancestor in current.ancestors() {
-            search_dirs.push(ancestor.to_path_buf());
-            search_dirs.push(ancestor.join("examples"));
-            search_dirs.push(ancestor.join("deps"));
-
-            let target_sub = if ancestor.file_name().and_then(|n| n.to_str()) == Some("target") {
-                Some(ancestor.to_path_buf())
-            } else if ancestor.join("target").is_dir() {
-                Some(ancestor.join("target"))
-            } else {
-                None
-            };
-
-            if let Some(target) = target_sub {
-                for profile in ["debug", "release"] {
-                    search_dirs.push(target.join(profile));
-                    search_dirs.push(target.join(profile).join("examples"));
-                    search_dirs.push(target.join(profile).join("deps"));
-                }
-                if let Ok(entries) = fs::read_dir(&target) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path.is_dir() {
-                            for profile in ["debug", "release"] {
-                                search_dirs.push(path.join(profile));
-                                search_dirs.push(path.join(profile).join("examples"));
-                                search_dirs.push(path.join(profile).join("deps"));
-                            }
-                        }
-                    }
-                }
-            }
+        profile = current
+            .ancestors()
+            .find_map(|path| match path.file_name().and_then(|name| name.to_str()) {
+                Some("debug") => Some("debug"),
+                Some("release") => Some("release"),
+                _ => None,
+            });
+        if let Some(target) = current
+            .ancestors()
+            .find(|path| path.file_name().is_some_and(|name| name == "target"))
+        {
+            target_dirs.push(target.to_path_buf());
         }
     }
 
-    // 2. CARGO_TARGET_DIR if set
-    if let Ok(target_dir) = std::env::var("CARGO_TARGET_DIR") {
-        let p = PathBuf::from(target_dir);
-        for profile in ["debug", "release"] {
-            search_dirs.push(p.join(profile));
-            search_dirs.push(p.join(profile).join("examples"));
-            search_dirs.push(p.join(profile).join("deps"));
-        }
+    // Cargo also supports an external target directory. Resolve relative
+    // values from the package manifest directory, where Cargo resolves them.
+    if let Some(target) = std::env::var_os("CARGO_TARGET_DIR") {
+        let target = PathBuf::from(target);
+        let target = if target.is_absolute() {
+            target
+        } else {
+            Path::new(env!("CARGO_MANIFEST_DIR")).join(target)
+        };
+        target_dirs.push(target);
     }
 
-    // 3. Compile-time CARGO_MANIFEST_DIR ancestors (repo root)
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for ancestor in manifest_dir.ancestors() {
-        let target = ancestor.join("target");
-        if target.is_dir() {
-            for profile in ["debug", "release"] {
-                search_dirs.push(target.join(profile));
-                search_dirs.push(target.join(profile).join("examples"));
-                search_dirs.push(target.join(profile).join("deps"));
-            }
+    let mut search_dirs = Vec::new();
+    let profiles = profile.map_or_else(|| vec!["debug", "release"], |profile| vec![profile]);
+    for target in target_dirs {
+        for profile in &profiles {
+            search_dirs.push(target.join(profile));
+            search_dirs.push(target.join(profile).join("examples"));
+
+            // Cross-target builds add one target-triple directory.
             if let Ok(entries) = fs::read_dir(&target) {
                 for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        for profile in ["debug", "release"] {
-                            search_dirs.push(path.join(profile));
-                            search_dirs.push(path.join(profile).join("examples"));
-                            search_dirs.push(path.join(profile).join("deps"));
-                        }
+                    let triple_profile = entry.path().join(profile);
+                    if triple_profile.is_dir() {
+                        search_dirs.push(triple_profile.clone());
+                        search_dirs.push(triple_profile.join("examples"));
                     }
                 }
             }
         }
     }
 
-    for dir in search_dirs {
-        let candidate = dir.join(&name);
-        if candidate.is_file() {
-            return Some(candidate);
-        }
-    }
-
-    None
+    search_dirs
+        .into_iter()
+        .map(|dir| dir.join(&name))
+        .find(|candidate| candidate.is_file())
 }
 
 pub fn dummy_exe() -> PathBuf {
