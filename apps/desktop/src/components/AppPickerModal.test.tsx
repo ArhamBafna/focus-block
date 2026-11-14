@@ -98,4 +98,27 @@ describe("AppPickerModal icon loading", () => {
     expect(getAppIcon).toHaveBeenCalledTimes(1);
     expect(document.querySelector('img[src="data:image/png;base64,AAAA"]')).toBeNull();
   });
+
+  it("safely handles unmounting the modal while an icon extraction is in flight", async () => {
+    const pending = deferred<string | null>();
+    listInstalledApps.mockResolvedValue([app("Gamma", "C:\\Apps\\gamma.exe")]);
+    getAppIcon.mockReturnValue(pending.promise);
+
+    const { unmount } = render(
+      <AppPickerModal isOpen onClose={vi.fn()} onToggleApp={vi.fn()} blockedApps={[]} />
+    );
+
+    await screen.findByText("Gamma");
+    await waitFor(() => expect(getAppIcon).toHaveBeenCalledTimes(1));
+
+    // Unmount modal while extraction promise is in-flight
+    unmount();
+
+    // Resolving after unmount must not throw or update unmounted state
+    await act(async () => {
+      pending.resolve("data:image/png;base64,GGGG");
+    });
+
+    expect(getAppIcon).toHaveBeenCalledTimes(1);
+  });
 });

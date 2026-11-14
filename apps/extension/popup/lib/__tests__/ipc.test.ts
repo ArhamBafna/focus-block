@@ -66,6 +66,28 @@ describe("background channel arms", () => {
     await expect(ipc.stopSession()).rejects.toMatchObject({ kind: "unavailable" });
   });
 
+  it("times out and rejects with kind 'unavailable' when background never responds", async () => {
+    vi.useFakeTimers();
+    // Simulate runtime.sendMessage never calling the callback
+    const runtime = (globalThis as unknown as {
+      chrome: {
+        runtime: {
+          sendMessage: (message: unknown, callback: (response?: unknown) => void) => void;
+        };
+      };
+    }).chrome.runtime;
+    runtime.sendMessage = vi.fn();
+
+    const stopPromise = ipc.stopSession();
+    const assertion = expect(stopPromise).rejects.toMatchObject({
+      kind: "unavailable",
+      message: "Background service timed out",
+    });
+    await vi.advanceTimersByTimeAsync(4500);
+    await assertion;
+    vi.useRealTimers();
+  });
+
   it("startSession unwraps a successful background result", async () => {
     const sent = fakeSendMessage((message) => {
       expect((message as { type?: string }).type).toBe("session:start");

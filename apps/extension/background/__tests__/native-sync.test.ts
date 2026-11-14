@@ -555,4 +555,17 @@ describe("desktop policy mirror", () => {
     expect(popupStorage.isMirrorSession({ id: "session-1" })).toBe(false);
     expect(popupStorage.isMirrorSession(null)).toBe(false);
   });
+
+  it("recovers safely when sendNativeMessage hangs and times out", async () => {
+    vi.useFakeTimers();
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    // Simulate a hung native host that never calls the callback
+    chromeLike.runtime.sendNativeMessage = vi.fn();
+
+    const checkPromise = sw.checkNativePolicy();
+    await vi.advanceTimersByTimeAsync(3500);
+    await checkPromise;
+
+    expect(chromeLike.runtime.sendNativeMessage).toHaveBeenCalled();
+  });
 });

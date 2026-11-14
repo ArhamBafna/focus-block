@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { X } from "@phosphor-icons/react/X";
 import { motion, AnimatePresence } from "framer-motion";
@@ -12,12 +12,32 @@ export type { DiscoveredApp };
 // this, an aborted batch would throw away icons it had already extracted and the
 // apps would be stuck on a letter placeholder.
 //
-//   iconCache  – a real icon, reused on reopen with no IPC at all
-//   noIcon     – extraction returned nothing; retrying is a process per keystroke
-//   inFlight   – keys a running batch is already working on
+//   iconCache       – a real icon, reused on reopen with no IPC at all (bounded LRU)
+//   noIconFailures  – extraction returned nothing; retried only after TTL expires
+//   inFlight        – keys a running batch is already working on
+const MAX_ICON_CACHE = 200;
+const NO_ICON_TTL_MS = 5 * 60 * 1000;
 const iconCache = new Map<string, string>();
-const noIcon = new Set<string>();
+const noIconFailures = new Map<string, number>();
 const inFlight = new Set<string>();
+
+function cacheIcon(key: string, iconUri: string) {
+  if (iconCache.size >= MAX_ICON_CACHE) {
+    const oldestKey = iconCache.keys().next().value;
+    if (oldestKey) iconCache.delete(oldestKey);
+  }
+  iconCache.set(key, iconUri);
+}
+
+function hasFreshNoIcon(key: string): boolean {
+  const failedAt = noIconFailures.get(key);
+  if (!failedAt) return false;
+  if (Date.now() - failedAt > NO_ICON_TTL_MS) {
+    noIconFailures.delete(key);
+    return false;
+  }
+  return true;
+}
 
 const iconKey = (app: DiscoveredApp) =>
   app.target.kind === "executable"
@@ -32,6 +52,14 @@ interface Props {
 }
 
 export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Props) {
+  const isComponentMounted = useRef(true);
+  useEffect(() => {
+    isComponentMounted.current = true;
+    return () => {
+      isComponentMounted.current = false;
+    };
+  }, []);
+
   const [search, setSearch] = useState("");
   const [apps, setApps] = useState<DiscoveredApp[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,7 +108,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
       (a) =>
         !a.iconDataUri &&
         !iconCache.has(iconKey(a)) &&
-        !noIcon.has(iconKey(a)) &&
+        !hasFreshNoIcon(iconKey(a)) &&
         !inFlight.has(iconKey(a))
     );
     if (missing.length === 0) return;
@@ -108,13 +136,17 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
         for (const { app, iconUri } of results) {
           const key = iconKey(app);
           inFlight.delete(key);
-          if (iconUri) iconCache.set(key, iconUri);
-          else noIcon.add(key);
+          if (iconUri) {
+            cacheIcon(key, iconUri);
+            noIconFailures.delete(key);
+          } else {
+            noIconFailures.set(key, Date.now());
+          }
         }
         const updates = results.filter(
           (r): r is { app: DiscoveredApp; iconUri: string } => !!r.iconUri
         );
-        if (updates.length > 0) {
+        if (isComponentMounted.current && updates.length > 0) {
           setApps((prev) =>
             prev.map((item) => {
               const found = updates.find(

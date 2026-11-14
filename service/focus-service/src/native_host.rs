@@ -79,55 +79,70 @@ mod windows_host {
         }
     }
 
-    /// The origin the installed manifest allows, or the environment override.
+    /// The origins the installed manifest allows, or the environment override.
     /// Chrome enforces `allowed_origins` before it starts this process, so this
     /// is the second lock on the same door; it must not be skipped merely
     /// because the installer never exported an environment variable.
-    fn configured_extension_origin() -> Option<String> {
+    fn configured_extension_origins() -> Vec<String> {
+        let mut origins = Vec::new();
         if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
             let id = id.trim().to_string();
             if !id.is_empty() {
-                return Some(format!("chrome-extension://{id}/"));
+                origins.push(format!("chrome-extension://{id}/"));
             }
         }
-        let program_data = std::env::var("ProgramData").ok()?;
-        let manifest = std::path::Path::new(&program_data)
-            .join("FocusBlock")
-            .join("com.focusblock.bridge.json");
-        let text = std::fs::read_to_string(manifest).ok()?;
-        let value: serde_json::Value = serde_json::from_str(&text).ok()?;
-        value
-            .get("allowed_origins")?
-            .as_array()?
-            .first()?
-            .as_str()
-            .map(str::to_string)
+        if let Ok(program_data) = std::env::var("ProgramData") {
+            let manifest = std::path::Path::new(&program_data)
+                .join("FocusBlock")
+                .join("com.focusblock.bridge.json");
+            if let Ok(text) = std::fs::read_to_string(manifest) {
+                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                    if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
+                        for item in arr {
+                            if let Some(s) = item.as_str() {
+                                let origin = s.to_string();
+                                if !origins.contains(&origin) {
+                                    origins.push(origin);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        origins
     }
 
     /// Generic over the argument type so the caller can pass Chrome's `String`
     /// arguments and a test can pass `&str` literals without a collect.
-    fn origin_matches<S: AsRef<str>>(expected: &str, mut arguments: impl Iterator<Item = S>) -> bool {
-        arguments.any(|argument| argument.as_ref() == expected)
+    fn origin_matches<S: AsRef<str>, O: AsRef<str>>(
+        allowed_origins: &[O],
+        mut arguments: impl Iterator<Item = S>,
+    ) -> bool {
+        arguments.any(|argument| {
+            let arg = argument.as_ref();
+            allowed_origins.iter().any(|allowed| allowed.as_ref() == arg)
+        })
     }
 
     fn validate_origin() -> Result<(), String> {
-        let Some(expected) = configured_extension_origin() else {
-            // Nothing is configured to compare against; Chrome's manifest rules
-            // still decide which extension may start this process at all.
-            return Ok(());
-        };
-        if origin_matches(&expected, std::env::args().skip(1)) {
+        let allowed = configured_extension_origins();
+        if allowed.is_empty() {
+            // Fail closed: if origin configuration is missing or cannot be read,
+            // refuse native requests rather than opening an unvalidated bridge.
+            return Err("no allowed extension origins configured in manifest or environment".into());
+        }
+        if origin_matches(&allowed, std::env::args().skip(1)) {
             Ok(())
         } else {
-            Err("native host origin did not match the configured extension".into())
+            Err("native host origin did not match any configured extension".into())
         }
     }
 
     fn native_request_allowed(request: &IpcRequest) -> bool {
-        // A browser client may read state and start a session. Anything that
-        // rewrites the desktop user's configuration or history stays out: the
-        // shipped extension only ever asks for the active policy, so this list
-        // is the smallest surface that still supports an extension-side bridge.
+        // A browser client may read state, but may not modify configuration,
+        // history, or start/stop sessions. Starting a session is reserved for
+        // the desktop app to prevent asymmetric lockout vectors over native messaging.
         matches!(
             request,
             IpcRequest::Ping
@@ -136,7 +151,6 @@ mod windows_host {
                 | IpcRequest::ListBlocklist
                 | IpcRequest::ListWhitelist
                 | IpcRequest::ListPresets
-                | IpcRequest::StartSession { .. }
                 | IpcRequest::ListHistory { .. }
                 | IpcRequest::GetSettings
         )
@@ -250,17 +264,18 @@ mod windows_host {
                 assert!(!native_request_allowed(&denied), "{denied:?}");
             }
 
-            // Reading state and starting a session is the designed bridge surface.
+            // Reading state is the designed bridge surface.
             assert!(native_request_allowed(&IpcRequest::GetStatus));
             assert!(native_request_allowed(&IpcRequest::ListBlocklist));
-            assert!(native_request_allowed(&IpcRequest::StartSession {
+
+            // Starting or ending a desktop session must go through the desktop app, which
+            // owns the session lifecycle and stop challenge; the browser bridge must not be a bypass
+            // or an asymmetric lockout vector.
+            assert!(!native_request_allowed(&IpcRequest::StartSession {
                 mode: focus_core::SessionMode::Blocklist,
                 duration_minutes: 25,
                 preset_id: None,
             }));
-
-            // Ending a desktop session must go through the desktop app, which
-            // owns the stop challenge; the browser bridge must not be a bypass.
             assert!(!native_request_allowed(&IpcRequest::StopSession));
         }
 
@@ -268,19 +283,26 @@ mod windows_host {
         fn origin_check_only_accepts_the_configured_extension() {
             use super::origin_matches;
 
-            let expected = "chrome-extension://abcdefghijklmnopabcdefghijklmnop/";
+            let allowed = [
+                "chrome-extension://abcdefghijklmnopabcdefghijklmnop/",
+                "chrome-extension://secondallowedextensionid000000000/",
+            ];
             assert!(origin_matches(
-                expected,
+                &allowed,
                 ["chrome-extension://abcdefghijklmnopabcdefghijklmnop/"].into_iter()
+            ));
+            assert!(origin_matches(
+                &allowed,
+                ["chrome-extension://secondallowedextensionid000000000/"].into_iter()
             ));
             // A different extension, another app, or an empty argument list must
             // not pass: Chrome passes the caller's origin as the first argument.
             assert!(!origin_matches(
-                expected,
+                &allowed,
                 ["chrome-extension://ponmlkjihgfedcbaponmlkjihgfedcba/"].into_iter()
             ));
-            assert!(!origin_matches(expected, ["--parent-window=0"].into_iter()));
-            assert!(!origin_matches(expected, std::iter::empty::<&str>()));
+            assert!(!origin_matches(&allowed, ["--parent-window=0"].into_iter()));
+            assert!(!origin_matches(&allowed, std::iter::empty::<&str>()));
         }
     }
 }

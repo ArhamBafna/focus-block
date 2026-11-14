@@ -231,8 +231,23 @@ function errorMessage(e: unknown): string {
 
 function sendToBackground<T>(message: Record<string, unknown>): Promise<BridgeEnvelope<T>> {
   return new Promise((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve({
+          ok: false,
+          kind: "unavailable",
+          message: "Background service timed out",
+        });
+      }
+    }, 4000);
+
     try {
       chrome.runtime.sendMessage(message, (response: BackgroundResponse | undefined) => {
+        if (resolved) return;
+        resolved = true;
+        clearTimeout(timer);
         const lastError = chrome.runtime.lastError;
         if (lastError) {
           resolve({
@@ -257,6 +272,9 @@ function sendToBackground<T>(message: Record<string, unknown>): Promise<BridgeEn
         resolve({ ok: true, data: response.result as T });
       });
     } catch (error) {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
       resolve({ ok: false, kind: "unavailable", message: errorMessage(error) });
     }
   });

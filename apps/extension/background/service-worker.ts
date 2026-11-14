@@ -151,11 +151,6 @@ export async function requestReconcile(): Promise<void> {
       }
     }
   });
-  // A lease can run out between the check above and the pass itself, and the
-  // pass refuses to unblock Chrome on a mirror without a fresh answer. Ask again
-  // here rather than leaving a live desktop session unprotected until the next
-  // minute-long tick.
-  await renewMirrorLeaseIfExpired();
 }
 
 // ── Rule management ──────────────────────────────────────────────────────────
@@ -795,7 +790,12 @@ async function applyBlockingStateUnlocked(): Promise<void> {
     const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
     remainingSec = end ? Math.max(1, Math.ceil((end.getTime() - Date.now()) / 1000)) : 1;
   } else {
-    remainingSec = Math.max(1, session.planned_duration_sec - elapsed);
+    // For mirrored desktop sessions whose expires_at has passed or lease has expired,
+    // enforce a 5-second minimum alarm delay to prevent 1-second busy loop alarm thrashing
+    // while waiting for the native desktop service to report inactive status.
+    const isMirror = session.id.startsWith(NATIVE_MIRROR_ID_PREFIX);
+    const minDelay = isMirror ? 5 : 1;
+    remainingSec = Math.max(minDelay, session.planned_duration_sec - elapsed);
   }
   const remainingMs = remainingSec * 1000;
   chrome.alarms.create(ALARM_SESSION_EXPIRY, {
@@ -1159,11 +1159,22 @@ export async function checkNativePolicy(): Promise<void> {
     return;
   }
   const policy = await new Promise<NativePolicy | null>((resolve) => {
+    let resolved = false;
+    const timer = setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        resolve(null);
+      }
+    }, 3000);
+
     try {
       chrome.runtime.sendNativeMessage(
         NATIVE_HOST_NAME,
         { type: "get-active-policy" },
         (response: NativePolicy) => {
+          if (resolved) return;
+          resolved = true;
+          clearTimeout(timer);
           if (chrome.runtime.lastError || !response) {
             resolve(null);
             return;
@@ -1172,6 +1183,9 @@ export async function checkNativePolicy(): Promise<void> {
         }
       );
     } catch {
+      if (resolved) return;
+      resolved = true;
+      clearTimeout(timer);
       resolve(null);
     }
   });
