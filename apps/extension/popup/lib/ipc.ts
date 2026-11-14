@@ -241,7 +241,7 @@ function sendToBackground<T>(message: Record<string, unknown>): Promise<BridgeEn
           message: "Background service timed out",
         });
       }
-    }, 4000);
+    }, 8000);
 
     try {
       chrome.runtime.sendMessage(message, (response: BackgroundResponse | undefined) => {

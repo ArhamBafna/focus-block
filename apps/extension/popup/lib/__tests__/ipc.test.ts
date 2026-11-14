@@ -83,7 +83,7 @@ describe("background channel arms", () => {
       kind: "unavailable",
       message: "Background service timed out",
     });
-    await vi.advanceTimersByTimeAsync(4500);
+    await vi.advanceTimersByTimeAsync(8500);
     await assertion;
     vi.useRealTimers();
   });

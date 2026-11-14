@@ -37,9 +37,7 @@ mod windows_host {
                 Err(error) => {
                     write_native_message(
                         &mut output,
-                        &IpcResponse::Err {
-                            message: format!("invalid native message: {error}"),
-                        },
+                        &inactive_policy(Some(format!("invalid native message: {error}"))),
                     )?;
                     continue;
                 }
@@ -101,10 +99,20 @@ mod windows_host {
                 origins.push(normalized);
             }
         }
+
+        let mut candidate_dirs = Vec::new();
         if let Ok(program_data) = std::env::var("ProgramData") {
-            let manifest = std::path::Path::new(&program_data)
-                .join("FocusBlock")
-                .join("com.focusblock.bridge.json");
+            candidate_dirs.push(std::path::PathBuf::from(program_data));
+        }
+        if let Ok(local_app_data) = std::env::var("LocalAppData") {
+            candidate_dirs.push(std::path::PathBuf::from(local_app_data));
+        }
+        if let Ok(app_data) = std::env::var("AppData") {
+            candidate_dirs.push(std::path::PathBuf::from(app_data));
+        }
+
+        for dir in candidate_dirs {
+            let manifest = dir.join("FocusBlock").join("com.focusblock.bridge.json");
             if let Ok(text) = std::fs::read_to_string(manifest) {
                 if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
                     if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {

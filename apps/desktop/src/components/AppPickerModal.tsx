@@ -111,7 +111,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
   );
 
   useEffect(() => {
-    if (apps.length === 0) return;
+    if (!isOpen || apps.length === 0) return;
 
     // Icons extracted by a batch that a keystroke aborted are already in
     // `iconCache`; apply them before deciding what still needs work.
@@ -192,7 +192,7 @@ export function AppPickerModal({ isOpen, onClose, onToggleApp, blockedApps }: Pr
     return () => {
       isMounted = false;
     };
-  }, [apps.length, search]);
+  }, [isOpen, apps.length, search]);
 
   const categories = Array.from(new Set(filteredApps.map((a) => a.category))).sort();
 

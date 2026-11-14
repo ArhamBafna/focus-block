@@ -1199,7 +1199,14 @@ export async function checkNativePolicy(): Promise<void> {
   // A failed query means "unknown", not "inactive". Extending the mirror's
   // lease keeps blocking through a transient IPC failure, bounded so a service
   // that is really gone cannot hold Chrome hostage.
-  if (!policy || policy.error) {
+  const rawAny = policy as Record<string, unknown> | null;
+  const hasError =
+    !policy ||
+    Boolean(policy.error) ||
+    Boolean(rawAny?.message) ||
+    rawAny?.type === "err";
+
+  if (hasError) {
     await keepMirrorBlockingThroughNativeFailure();
     return;
   }
