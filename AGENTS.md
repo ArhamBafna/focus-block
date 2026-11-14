@@ -1,21 +1,53 @@
-# Focus Block
+a distraction blocking service.
 
-Distraction blocking service mimicking freedom.to with extra features.
-- **Apps**: Desktop (`apps/desktop/`) and Chrome extension (`apps/extension/`).
-- **UI/UX**: Wispr Flow design; reference palettes/tokens in `apps/desktop/src/App.css` and `apps/extension/popup/App.css`.
+The functionality should mimic apps like freedom.to + additional features not in those.
 
-## Skills & Docs
-- **Extension Rules & Architecture**: `.agents\skills\chrome-extension\SKILL.md`
-- **MV3 & Store Compliance**: `.agents\skills\chrome-extensions\SKILL.md`
-- **DevTools CLI Automation**: `.agents\skills\chrome-devtools-cli\SKILL.md`
-- **Domain Docs**: `docs/agents/domain.md`
-- **Issue Tracker**: GitHub Issues (`ArhamBafna/focus-block`) via `gh` CLI (`docs/agents/issue-tracker.md`)
+The UI/UX Design should be that of wisprflow.com (design tokens and palettes are implemented in `apps/desktop/src/App.css` and `apps/extension/popup/App.css`). When creating any visual modifications, those must be used as reference.
 
-## Scripts & Tests
-- **Start App**: `.\scripts\start.bat` (all) | `-DesktopOnly` (`-d`) | `-ExtensionOnly` (`-e`) | `-ServiceOnly` (`-s`)
-- **Run Tests**: `.\scripts\test.bat` (runs all 4 suites in sequence)
-  - `-RustOnly` (`-r`): `cargo test --workspace` (`crates/`, `apps/desktop/src-tauri`)
-  - `-ExtensionOnly` (`-e`): `cd apps/extension && npm test` (`background/`, `popup/`)
-  - `-DesktopOnly` (`-d`): `cd apps/desktop && npm test` (`pages/`, `lib/ipc*`)
-  - `-E2EOnly` (`-e2e`): `cd tests/e2e && npx playwright test` (`specs/`)
-  - `-Headed` (`-v`): Run Playwright tests visibly (combine with `-E2EOnly`)
+For Chrome extensions, use following:
+
+.agents\skills\chrome-extension\SKILL.md: Maps background architecture and routes u to exact network-level blocking rules.
+
+.agents\skills\chrome-extensions\SKILL.md: Enforces official Google compliance and Manifest V3 docs.
+
+ .agents\skills\chrome-devtools-cli\SKILL.md: CLI automation for Chrome debugging—inspect DOM, network, console, performance metrics via isolated browser.
+
+- There are two user-facing parts: desktop app `apps/desktop/` and Chrome extension `apps/extension/`. For feature request, find which part(s) affected and change.
+
+## Launch & Test Scripts
+
+All runnable scripts live in `scripts/`:
+- **Start App**: `.\scripts\start.bat`
+  - Default: Starts all (service + extension build + desktop app)
+  - `-DesktopOnly` (or `-d`): Starts desktop app + service
+  - `-ExtensionOnly` (or `-e`): Builds Chrome extension only
+  - `-ServiceOnly` (or `-s`): Starts background service only
+- **Run Tests**: `.\scripts\test.bat`
+  - Default: Runs all 4 test suites (Rust backend, Extension unit, Desktop UI, Extension E2E)
+  - `-RustOnly` (or `-r`): Runs Rust backend tests only
+  - `-ExtensionOnly` (or `-e`): Runs Chrome extension unit tests only
+  - `-DesktopOnly` (or `-d`): Runs Desktop UI tests only
+  - `-E2EOnly` (or `-e2e`): Runs Chrome Extension Playwright E2E suite
+  - `-Headed` (or `-v`): Runs E2E Playwright tests visibly in a live browser window (can be combined with `-E2EOnly`, e.g. `.\scripts\test.bat -E2EOnly -Headed`)
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues (`ArhamBafna/focus-block`) via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+See `docs/agents/domain.md`.
+
+## Test Map
+
+- Extension E2E: `cd tests/e2e && npx playwright test`
+  - Specs: `tests/e2e/specs/` (`01-focus-blocking`, `02-lockdown-whitelist`, `03-schedule`, `04-presets-and-challenges`)
+- Extension Unit: `cd apps/extension && npm test`
+  - Background: `apps/extension/background/__tests__/` (`rules`, `schedule`, `scheduled-stop-suppression`, `session-brain`)
+  - Popup: `apps/extension/popup/lib/__tests__/` (`ipc`, `schedule-crud`, `storage`)
+- Desktop UI: `cd apps/desktop && npm test`
+  - `apps/desktop/src/pages/Home.test.tsx`, `apps/desktop/src/lib/ipc.*.test.ts`
+- Rust Backend: `cargo test --workspace`
+  - `crates/focus-core/src/`, `crates/focus-store/src/`, `apps/desktop/src-tauri/src/lib.rs`
