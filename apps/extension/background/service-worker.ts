@@ -132,13 +132,16 @@ export function withLock<T>(task: () => Promise<T>): Promise<T> {
 
 let reconcileRequested = false;
 
-export function requestReconcile(): Promise<void> {
+export async function requestReconcile(): Promise<void> {
+  // Waking from sleep usually lands here before the native-sync tick, so a live
+  // desktop session gets one chance to renew its mirror lease first.
+  await renewMirrorLeaseIfExpired();
   reconcileRequested = true;
   return withLock(async () => {
     while (reconcileRequested) {
       reconcileRequested = false;
       try {
-        await applyBlockingStateLocked();
+        await applyBlockingStateUnlocked();
       } catch (error) {
         // A failed pass must never become an unhandled rejection; the next
         // trigger retries and blocking keeps working for valid entries.
@@ -564,14 +567,19 @@ export async function migrateStrayActiveSession(): Promise<ActiveSessionRecord |
 }
 
 /**
- * Activates a schedule window's session. Callers must hold the mutation lock;
- * every schedule trigger goes through `applyBlockingStateLocked`. A desktop
- * mirror is never dropped here: `applyBlockingStateLocked` keeps the mirror in
- * the slot for as long as it exists, so a schedule cannot take it back.
+ * Activates a schedule window's session, archiving whatever held the slot.
+ * Callers must hold the mutation lock; every schedule trigger goes through
+ * `applyBlockingStateUnlocked`, which passes in the session it already read.
+ * A desktop mirror never reaches here: `applyBlockingStateUnlocked` keeps the
+ * mirror in the slot for as long as it exists, so a schedule cannot take it
+ * back and a mirror is never archived as a stopped extension session.
  */
-async function activateScheduledSession(schedule: Schedule, now: Date): Promise<ActiveSessionRecord> {
-  const active = await storageGet("active_session");
-  if (active) {
+async function activateScheduledSession(
+  existing: ActiveSessionRecord | null,
+  schedule: Schedule,
+  now: Date
+): Promise<ActiveSessionRecord> {
+  if (existing) {
     // Superseded by the new scheduled session.
     await finalizeActiveSession("stopped");
   }
@@ -600,15 +608,20 @@ async function activateScheduledSession(schedule: Schedule, now: Date): Promise<
 // ── Session expiry ───────────────────────────────────────────────────────────
 
 /** Public entry point: serializes against every other mutation. */
-export function expireSession(): Promise<void> {
-  return withLock(expireSessionLocked);
+export async function expireSession(): Promise<void> {
+  // The popup sends this on every open. A mirror's stored duration is only a
+  // keep-alive lease, so let a live desktop session renew it before the lease
+  // is allowed to end blocking; this is what stops a wake-from-sleep from
+  // unblocking Chrome while the desktop session is still running.
+  await renewMirrorLeaseIfExpired();
+  return withLock(expireSessionUnlocked);
 }
 
 /**
  * The expiry transition itself. Callers must already hold the mutation lock;
  * every exported mutator takes it, and internal callers are inside it.
  */
-async function expireSessionLocked(): Promise<void> {
+async function expireSessionUnlocked(): Promise<void> {
   const session = await storageGet("active_session");
   if (!session) return;
 
@@ -663,7 +676,7 @@ async function scheduledSessionOutcome(scheduledId: string | null): Promise<Arch
 
 /** Public entry point: serializes against every other mutation. */
 export function applyBlockingState(): Promise<void> {
-  return withLock(applyBlockingStateLocked);
+  return withLock(applyBlockingStateUnlocked);
 }
 
 /**
@@ -671,7 +684,7 @@ export function applyBlockingState(): Promise<void> {
  * Callers must already hold the mutation lock; every trigger (startup, storage
  * change, alarm, popup mutation) enters through a locked wrapper.
  */
-async function applyBlockingStateLocked(): Promise<void> {
+async function applyBlockingStateUnlocked(): Promise<void> {
   const schedules = (await storageGet("schedules")) ?? [];
   await scheduleNextBoundaryAlarm(schedules);
   const temporaryAllows = await getActiveTemporaryAllows();
@@ -693,11 +706,11 @@ async function applyBlockingStateLocked(): Promise<void> {
   const mirrored = mirrorSession(session);
   if (currentSchedule && !mirrored) {
     if (!session || session.scheduled_schedule_id !== currentSchedule.id) {
-      session = await activateScheduledSession(currentSchedule, new Date());
+      session = await activateScheduledSession(session, currentSchedule, new Date());
     } else {
       const end = getScheduleBoundary(currentSchedule, "end_time", new Date());
       if (end && end.getTime() <= Date.now()) {
-        await expireSessionLocked();
+        await expireSessionUnlocked();
         return;
       }
       // planned_duration_sec stays frozen at the activation value; the expiry
@@ -720,10 +733,13 @@ async function applyBlockingStateLocked(): Promise<void> {
     return;
   }
 
-  // Check if session has already expired
+  // Check if session has already expired. A mirror has no schedule, so its
+  // lease is the only liveness signal: requestReconcile and the popup's expiry
+  // request both ask the service to renew it before this pass runs, so reaching
+  // here with an expired lease means the desktop really is gone or silent.
   const elapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
   if (!session.scheduled_schedule_id && elapsed >= session.planned_duration_sec) {
-    await expireSessionLocked();
+    await expireSessionUnlocked();
     return;
   }
 
@@ -772,7 +788,7 @@ async function applyBlockingStateLocked(): Promise<void> {
 // runs inside the mutation lock here, so rapid clicks and expiry alarms
 // serialize instead of racing read-modify-write updates.
 
-export async function startSessionLocked(
+export async function startSession(
   mode: ActiveSessionRecord["mode"],
   duration_minutes: number,
   preset_id?: string
@@ -799,12 +815,12 @@ export async function startSessionLocked(
     };
 
     await storageSet("active_session", newSession);
-    await applyBlockingStateLocked();
+    await applyBlockingStateUnlocked();
     return null;
   });
 }
 
-export async function stopSessionLocked(): Promise<null> {
+export async function stopSession(): Promise<null> {
   return withLock(async () => {
   const active = await storageGet("active_session");
   if (active) {
@@ -829,7 +845,7 @@ export async function stopSessionLocked(): Promise<null> {
       await finalizeActiveSession("stopped");
 
       await setIfChanged("active_challenge", null);
-      await applyBlockingStateLocked();
+      await applyBlockingStateUnlocked();
     }
     return null;
   });
@@ -845,13 +861,13 @@ async function handleBackgroundMessage(message: unknown): Promise<unknown> {
   const request = message as { type?: string; mode?: string; duration_minutes?: number; preset_id?: string };
   switch (request?.type) {
     case "session:start":
-      return startSessionLocked(
+      return startSession(
         request.mode === "lockdown" ? "lockdown" : "blocklist",
         typeof request.duration_minutes === "number" ? request.duration_minutes : 0,
         request.preset_id
       );
     case "session:stop":
-      return stopSessionLocked();
+      return stopSession();
     case "session:expire":
       return expireSession().then(() => null);
     default:
@@ -906,7 +922,11 @@ interface NativePolicy {
 function mirrorSession(
   session: ActiveSessionRecord | null | undefined
 ): ActiveSessionRecord | null {
-  return session && session.id.startsWith(NATIVE_MIRROR_ID_PREFIX) ? session : null;
+  // A stray or corrupt record (an old schema, a half-written value) must read as
+  // "not a mirror" instead of throwing: every reconcile pass calls this, so a
+  // throw here would take down the whole pass and leave Chrome unblocked.
+  if (!session || typeof session.id !== "string") return null;
+  return session.id.startsWith(NATIVE_MIRROR_ID_PREFIX) ? session : null;
 }
 
 /**
@@ -917,6 +937,28 @@ function mirrorSession(
 async function clearMirror(): Promise<void> {
   await storageSet("active_session", null);
   await setIfChanged("active_challenge", null);
+}
+
+/** True once a mirror's keep-alive lease has run out; the desktop may be gone. */
+function mirrorLeaseExpired(mirror: ActiveSessionRecord): boolean {
+  const elapsed = Math.floor((Date.now() - new Date(mirror.started_at).getTime()) / 1000);
+  return elapsed >= mirror.planned_duration_sec;
+}
+
+/**
+ * A mirror's planned duration is a lease, not a deadline: every native-sync tick
+ * rewrites it as "elapsed + grace". When it runs out the desktop app may simply
+ * have been asleep (the worker does not run then either), so ask the service
+ * before letting the lease take effect. A live policy renews the lease and the
+ * expiry pass then finds nothing to do; an inactive policy clears the mirror;
+ * only a silent native host leaves the lease expired, and then the mirror really
+ * does expire, because the extension must not block Chrome forever on a session
+ * it cannot verify.
+ */
+async function renewMirrorLeaseIfExpired(): Promise<void> {
+  const mirror = mirrorSession(await storageGet("active_session"));
+  if (!mirror || !mirrorLeaseExpired(mirror)) return;
+  await checkNativePolicy();
 }
 
 function sameDomains(a: string[], b: string[]): boolean {
@@ -976,7 +1018,7 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
     if (!policy.active || !policy.mode) {
       if (!mirror) return;
       await clearMirror();
-      await applyBlockingStateLocked();
+      await applyBlockingStateUnlocked();
       return;
     }
 
@@ -1002,7 +1044,7 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
         ends_at: endsAt,
       };
       await storageSet("active_session", refreshed);
-      await applyBlockingStateLocked();
+      await applyBlockingStateUnlocked();
       return;
     }
 
@@ -1014,7 +1056,7 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
       await setIfChanged("active_challenge", null);
     }
     await storageSet("active_session", mirrorFromPolicy(policy));
-    await applyBlockingStateLocked();
+    await applyBlockingStateUnlocked();
   });
 }
 

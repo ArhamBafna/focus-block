@@ -186,7 +186,7 @@ describe("desktop policy mirror", () => {
     await sw.syncNativePolicy(activeDesktopPolicy());
     rawSet("active_challenge", { type: "math", status: "pending" });
 
-    await expect(sw.stopSessionLocked()).rejects.toThrow(/Focus Block app/);
+    await expect(sw.stopSession()).rejects.toThrow(/Focus Block app/);
 
     expect(rawGet<ActiveSessionRecord>("active_session")).not.toBeNull();
     expect(rulesMention("news.com")).toBe(true);
@@ -337,6 +337,64 @@ describe("desktop policy mirror", () => {
     expect(active?.id.startsWith(sw.NATIVE_MIRROR_ID_PREFIX)).toBe(true);
     expect(rulesMention("news.com")).toBe(true);
     expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("renews an expired mirror lease when the desktop session is still alive", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+
+    // Simulate a machine that slept: the lease ran out and no sync tick arrived,
+    // which is also exactly when the popup gets opened.
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      planned_duration_sec: 600,
+    });
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      callback(indefinite);
+    };
+
+    await sw.expireSession();
+
+    // The desktop session is live, so the lease renews instead of unblocking.
+    expect(rawGet<ActiveSessionRecord>("active_session")?.id).toBe(mirror.id);
+    expect(rulesMention("news.com")).toBe(true);
+    expect(rawGet<ArchivedSessionRecord[]>("history") ?? []).toHaveLength(0);
+  });
+
+  it("lets an expired mirror lease end blocking when the desktop cannot confirm", async () => {
+    const indefinite = { ...activeDesktopPolicy(), expires_at: null };
+    await sw.syncNativePolicy(indefinite);
+    const mirror = rawGet<ActiveSessionRecord>("active_session")!;
+    rawSet("active_session", {
+      ...mirror,
+      started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      planned_duration_sec: 600,
+    });
+
+    const chromeLike = (globalThis as unknown as { chrome: any }).chrome;
+    chromeLike.runtime.sendNativeMessage = (
+      _host: string,
+      _message: unknown,
+      callback: (response: unknown) => void
+    ) => {
+      chromeLike.runtime.lastError = { message: "native host has exited" };
+      callback(undefined);
+    };
+
+    await sw.expireSession();
+
+    // An unreachable host is not proof of a live session: the extension must
+    // never leave Chrome blocked forever on a session it cannot verify.
+    expect(rawGet("active_session")).toBeNull();
+    expect(mock.dnrRules).toHaveLength(0);
   });
 
   it("shares one mirror id prefix with the popup", async () => {

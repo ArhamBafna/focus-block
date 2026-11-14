@@ -12,6 +12,7 @@
 import {
   storageGet,
   storageSet,
+  isMirrorSession,
   ScheduleRecord,
   SessionRecord,
   TemporaryAllowRecord,
@@ -271,6 +272,30 @@ function unwrap<T>(envelope: BridgeEnvelope<T>): Promise<T> {
 
 // ── IPC implementation ───────────────────────────────────────────────────────
 
+/**
+ * One live session as the UI sees it. A mirrored desktop session's stored
+ * duration is only a keep-alive lease, so its deadline comes from `ends_at`
+ * (null meaning "no planned end") instead of `planned_duration_sec`.
+ */
+function describeActiveSession(session: SessionRecord): ActiveSessionView {
+  const elapsed_sec = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
+  if (isMirrorSession(session)) {
+    const endsAt = session.ends_at ? Date.parse(session.ends_at) : Number.NaN;
+    return {
+      session,
+      elapsed_sec,
+      remaining_sec: Number.isFinite(endsAt)
+        ? Math.max(0, Math.ceil((endsAt - Date.now()) / 1000))
+        : null,
+    };
+  }
+  return {
+    session,
+    elapsed_sec,
+    remaining_sec: Math.max(0, session.planned_duration_sec - elapsed_sec),
+  };
+}
+
 export const ipc = {
   // Health / status ──────────────────────────────────────────────────────────
 
@@ -293,23 +318,7 @@ export const ipc = {
       health: { running: true, version: chrome.runtime.getManifest().version },
       active_session:
         activeSession && activeSession.status === "active"
-          ? {
-              session: activeSession,
-              elapsed_sec: Math.floor(
-                (Date.now() -
-                  new Date(activeSession.started_at).getTime()) /
-                  1000
-              ),
-              remaining_sec: Math.max(
-                0,
-                activeSession.planned_duration_sec -
-                  Math.floor(
-                    (Date.now() -
-                      new Date(activeSession.started_at).getTime()) /
-                      1000
-                  )
-              ),
-            }
+          ? describeActiveSession(activeSession)
           : null,
       active_challenge: activeChallenge,
     };

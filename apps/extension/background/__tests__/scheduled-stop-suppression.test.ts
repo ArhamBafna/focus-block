@@ -1,6 +1,6 @@
 /**
  * Scheduled-session lifecycle integration tests: the manual-stop suppression
- * arm of stopSessionLocked, the suppression gate inside applyBlockingState,
+ * arm of stopSession, the suppression gate inside applyBlockingState,
  * and the supersede path that archives a running manual session when a
  * schedule window opens.
  */
@@ -69,7 +69,7 @@ describe("manual stop of a scheduled session", () => {
     await sw.requestReconcile();
     expect(mock.dnrRules.length).toBeGreaterThan(0);
 
-    await sw.stopSessionLocked();
+    await sw.stopSession();
 
     const archived = history();
     expect(archived).toHaveLength(1);
@@ -96,7 +96,7 @@ describe("manual stop of a scheduled session", () => {
     rawSet("schedules", [makeSchedule()]);
     seedScheduledSession("sched-1");
 
-    await sw.stopSessionLocked();
+    await sw.stopSession();
 
     const suppressedUntil = rawGet<number>("schedule_suppressed_until");
     const now = new Date(2026, 7, 24, 13, 0).getTime();
@@ -111,7 +111,7 @@ describe("manual stop of a scheduled session", () => {
     seedScheduledSession("sched-1");
     rawSet("active_challenge", { type: "typing", status: "pending" });
 
-    await sw.stopSessionLocked();
+    await sw.stopSession();
 
     expect(rawGet("active_challenge")).toBeNull();
   });
@@ -164,7 +164,7 @@ describe("schedule window supersedes a running manual session", () => {
     vi.setSystemTime(new Date(2026, 7, 24, 10, 0));
 
     rawSet("blocklist", [{ id: 1, domain: "news.com" }]);
-    await sw.startSessionLocked("lockdown", 60);
+    await sw.startSession("lockdown", 60);
     const manualId = rawGet<ActiveSessionRecord>("active_session")?.id;
     expect(manualId).toBeDefined();
 

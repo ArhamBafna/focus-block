@@ -54,11 +54,11 @@ describe("rapid start/stop clicks", () => {
     seedDomainList("blocklist", ["news.com"]);
 
     const outcomes = await Promise.allSettled([
-      sw.startSessionLocked("blocklist", 25),
-      sw.startSessionLocked("blocklist", 25),
-      sw.stopSessionLocked(),
-      sw.startSessionLocked("lockdown", 10),
-      sw.stopSessionLocked(),
+      sw.startSession("blocklist", 25),
+      sw.startSession("blocklist", 25),
+      sw.stopSession(),
+      sw.startSession("lockdown", 10),
+      sw.stopSession(),
     ]);
 
     expect(outcomes[0].status).toBe("fulfilled");
@@ -82,8 +82,8 @@ describe("rapid start/stop clicks", () => {
 
   it("keeps history intact when stop clicks arrive with no session running", async () => {
     const outcomes = await Promise.allSettled([
-      sw.stopSessionLocked(),
-      sw.stopSessionLocked(),
+      sw.stopSession(),
+      sw.stopSession(),
     ]);
 
     for (const outcome of outcomes) expect(outcome.status).toBe("fulfilled");
@@ -97,11 +97,11 @@ describe("rapid start/stop clicks", () => {
 describe("expiry racing a fresh manual start", () => {
   it("does not archive a fresh session when a stale expiry alarm fires", async () => {
     // Session A lives and dies normally.
-    await sw.startSessionLocked("blocklist", 60);
-    await sw.stopSessionLocked();
+    await sw.startSession("blocklist", 60);
+    await sw.stopSession();
 
     // Fresh manual session B starts; the alarm scheduled for A fires late.
-    await sw.startSessionLocked("lockdown", 45);
+    await sw.startSession("lockdown", 45);
     await sw.requestReconcile();
     await sw.expireSession();
 
@@ -135,7 +135,7 @@ describe("stray terminal record in the active slot", () => {
     "archives a stray %s record and clears rules on next apply",
     async (status) => {
       seedDomainList("blocklist", ["news.com"]);
-      await sw.startSessionLocked("blocklist", 30);
+      await sw.startSession("blocklist", 30);
       expect(mock.dnrRules.length).toBeGreaterThan(0);
 
       const live = rawGet<ActiveSessionRecord>("active_session");
@@ -170,7 +170,7 @@ describe("blocking-rule updates", () => {
   it("produces exactly one rules update per real change and skips no-op passes", async () => {
     seedDomainList("blocklist", ["news.com"]);
 
-    await sw.startSessionLocked("blocklist", 30);
+    await sw.startSession("blocklist", 30);
     const updatesAfterStart = mock.stats.dnrUpdateCalls;
     expect(updatesAfterStart).toBeGreaterThan(0);
     expect(mock.dnrRules.length).toBeGreaterThan(0);
@@ -190,9 +190,9 @@ describe("blocking-rule updates", () => {
 
   it("clears all rules in one update when the last session ends", async () => {
     seedDomainList("blocklist", ["news.com"]);
-    await sw.startSessionLocked("blocklist", 30);
+    await sw.startSession("blocklist", 30);
 
-    await sw.stopSessionLocked();
+    await sw.stopSession();
 
     expect(mock.dnrRules).toHaveLength(0);
   });
@@ -201,7 +201,7 @@ describe("blocking-rule updates", () => {
 describe("reconcile failure handling", () => {
   it("a failed DNR pass resolves without rejecting and the next pass recovers", async () => {
     seedDomainList("blocklist", ["news.com"]);
-    await sw.startSessionLocked("blocklist", 30);
+    await sw.startSession("blocklist", 30);
     const updatesAfterStart = mock.stats.dnrUpdateCalls;
     expect(updatesAfterStart).toBeGreaterThan(0);
 

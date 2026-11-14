@@ -66,7 +66,9 @@ export const NATIVE_MIRROR_ID_PREFIX = "service-sync-";
  * the desktop app owns that session and its stop challenge.
  */
 export function isMirrorSession(session: Pick<SessionBase, "id"> | null | undefined): boolean {
-  return Boolean(session && session.id.startsWith(NATIVE_MIRROR_ID_PREFIX));
+  // Same tolerance as the worker: a corrupt record must not throw in the popup.
+  if (!session || typeof session.id !== "string") return false;
+  return session.id.startsWith(NATIVE_MIRROR_ID_PREFIX);
 }
 
 /** Any session record, live or archived. */

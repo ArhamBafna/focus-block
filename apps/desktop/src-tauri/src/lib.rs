@@ -1,7 +1,6 @@
 use focus_core::{AppBlockTarget, DiscoveredApp, IpcRequest, IpcResponse};
 use focus_ipc::IpcClient;
 use serde::{Deserialize, Serialize};
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 #[derive(Deserialize, Serialize)]
@@ -56,15 +55,23 @@ fn target_cache_key(target: &AppBlockTarget) -> String {
             format!("pkg_{}", package_family_name.to_lowercase())
         }
     };
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    raw.hash(&mut hasher);
-    let h = hasher.finish();
     let clean: String = raw
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '_' })
         .take(32)
         .collect();
-    format!("{}_{:016x}.b64", clean, h)
+    format!("{}_{:016x}.b64", clean, stable_hash(&raw))
+}
+
+/// FNV-1a. `DefaultHasher` is explicitly not stable across Rust releases, and a
+/// cache key that changed on a toolchain bump would orphan every cached icon.
+fn stable_hash(value: &str) -> u64 {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in value.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 /// Renders `value` as a PowerShell single-quoted literal. Single-quoted strings
@@ -543,8 +550,13 @@ mod tests {
     /// the same file whatever the case of the path.
     #[test]
     fn icon_cache_keys_are_safe_file_names_and_stable_per_target() {
-        use super::target_cache_key;
+        use super::{stable_hash, target_cache_key};
         use focus_core::AppBlockTarget;
+
+        // Known-answer vectors: FNV-1a 64, so a toolchain upgrade cannot move
+        // every key and orphan the cache.
+        assert_eq!(stable_hash(""), 0xcbf2_9ce4_8422_2325);
+        assert_eq!(stable_hash("a"), 0xaf63_dc4c_8601_ec8c);
 
         let exe = AppBlockTarget::Executable {
             path: r"C:\Program Files\Discord\Discord.exe".into(),

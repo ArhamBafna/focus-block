@@ -114,7 +114,6 @@ mod windows_host {
                 | IpcRequest::CreatePreset { .. }
                 | IpcRequest::DeletePreset { .. }
                 | IpcRequest::StartSession { .. }
-                | IpcRequest::StopSession
                 | IpcRequest::ListHistory { .. }
                 | IpcRequest::ClearHistory
                 | IpcRequest::GetSettings
@@ -203,9 +202,17 @@ mod windows_host {
                 assert!(!native_request_allowed(&denied), "{denied:?}");
             }
 
-            // Reading state and running a session is the designed bridge surface.
+            // Reading state and starting a session is the designed bridge surface.
             assert!(native_request_allowed(&IpcRequest::GetStatus));
-            assert!(native_request_allowed(&IpcRequest::StopSession));
+            assert!(native_request_allowed(&IpcRequest::StartSession {
+                mode: focus_core::SessionMode::Blocklist,
+                duration_minutes: 25,
+                preset_id: None,
+            }));
+
+            // Ending a desktop session must go through the desktop app, which
+            // owns the stop challenge; the browser bridge must not be a bypass.
+            assert!(!native_request_allowed(&IpcRequest::StopSession));
         }
     }
 }
