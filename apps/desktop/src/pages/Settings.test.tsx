@@ -18,7 +18,6 @@ vi.mock("../lib/ipc", () => ({
 import { ipc } from "../lib/ipc";
 
 const getSettingsMock = vi.mocked(ipc.getSettings);
-const updateSettingsMock = vi.mocked(ipc.updateSettings);
 const checkExtensionBridgeMock = vi.mocked(ipc.checkExtensionBridge);
 const repairExtensionBridgeMock = vi.mocked(ipc.repairExtensionBridge);
 
@@ -91,6 +90,24 @@ describe("Desktop Settings page", () => {
     await waitFor(() => {
       expect(repairExtensionBridgeMock).toHaveBeenCalled();
       expect(screen.getByText("Extension linked")).toBeTruthy();
+    });
+  });
+
+  it("still renders extension bridge status and repair button when getSettings fails", async () => {
+    getSettingsMock.mockRejectedValueOnce(new Error("Connection refused"));
+    checkExtensionBridgeMock.mockResolvedValueOnce({
+      linked: false,
+      manifest_path: null,
+      host_path: null,
+      message: "Registry key not found",
+    });
+
+    render(<Settings />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Service is not responding. Start the FocusBlock service to change settings.")).toBeTruthy();
+      expect(screen.getByText("Extension not linked")).toBeTruthy();
+      expect(screen.getByText("Repair")).toBeTruthy();
     });
   });
 });

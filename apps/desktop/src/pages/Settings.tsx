@@ -75,6 +75,7 @@ function SettingRow({
 
 export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<ExtensionBridgeStatus | null>(null);
@@ -82,7 +83,10 @@ export default function Settings() {
   const [repairError, setRepairError] = useState<string | null>(null);
 
   useEffect(() => {
-    ipc.getSettings().then(setSettings).catch(console.error);
+    ipc.getSettings().then(setSettings).catch((err) => {
+      console.error(err);
+      setLoadError(err instanceof Error ? err.message : "Service not running or unreachable");
+    });
     ipc.checkExtensionBridge().then(setBridgeStatus).catch(console.error);
   }, []);
 
@@ -127,9 +131,26 @@ export default function Settings() {
       </div>
 
       {settings === null ? (
-        <div style={{ color: "var(--color-neutral-400)", fontSize: "13px" }}>Loading…</div>
+        loadError ? (
+          <div
+            role="alert"
+            style={{
+              padding: "10px 12px",
+              background: "#fff0f0",
+              border: "1px solid #f8d0d0",
+              borderRadius: "8px",
+              fontSize: "12px",
+              color: "var(--color-pulse)",
+              marginBottom: "12px",
+            }}
+          >
+            Service is not responding. Start the FocusBlock service to change settings.
+          </div>
+        ) : (
+          <div style={{ color: "var(--color-neutral-400)", fontSize: "13px", marginBottom: "12px" }}>Loading…</div>
+        )
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "12px" }}>
           <SettingRow
             title="OS Essentials Allowlist"
             description="Allow essential Windows services even during Lockdown mode."
@@ -145,76 +166,77 @@ export default function Settings() {
               {saveError}
             </div>
           )}
+        </div>
+      )}
 
-          {/* Extension bridge status footer */}
-          <div
+      {/* Extension bridge status footer - always rendered */}
+      <div
+        style={{
+          marginTop: "8px",
+          padding: "10px 14px",
+          background: "var(--color-neutral-50)",
+          border: "1px solid var(--color-lumen-dark)",
+          borderRadius: "10px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "8px",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+          <span
             style={{
-              marginTop: "8px",
-              padding: "10px 14px",
-              background: "var(--color-neutral-50)",
-              border: "1px solid var(--color-lumen-dark)",
-              borderRadius: "10px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "8px",
+              color: bridgeStatus?.linked ? "var(--color-fathom)" : "var(--color-glow)",
+              fontSize: "13px",
+              lineHeight: 1,
             }}
           >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
-              <span
-                style={{
-                  color: bridgeStatus?.linked ? "var(--color-fathom)" : "var(--color-glow)",
-                  fontSize: "13px",
-                  lineHeight: 1,
-                }}
-              >
-                {bridgeStatus?.linked ? "●" : "○"}
-              </span>
-              <span
-                style={{
-                  fontWeight: 500,
-                  color: bridgeStatus?.linked ? "var(--color-neutral-700)" : "var(--color-neutral-600)",
-                }}
-              >
-                {bridgeStatus?.linked ? "Extension linked" : "Extension not linked"}
-              </span>
-            </div>
-            {!bridgeStatus?.linked && (
-              <button
-                type="button"
-                onClick={handleRepair}
-                disabled={repairing}
-                style={{
-                  background: "var(--color-surface)",
-                  border: "1px solid var(--color-neutral-200)",
-                  borderRadius: "6px",
-                  padding: "3px 10px",
-                  fontSize: "11px",
-                  fontWeight: 600,
-                  color: "var(--color-vast)",
-                  cursor: repairing ? "default" : "pointer",
-                  opacity: repairing ? 0.6 : 1,
-                }}
-              >
-                {repairing ? "Repairing…" : "Repair"}
-              </button>
-            )}
-          </div>
-          {repairError && (
-            <div
-              role="alert"
-              style={{
-                padding: "8px 12px",
-                background: "var(--color-pulse-soft)",
-                border: "1px solid var(--color-pulse)",
-                borderRadius: "8px",
-                fontSize: "11px",
-                color: "var(--color-pulse)",
-              }}
-            >
-              {repairError}
-            </div>
-          )}
+            {bridgeStatus?.linked ? "●" : "○"}
+          </span>
+          <span
+            style={{
+              fontWeight: 500,
+              color: bridgeStatus?.linked ? "var(--color-neutral-700)" : "var(--color-neutral-600)",
+            }}
+          >
+            {bridgeStatus?.linked ? "Extension linked" : "Extension not linked"}
+          </span>
+        </div>
+        {!bridgeStatus?.linked && (
+          <button
+            type="button"
+            onClick={handleRepair}
+            disabled={repairing}
+            style={{
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-neutral-200)",
+              borderRadius: "6px",
+              padding: "3px 10px",
+              fontSize: "11px",
+              fontWeight: 600,
+              color: "var(--color-vast)",
+              cursor: repairing ? "default" : "pointer",
+              opacity: repairing ? 0.6 : 1,
+            }}
+          >
+            {repairing ? "Repairing…" : "Repair"}
+          </button>
+        )}
+      </div>
+      {repairError && (
+        <div
+          role="alert"
+          style={{
+            marginTop: "8px",
+            padding: "8px 12px",
+            background: "var(--color-pulse-soft)",
+            border: "1px solid var(--color-pulse)",
+            borderRadius: "8px",
+            fontSize: "11px",
+            color: "var(--color-pulse)",
+          }}
+        >
+          {repairError}
         </div>
       )}
     </div>

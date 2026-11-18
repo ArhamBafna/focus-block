@@ -407,6 +407,63 @@ $apps = @(Get-StartApps | ForEach-Object {
 
 pub const DEV_EXTENSION_ID: &str = "gmlbmoeejgjgmeffemfelecnmbiglfld";
 
+fn normalize_origin(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let without_prefix = trimmed
+        .strip_prefix("chrome-extension://")
+        .unwrap_or(trimmed);
+    let id = without_prefix.trim_matches('/');
+    format!("chrome-extension://{}/", id.to_ascii_lowercase())
+}
+
+fn configured_release_extension_origin() -> Option<String> {
+    if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() {
+            let norm = normalize_origin(trimmed);
+            if norm != "chrome-extension:///" {
+                return Some(norm);
+            }
+        }
+    }
+
+    let mut candidate_dirs = Vec::new();
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            candidate_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidate_dirs.push(cwd);
+    }
+    if let Ok(program_data) = std::env::var("ProgramData") {
+        candidate_dirs.push(PathBuf::from(program_data));
+    }
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        candidate_dirs.push(PathBuf::from(local_app_data));
+    }
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        candidate_dirs.push(PathBuf::from(app_data));
+    }
+
+    for dir in candidate_dirs {
+        for candidate in [
+            dir.join("FocusBlock").join("focusblock-web-store-extension-id.txt"),
+            dir.join("focusblock-web-store-extension-id.txt"),
+        ] {
+            if let Ok(text) = std::fs::read_to_string(candidate) {
+                let trimmed = text.trim();
+                if trimmed.len() == 32
+                    && trimmed.chars().all(|c| c.is_ascii_lowercase() && c <= 'p')
+                {
+                    return Some(format!("chrome-extension://{trimmed}/"));
+                }
+            }
+        }
+    }
+    None
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ExtensionBridgeStatus {
     pub linked: bool,
@@ -440,6 +497,13 @@ fn validate_manifest_content(text: &str) -> Result<String, String> {
             "Manifest name '{name}' does not match 'com.focusblock.bridge'"
         ));
     }
+    let manifest_type = value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Manifest missing 'type' field".to_string())?;
+    if manifest_type != "stdio" {
+        return Err(format!("Manifest type '{manifest_type}' must be 'stdio'"));
+    }
     let path = value
         .get("path")
         .and_then(|v| v.as_str())
@@ -448,13 +512,27 @@ fn validate_manifest_content(text: &str) -> Result<String, String> {
         .get("allowed_origins")
         .and_then(|v| v.as_array())
         .ok_or_else(|| "Manifest missing 'allowed_origins' array".to_string())?;
+
+    let dev_origin = format!("chrome-extension://{DEV_EXTENSION_ID}/");
+    let release_origin = configured_release_extension_origin();
+
     let has_valid_origin = origins.iter().any(|item| {
         item.as_str()
-            .map(|s| s.starts_with("chrome-extension://"))
+            .map(|s| {
+                let norm = normalize_origin(s);
+                norm == dev_origin
+                    || release_origin
+                        .as_deref()
+                        .map(|rel| norm == rel)
+                        .unwrap_or(false)
+            })
             .unwrap_or(false)
     });
     if !has_valid_origin {
-        return Err("Manifest allowed_origins has no valid chrome-extension:// origin".to_string());
+        return Err(
+            "Manifest allowed_origins does not contain a recognized FocusBlock extension ID"
+                .to_string(),
+        );
     }
     Ok(path.to_string())
 }
@@ -639,14 +717,33 @@ fn repair_bridge_internal() -> Result<ExtensionBridgeStatus, String> {
     let _ = std::fs::create_dir_all(&manifest_dir);
     let manifest_path = manifest_dir.join("com.focusblock.bridge.json");
 
+    let mut allowed_origins = vec![format!("chrome-extension://{}/", DEV_EXTENSION_ID)];
+    if let Some(rel) = configured_release_extension_origin() {
+        if !allowed_origins.contains(&rel) {
+            allowed_origins.push(rel);
+        }
+    }
+    if let Ok(existing_text) = std::fs::read_to_string(&manifest_path) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&existing_text) {
+            if let Some(arr) = val.get("allowed_origins").and_then(|v| v.as_array()) {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        let norm = normalize_origin(s);
+                        if norm != "chrome-extension:///" && !allowed_origins.contains(&norm) {
+                            allowed_origins.push(norm);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     let manifest_json = serde_json::json!({
         "name": "com.focusblock.bridge",
         "description": "FocusBlock Chrome policy bridge",
         "path": host_exe_str,
         "type": "stdio",
-        "allowed_origins": [
-            format!("chrome-extension://{}/", DEV_EXTENSION_ID)
-        ]
+        "allowed_origins": allowed_origins
     });
 
     let manifest_str = serde_json::to_string_pretty(&manifest_json)
@@ -904,16 +1001,28 @@ mod tests {
         assert_eq!(path, "C:\\path\\to\\focus-native-host.exe");
 
         // Wrong name rejected
-        let wrong_name = r#"{"name":"other.name","path":"C:\\x.exe","allowed_origins":["chrome-extension://abc/"]}"#;
+        let wrong_name = r#"{"name":"other.name","type":"stdio","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
         assert!(validate_manifest_content(wrong_name).is_err());
 
+        // Missing type rejected
+        let missing_type = r#"{"name":"com.focusblock.bridge","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(missing_type).is_err());
+
+        // Non-stdio type rejected
+        let wrong_type = r#"{"name":"com.focusblock.bridge","type":"socket","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(wrong_type).is_err());
+
         // Missing path rejected
-        let missing_path = r#"{"name":"com.focusblock.bridge","allowed_origins":["chrome-extension://abc/"]}"#;
+        let missing_path = r#"{"name":"com.focusblock.bridge","type":"stdio","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
         assert!(validate_manifest_content(missing_path).is_err());
 
-        // Invalid origin rejected
-        let invalid_origin = r#"{"name":"com.focusblock.bridge","path":"C:\\x.exe","allowed_origins":["https://google.com"]}"#;
+        // Non-extension origin rejected
+        let invalid_origin = r#"{"name":"com.focusblock.bridge","type":"stdio","path":"C:\\x.exe","allowed_origins":["https://google.com"]}"#;
         assert!(validate_manifest_content(invalid_origin).is_err());
+
+        // Unrecognized extension origin rejected
+        let unrecognized_origin = r#"{"name":"com.focusblock.bridge","type":"stdio","path":"C:\\x.exe","allowed_origins":["chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"]}"#;
+        assert!(validate_manifest_content(unrecognized_origin).is_err());
     }
 
     #[test]
