@@ -553,6 +553,14 @@ fn query_registry_manifest_path(key_path: &str) -> Option<String> {
     extract_manifest_path_from_reg_output(&stdout)
 }
 
+fn is_valid_executable(path: &Path) -> bool {
+    if let Ok(meta) = path.metadata() {
+        meta.is_file() && meta.len() > 1024
+    } else {
+        false
+    }
+}
+
 #[cfg(target_os = "windows")]
 fn check_bridge_status_internal() -> ExtensionBridgeStatus {
     let hkcu_key = r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge";
@@ -607,12 +615,12 @@ fn check_bridge_status_internal() -> ExtensionBridgeStatus {
     };
 
     let host_file = Path::new(&host_path_str);
-    if !host_file.is_file() {
+    if !is_valid_executable(host_file) {
         return ExtensionBridgeStatus {
             linked: false,
             manifest_path: Some(manifest_path),
             host_path: Some(host_path_str),
-            message: "Native host binary specified in manifest does not exist".into(),
+            message: "Native host binary specified in manifest does not exist or is invalid".into(),
         };
     }
 
@@ -640,11 +648,11 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
             let next_to_exe = parent.join("focus-native-host.exe");
-            if next_to_exe.is_file() {
+            if is_valid_executable(&next_to_exe) {
                 return Ok(next_to_exe);
             }
             let candidate1 = parent.join("target").join("debug").join("focus-native-host.exe");
-            if candidate1.is_file() {
+            if is_valid_executable(&candidate1) {
                 return Ok(candidate1);
             }
         }
@@ -655,11 +663,11 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
         let mut cur = Some(cwd.as_path());
         while let Some(dir) = cur {
             let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
-            if debug_candidate.is_file() {
+            if is_valid_executable(&debug_candidate) {
                 return Ok(debug_candidate);
             }
             let rel_candidate = dir.join("target").join("release").join("focus-native-host.exe");
-            if rel_candidate.is_file() {
+            if is_valid_executable(&rel_candidate) {
                 return Ok(rel_candidate);
             }
             cur = dir.parent();
@@ -671,7 +679,7 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
         let candidate = PathBuf::from(local_app_data)
             .join("FocusBlock")
             .join("focus-native-host.exe");
-        if candidate.is_file() {
+        if is_valid_executable(&candidate) {
             return Ok(candidate);
         }
     }
@@ -679,7 +687,7 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
         let candidate = PathBuf::from(program_files)
             .join("FocusBlock")
             .join("focus-native-host.exe");
-        if candidate.is_file() {
+        if is_valid_executable(&candidate) {
             return Ok(candidate);
         }
     }
@@ -694,7 +702,7 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
                 let mut cur = Some(cwd.as_path());
                 while let Some(dir) = cur {
                     let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
-                    if debug_candidate.is_file() {
+                    if is_valid_executable(&debug_candidate) {
                         return Ok(debug_candidate);
                     }
                     cur = dir.parent();

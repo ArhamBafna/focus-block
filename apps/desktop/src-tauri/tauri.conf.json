@@ -32,8 +32,8 @@
       "icons/icon.ico"
     ],
     "resources": {
-      "../../../target/release/focus-service.exe": "focus-service.exe",
-      "../../../target/release/focus-native-host.exe": "focus-native-host.exe"
+      "bundle_bins/focus-service.exe": "focus-service.exe",
+      "bundle_bins/focus-native-host.exe": "focus-native-host.exe"
     },
     "windows": {
       "nsis": {
