@@ -1,3 +1,5 @@
+at start of each new chat, read "C:\Users\bafna_sb19qr0\Desktop\AGENTS.md" once and follow it throughout the chat.
+
 a distraction blocking service.
 
 The functionality should mimic apps like freedom.to + additional features not in those.

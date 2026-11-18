@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ipc, AppSettings } from "../lib/ipc";
+import { ipc, AppSettings, ExtensionBridgeStatus } from "../lib/ipc";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
@@ -77,9 +77,13 @@ export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [bridgeStatus, setBridgeStatus] = useState<ExtensionBridgeStatus | null>(null);
+  const [repairing, setRepairing] = useState(false);
+  const [repairError, setRepairError] = useState<string | null>(null);
 
   useEffect(() => {
     ipc.getSettings().then(setSettings).catch(console.error);
+    ipc.checkExtensionBridge().then(setBridgeStatus).catch(console.error);
   }, []);
 
   const toggleOsAllowlist = async () => {
@@ -94,6 +98,19 @@ export default function Settings() {
       setSaveError(e instanceof Error ? e.message : "Could not save setting.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRepair = async () => {
+    setRepairing(true);
+    setRepairError(null);
+    try {
+      const status = await ipc.repairExtensionBridge();
+      setBridgeStatus(status);
+    } catch (e) {
+      setRepairError(e instanceof Error ? e.message : "Repair failed.");
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -126,6 +143,76 @@ export default function Settings() {
           {saveError && (
             <div role="alert" style={{ padding: "8px 12px", background: "#fff0f0", border: "1px solid #f8d0d0", borderRadius: "8px", fontSize: "12px", color: "var(--color-pulse)" }}>
               {saveError}
+            </div>
+          )}
+
+          {/* Extension bridge status footer */}
+          <div
+            style={{
+              marginTop: "8px",
+              padding: "10px 14px",
+              background: "var(--color-neutral-50)",
+              border: "1px solid var(--color-lumen-dark)",
+              borderRadius: "10px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
+              <span
+                style={{
+                  color: bridgeStatus?.linked ? "var(--color-fathom)" : "var(--color-glow)",
+                  fontSize: "13px",
+                  lineHeight: 1,
+                }}
+              >
+                {bridgeStatus?.linked ? "●" : "○"}
+              </span>
+              <span
+                style={{
+                  fontWeight: 500,
+                  color: bridgeStatus?.linked ? "var(--color-neutral-700)" : "var(--color-neutral-600)",
+                }}
+              >
+                {bridgeStatus?.linked ? "Extension linked" : "Extension not linked"}
+              </span>
+            </div>
+            {!bridgeStatus?.linked && (
+              <button
+                type="button"
+                onClick={handleRepair}
+                disabled={repairing}
+                style={{
+                  background: "var(--color-surface)",
+                  border: "1px solid var(--color-neutral-200)",
+                  borderRadius: "6px",
+                  padding: "3px 10px",
+                  fontSize: "11px",
+                  fontWeight: 600,
+                  color: "var(--color-vast)",
+                  cursor: repairing ? "default" : "pointer",
+                  opacity: repairing ? 0.6 : 1,
+                }}
+              >
+                {repairing ? "Repairing…" : "Repair"}
+              </button>
+            )}
+          </div>
+          {repairError && (
+            <div
+              role="alert"
+              style={{
+                padding: "8px 12px",
+                background: "var(--color-pulse-soft)",
+                border: "1px solid var(--color-pulse)",
+                borderRadius: "8px",
+                fontSize: "11px",
+                color: "var(--color-pulse)",
+              }}
+            >
+              {repairError}
             </div>
           )}
         </div>

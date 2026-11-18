@@ -6,6 +6,7 @@
   "author": "Arham Bafna",
   "homepage_url": "https://github.com/ArhamBafna/focus-block",
   "minimum_chrome_version": "116",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEArcp2WibzlW38/rEGGwUOiEJXrGQlo2etXwnhzrwlsSUkHaUrLbjKvIvTkO0FjsMh7JKA7aD0PID3qGziic2+eakiGZU59SMcmpKkptx4pOao9CMTsGkvwLhay/q6rRPqgJjSM2Hv73jcZMVTcCwJ96Xt56r5S8sX+qln6hSIdqawFGAJQ2xIIRmPD43I4Ici7N0tEw/pjhGXGuePbkn1M3kndl4Y6Kvg7hfJEPkuNFyZsusXmD16JQyHlWTi056jrFlm7jtEVHW3fIn4QTq+ch7Lx6JmUP6ondbkt7V1VHdDHJcHGaCr5mfUZPHtDEPNtx342oRbP6tzzQIPXjABEQIDAQAB",
 
   "icons": {
     "16": "icons/icon16.png",

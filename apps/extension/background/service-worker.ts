@@ -900,6 +900,8 @@ async function handleBackgroundMessage(message: unknown): Promise<unknown> {
       return stopSession();
     case "session:expire":
       return expireSession().then(() => null);
+    case "native:check":
+      return checkNativePolicy();
     default:
       throw new Error(`Unknown background message type`);
   }
@@ -1159,9 +1161,9 @@ export async function syncNativePolicy(policy: NativePolicy): Promise<void> {
   });
 }
 
-export async function checkNativePolicy(): Promise<void> {
+export async function checkNativePolicy(): Promise<boolean> {
   if (typeof chrome === "undefined" || !chrome.runtime?.sendNativeMessage) {
-    return;
+    return false;
   }
   const policy = await new Promise<NativePolicy | null>((resolve) => {
     let resolved = false;
@@ -1208,10 +1210,11 @@ export async function checkNativePolicy(): Promise<void> {
 
   if (hasError) {
     await keepMirrorBlockingThroughNativeFailure();
-    return;
+    return false;
   }
 
   await syncNativePolicy(policy);
+  return true;
 }
 
 // ── Event listeners & worker lifecycle ────────────────────────────────────────

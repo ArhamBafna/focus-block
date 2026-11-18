@@ -87,20 +87,33 @@ mod windows_host {
         format!("chrome-extension://{}/", id.to_ascii_lowercase())
     }
 
+    /// Dedicated permanent development extension ID derived from the committed public key in manifest.json.
+    pub const DEV_EXTENSION_ID: &str = "gmlbmoeejgjgmeffemfelecnmbiglfld";
+
     /// The origins the installed manifest allows, or the environment override.
     /// Chrome enforces `allowed_origins` before it starts this process, so this
     /// is the second lock on the same door; it must not be skipped merely
     /// because the installer never exported an environment variable.
     fn configured_extension_origins() -> Vec<String> {
         let mut origins = Vec::new();
+        let dev_origin = normalize_origin(DEV_EXTENSION_ID);
+        if !origins.contains(&dev_origin) {
+            origins.push(dev_origin);
+        }
+
         if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
             let normalized = normalize_origin(&id);
-            if normalized != "chrome-extension:///" {
+            if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
                 origins.push(normalized);
             }
         }
 
         let mut candidate_dirs = Vec::new();
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(parent) = exe_path.parent() {
+                candidate_dirs.push(parent.to_path_buf());
+            }
+        }
         if let Ok(program_data) = std::env::var("ProgramData") {
             candidate_dirs.push(std::path::PathBuf::from(program_data));
         }
@@ -112,17 +125,38 @@ mod windows_host {
         }
 
         for dir in candidate_dirs {
-            let manifest = dir.join("FocusBlock").join("com.focusblock.bridge.json");
-            if let Ok(text) = std::fs::read_to_string(manifest) {
-                if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-                    if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
-                        for item in arr {
-                            if let Some(s) = item.as_str() {
-                                let normalized = normalize_origin(s);
-                                if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
-                                    origins.push(normalized);
+            let manifest_paths = [
+                dir.join("FocusBlock").join("com.focusblock.bridge.json"),
+                dir.join("com.focusblock.bridge.json"),
+            ];
+            for manifest in manifest_paths {
+                if let Ok(text) = std::fs::read_to_string(manifest) {
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
+                            for item in arr {
+                                if let Some(s) = item.as_str() {
+                                    let normalized = normalize_origin(s);
+                                    if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
+                                        origins.push(normalized);
+                                    }
                                 }
                             }
+                        }
+                    }
+                }
+            }
+
+            let release_id_paths = [
+                dir.join("FocusBlock").join("focusblock-web-store-extension-id.txt"),
+                dir.join("focusblock-web-store-extension-id.txt"),
+            ];
+            for release_path in release_id_paths {
+                if let Ok(text) = std::fs::read_to_string(release_path) {
+                    let trimmed = text.trim();
+                    if trimmed.len() == 32 && trimmed.chars().all(|c| c.is_ascii_lowercase() && c <= 'p') {
+                        let normalized = normalize_origin(trimmed);
+                        if !origins.contains(&normalized) {
+                            origins.push(normalized);
                         }
                     }
                 }
@@ -335,6 +369,18 @@ mod windows_host {
             ));
             assert!(!origin_argument_matches(&allowed, Some("--parent-window=0")));
             assert!(!origin_argument_matches(&allowed, None));
+        }
+
+        #[test]
+        fn configured_origins_always_includes_permanent_dev_extension_id() {
+            use super::{configured_extension_origins, DEV_EXTENSION_ID};
+
+            let origins = configured_extension_origins();
+            let expected_dev = format!("chrome-extension://{}/", DEV_EXTENSION_ID);
+            assert!(
+                origins.contains(&expected_dev),
+                "origins should contain permanent dev extension ID"
+            );
         }
     }
 }

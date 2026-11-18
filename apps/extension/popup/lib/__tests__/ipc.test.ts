@@ -306,4 +306,23 @@ describe("shouldTriggerStopChallenge behavior verification", () => {
     expect(shouldTriggerStopChallenge("lockdown", null)).toBe(false);
     expect(shouldTriggerStopChallenge("blocklist", null)).toBe(false);
   });
+
+  it("checkNativePolicy sends native:check to background and returns connection status", async () => {
+    fakeSendMessage((msg) => {
+      if ((msg as { type: string }).type === "native:check") {
+        return { response: { ok: true, result: true } };
+      }
+      return { response: { ok: false, error: "unknown" } };
+    });
+
+    const status = await ipc.checkNativePolicy();
+    expect(status).toBe(true);
+  });
+
+  it("checkNativePolicy returns false when background fails or unreachable", async () => {
+    fakeSendMessage(() => ({ lastError: "Background unreachable" }));
+
+    const status = await ipc.checkNativePolicy();
+    expect(status).toBe(false);
+  });
 });

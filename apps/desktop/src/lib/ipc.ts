@@ -89,6 +89,12 @@ export interface ScheduleList {
   schedules: Schedule[];
 }
 
+export interface ExtensionBridgeStatus {
+  linked: boolean;
+  manifest_path?: string | null;
+  host_path?: string | null;
+  message: string;
+}
 
 const isTauri = typeof window !== "undefined" && (
   (window as any).__TAURI_INTERNALS__ !== undefined || 
@@ -640,4 +646,17 @@ export const ipc = {
   },
   deleteSchedule: (id: string) => request<null>("DeleteSchedule", { id }).then(unwrap),
 
+  checkExtensionBridge: async (): Promise<ExtensionBridgeStatus> => {
+    if (isTauri) {
+      return invoke<ExtensionBridgeStatus>("check_extension_bridge_status");
+    }
+    return { linked: true, message: "Mock bridge linked" };
+  },
+
+  repairExtensionBridge: async (): Promise<ExtensionBridgeStatus> => {
+    if (isTauri) {
+      return invoke<ExtensionBridgeStatus>("repair_extension_bridge");
+    }
+    return { linked: true, message: "Mock bridge repaired" };
+  },
 };

@@ -92,10 +92,79 @@ if ($RunAll -or $ExtensionOnly) {
         Write-Host ($buildOutput | Out-String) -ForegroundColor Red
     }
 
+    # Register Chrome Native Messaging Bridge
+    Write-Host "`nConfiguring Chrome Native Messaging Bridge..." -ForegroundColor Yellow
+    Push-Location "$root"
+    $nativeBuild = & cargo build --bin focus-native-host 2>&1
+    Pop-Location
+    $nativeHostExe = "$root\target\debug\focus-native-host.exe"
+    if (Test-Path $nativeHostExe) {
+        $manifestDir = "$env:LOCALAPPDATA\FocusBlock"
+        if (-not (Test-Path $manifestDir)) {
+            New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+        }
+        $manifestPath = "$manifestDir\com.focusblock.bridge.json"
+        $devId = "gmlbmoeejgjgmeffemfelecnmbiglfld"
+        $manifestObj = @{
+            name = "com.focusblock.bridge"
+            description = "FocusBlock Chrome policy bridge"
+            path = $nativeHostExe
+            type = "stdio"
+            allowed_origins = @("chrome-extension://$devId/")
+        }
+        $manifestJson = $manifestObj | ConvertTo-Json -Depth 5
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
+
+        $regKey = "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge"
+        if (-not (Test-Path $regKey)) {
+            New-Item -ItemType Directory -Force -Path $regKey | Out-Null
+        }
+        Set-ItemProperty -Path $regKey -Name "(Default)" -Value $manifestPath -PropertyType String -Force | Out-Null
+        Write-Host "Chrome Native Messaging host registered at:" -ForegroundColor Green
+        Write-Host "  $manifestPath" -ForegroundColor Cyan
+    } else {
+        Write-Host "Warning: Could not compile focus-native-host." -ForegroundColor Red
+        Write-Host ($nativeBuild | Out-String) -ForegroundColor Red
+    }
+
     if ($ExtensionOnly) {
         Write-Host "`nExtension build complete!" -ForegroundColor Green
         Read-Host "Press Enter to exit"
         exit 0
+    }
+} else {
+    # If starting without Extension rebuild, still ensure native host is built and registered
+    Write-Host "`nConfiguring Chrome Native Messaging Bridge..." -ForegroundColor Yellow
+    Push-Location "$root"
+    $nativeBuild = & cargo build --bin focus-native-host 2>&1
+    Pop-Location
+    $nativeHostExe = "$root\target\debug\focus-native-host.exe"
+    if (Test-Path $nativeHostExe) {
+        $manifestDir = "$env:LOCALAPPDATA\FocusBlock"
+        if (-not (Test-Path $manifestDir)) {
+            New-Item -ItemType Directory -Force -Path $manifestDir | Out-Null
+        }
+        $manifestPath = "$manifestDir\com.focusblock.bridge.json"
+        $devId = "gmlbmoeejgjgmeffemfelecnmbiglfld"
+        $manifestObj = @{
+            name = "com.focusblock.bridge"
+            description = "FocusBlock Chrome policy bridge"
+            path = $nativeHostExe
+            type = "stdio"
+            allowed_origins = @("chrome-extension://$devId/")
+        }
+        $manifestJson = $manifestObj | ConvertTo-Json -Depth 5
+        $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+        [System.IO.File]::WriteAllText($manifestPath, $manifestJson, $utf8NoBom)
+
+        $regKey = "HKCU:\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge"
+        if (-not (Test-Path $regKey)) {
+            New-Item -ItemType Directory -Force -Path $regKey | Out-Null
+        }
+        Set-ItemProperty -Path $regKey -Name "(Default)" -Value $manifestPath -PropertyType String -Force | Out-Null
+        Write-Host "Chrome Native Messaging host registered at:" -ForegroundColor Green
+        Write-Host "  $manifestPath" -ForegroundColor Cyan
     }
 }
 

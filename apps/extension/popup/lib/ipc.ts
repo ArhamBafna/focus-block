@@ -553,4 +553,19 @@ export const ipc = {
     await storageSet("settings", settings);
     return null;
   },
+
+  checkNativePolicy: async (): Promise<boolean> => {
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return false;
+    }
+    try {
+      const envelope = await sendToBackground<boolean>({ type: "native:check" });
+      if (envelope.ok && typeof envelope.data === "boolean") {
+        return envelope.data;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
 };

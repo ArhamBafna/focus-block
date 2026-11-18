@@ -88,9 +88,11 @@ export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [desktopConnected, setDesktopConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
     ipc.getSettings().then(setSettings).catch(console.error);
+    ipc.checkNativePolicy().then(setDesktopConnected).catch(() => setDesktopConnected(false));
   }, []);
 
   // One generic saver keyed by setting name. Only one save runs at a time;
@@ -262,7 +264,7 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Extension info */}
+          {/* Extension info & desktop sync status */}
           <div
             style={{
               marginTop: "8px",
@@ -275,9 +277,24 @@ export default function Settings() {
               lineHeight: 1.6,
             }}
           >
-            <strong style={{ color: "var(--color-neutral-700)" }}>
-              Focus Blocker Extension v{chrome.runtime.getManifest().version}
-            </strong>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong style={{ color: "var(--color-neutral-700)" }}>
+                Focus Blocker Extension v{typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : "0.2.0"}
+              </strong>
+              <span
+                style={{
+                  fontSize: "11px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  color: desktopConnected ? "var(--color-fathom)" : "var(--color-glow)",
+                  fontWeight: 500,
+                }}
+              >
+                <span>{desktopConnected ? "●" : "○"}</span>
+                <span>{desktopConnected ? "Desktop connected" : "Desktop not running"}</span>
+              </span>
+            </div>
             <div style={{ marginTop: "4px" }}>
               <Link
                 to="/privacy"
