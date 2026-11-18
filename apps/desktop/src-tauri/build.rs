@@ -8,6 +8,8 @@ fn main() {
             let bundle_file = bundle_bins.join(name);
             let release_file = release_dir.join(name);
 
+            println!("cargo:rerun-if-changed={}", release_file.display());
+
             // If real release binary exists, sync it to bundle_bins
             if let Ok(meta) = release_file.metadata() {
                 if meta.is_file() && meta.len() > 1024 {
