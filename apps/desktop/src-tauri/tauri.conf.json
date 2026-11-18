@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run build && cargo build --release --bin focus-service --bin focus-native-host --manifest-path ../../Cargo.toml && npm run prepare-bundle",
     "frontendDist": "../dist"
   },
   "app": {
@@ -30,6 +30,16 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "resources": {
+      "bundle_bins/focus-service.exe": "focus-service.exe",
+      "bundle_bins/focus-native-host.exe": "focus-native-host.exe"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "installerHooks": "nsis-hooks.nsi"
+      }
+    }
   }
 }

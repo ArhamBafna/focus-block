@@ -26,6 +26,8 @@ export { isMirrorSession, NATIVE_MIRROR_ID_PREFIX } from "./storage";
 // Stored-entity shapes are owned by ./storage and re-exported here under the
 // names components already import. No second hand-written declaration.
 
+export const APP_VERSION = "0.2.0";
+
 export type SessionMode = "blocklist" | "lockdown";
 export type SessionStatus = "active" | "completed" | "stopped";
 
@@ -552,5 +554,21 @@ export const ipc = {
   updateSettings: async (settings: AppSettings): Promise<null> => {
     await storageSet("settings", settings);
     return null;
+  },
+
+  checkNativePolicy: async (): Promise<boolean> => {
+    if (typeof chrome === "undefined" || !chrome.runtime?.sendMessage) {
+      return false;
+    }
+    try {
+      const envelope = await sendToBackground<boolean>({ type: "native:check" });
+      if (envelope.ok && typeof envelope.data === "boolean") {
+        return envelope.data;
+      }
+      return false;
+    } catch (error) {
+      console.error("[ipc] checkNativePolicy failed:", error);
+      return false;
+    }
   },
 };

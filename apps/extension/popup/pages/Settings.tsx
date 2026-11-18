@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 
-import { ipc, AppSettings } from "../lib/ipc";
+import { ipc, AppSettings, APP_VERSION } from "../lib/ipc";
 
 function Toggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
@@ -88,9 +88,29 @@ export default function Settings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [desktopConnected, setDesktopConnected] = useState<boolean | null>(null);
 
   useEffect(() => {
-    ipc.getSettings().then(setSettings).catch(console.error);
+    let mounted = true;
+    ipc
+      .getSettings()
+      .then((s) => {
+        if (mounted) setSettings(s);
+      })
+      .catch(console.error);
+
+    ipc
+      .checkNativePolicy()
+      .then((connected) => {
+        if (mounted) setDesktopConnected(connected);
+      })
+      .catch(() => {
+        if (mounted) setDesktopConnected(false);
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   // One generic saver keyed by setting name. Only one save runs at a time;
@@ -262,7 +282,7 @@ export default function Settings() {
             </div>
           )}
 
-          {/* Extension info */}
+          {/* Extension info & desktop sync status */}
           <div
             style={{
               marginTop: "8px",
@@ -275,9 +295,24 @@ export default function Settings() {
               lineHeight: 1.6,
             }}
           >
-            <strong style={{ color: "var(--color-neutral-700)" }}>
-              Focus Blocker Extension v{chrome.runtime.getManifest().version}
-            </strong>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <strong style={{ color: "var(--color-neutral-700)" }}>
+                Focus Blocker Extension v{typeof chrome !== "undefined" && chrome.runtime?.getManifest ? chrome.runtime.getManifest().version : APP_VERSION}
+              </strong>
+              <span
+                style={{
+                  fontSize: "11px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  color: desktopConnected === true ? "var(--color-fathom)" : desktopConnected === false ? "var(--color-glow)" : "var(--color-neutral-400)",
+                  fontWeight: 500,
+                }}
+              >
+                <span>{desktopConnected === true ? "●" : desktopConnected === false ? "○" : "◌"}</span>
+                <span>{desktopConnected === true ? "Desktop connected" : desktopConnected === false ? "Desktop not running" : "Checking…"}</span>
+              </span>
+            </div>
             <div style={{ marginTop: "4px" }}>
               <Link
                 to="/privacy"

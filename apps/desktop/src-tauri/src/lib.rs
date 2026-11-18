@@ -405,6 +405,405 @@ $apps = @(Get-StartApps | ForEach-Object {
     }
 }
 
+pub const DEV_EXTENSION_ID: &str = "gmlbmoeejgjgmeffemfelecnmbiglfld";
+
+fn normalize_origin(raw: &str) -> String {
+    let trimmed = raw.trim();
+    let without_prefix = trimmed
+        .strip_prefix("chrome-extension://")
+        .unwrap_or(trimmed);
+    let id = without_prefix.trim_matches('/');
+    format!("chrome-extension://{}/", id.to_ascii_lowercase())
+}
+
+fn configured_release_extension_origin() -> Option<String> {
+    if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
+        let trimmed = id.trim();
+        if !trimmed.is_empty() {
+            let norm = normalize_origin(trimmed);
+            if norm != "chrome-extension:///" {
+                return Some(norm);
+            }
+        }
+    }
+
+    let mut candidate_dirs = Vec::new();
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            candidate_dirs.push(parent.to_path_buf());
+        }
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        candidate_dirs.push(cwd);
+    }
+    if let Ok(program_data) = std::env::var("ProgramData") {
+        candidate_dirs.push(PathBuf::from(program_data));
+    }
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        candidate_dirs.push(PathBuf::from(local_app_data));
+    }
+    if let Ok(app_data) = std::env::var("APPDATA") {
+        candidate_dirs.push(PathBuf::from(app_data));
+    }
+
+    for dir in candidate_dirs {
+        for candidate in [
+            dir.join("FocusBlock").join("focusblock-web-store-extension-id.txt"),
+            dir.join("focusblock-web-store-extension-id.txt"),
+        ] {
+            if let Ok(text) = std::fs::read_to_string(candidate) {
+                let trimmed = text.trim();
+                if trimmed.len() == 32
+                    && trimmed.chars().all(|c| c.is_ascii_lowercase() && c <= 'p')
+                {
+                    return Some(format!("chrome-extension://{trimmed}/"));
+                }
+            }
+        }
+    }
+    None
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExtensionBridgeStatus {
+    pub linked: bool,
+    pub manifest_path: Option<String>,
+    pub host_path: Option<String>,
+    pub message: String,
+}
+
+fn extract_manifest_path_from_reg_output(stdout: &str) -> Option<String> {
+    for line in stdout.lines() {
+        let trimmed = line.trim();
+        if let Some(pos) = trimmed.find("REG_SZ") {
+            let val = trimmed[pos + "REG_SZ".len()..].trim();
+            if !val.is_empty() {
+                return Some(val.to_string());
+            }
+        }
+    }
+    None
+}
+
+fn validate_manifest_content(text: &str) -> Result<String, String> {
+    let value: serde_json::Value = serde_json::from_str(text)
+        .map_err(|e| format!("Manifest is not valid JSON: {e}"))?;
+    let name = value
+        .get("name")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Manifest missing 'name' field".to_string())?;
+    if name != "com.focusblock.bridge" {
+        return Err(format!(
+            "Manifest name '{name}' does not match 'com.focusblock.bridge'"
+        ));
+    }
+    let manifest_type = value
+        .get("type")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Manifest missing 'type' field".to_string())?;
+    if manifest_type != "stdio" {
+        return Err(format!("Manifest type '{manifest_type}' must be 'stdio'"));
+    }
+    let path = value
+        .get("path")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "Manifest missing 'path' field".to_string())?;
+    let origins = value
+        .get("allowed_origins")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "Manifest missing 'allowed_origins' array".to_string())?;
+
+    let dev_origin = format!("chrome-extension://{DEV_EXTENSION_ID}/");
+    let release_origin = configured_release_extension_origin();
+
+    let has_valid_origin = origins.iter().any(|item| {
+        item.as_str()
+            .map(|s| {
+                let norm = normalize_origin(s);
+                norm == dev_origin
+                    || release_origin
+                        .as_deref()
+                        .map(|rel| norm == rel)
+                        .unwrap_or(false)
+            })
+            .unwrap_or(false)
+    });
+    if !has_valid_origin {
+        return Err(
+            "Manifest allowed_origins does not contain a recognized FocusBlock extension ID"
+                .to_string(),
+        );
+    }
+    Ok(path.to_string())
+}
+
+#[cfg(target_os = "windows")]
+fn query_registry_manifest_path(key_path: &str) -> Option<String> {
+    let mut cmd = std::process::Command::new("reg");
+    cmd.args(["query", key_path, "/ve"]);
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let output = cmd.output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    extract_manifest_path_from_reg_output(&stdout)
+}
+
+fn is_valid_executable(path: &Path) -> bool {
+    if let Ok(meta) = path.metadata() {
+        meta.is_file() && meta.len() > 1024
+    } else {
+        false
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn check_bridge_status_internal() -> ExtensionBridgeStatus {
+    let hkcu_key = r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge";
+    let hklm_key = r"HKLM\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge";
+
+    let manifest_path = match query_registry_manifest_path(hkcu_key)
+        .or_else(|| query_registry_manifest_path(hklm_key))
+    {
+        Some(path) => path,
+        None => {
+            return ExtensionBridgeStatus {
+                linked: false,
+                manifest_path: None,
+                host_path: None,
+                message: "Chrome Native Messaging registry key not found".into(),
+            };
+        }
+    };
+
+    let manifest_file = Path::new(&manifest_path);
+    if !manifest_file.is_file() {
+        return ExtensionBridgeStatus {
+            linked: false,
+            manifest_path: Some(manifest_path),
+            host_path: None,
+            message: "Native Messaging manifest file does not exist".into(),
+        };
+    }
+
+    let manifest_content = match std::fs::read_to_string(manifest_file) {
+        Ok(c) => c,
+        Err(e) => {
+            return ExtensionBridgeStatus {
+                linked: false,
+                manifest_path: Some(manifest_path),
+                host_path: None,
+                message: format!("Could not read manifest file: {e}"),
+            };
+        }
+    };
+
+    let host_path_str = match validate_manifest_content(&manifest_content) {
+        Ok(p) => p,
+        Err(e) => {
+            return ExtensionBridgeStatus {
+                linked: false,
+                manifest_path: Some(manifest_path),
+                host_path: None,
+                message: e,
+            };
+        }
+    };
+
+    let host_file = Path::new(&host_path_str);
+    if !is_valid_executable(host_file) {
+        return ExtensionBridgeStatus {
+            linked: false,
+            manifest_path: Some(manifest_path),
+            host_path: Some(host_path_str),
+            message: "Native host binary specified in manifest does not exist or is invalid".into(),
+        };
+    }
+
+    ExtensionBridgeStatus {
+        linked: true,
+        manifest_path: Some(manifest_path),
+        host_path: Some(host_path_str),
+        message: "Extension bridge is properly configured and verified".into(),
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn check_bridge_status_internal() -> ExtensionBridgeStatus {
+    ExtensionBridgeStatus {
+        linked: true,
+        manifest_path: None,
+        host_path: None,
+        message: "Extension bridge check is only required on Windows".into(),
+    }
+}
+
+#[cfg(target_os = "windows")]
+fn find_native_host_binary() -> Result<PathBuf, String> {
+    // 1. Check directory of current executable
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            let next_to_exe = parent.join("focus-native-host.exe");
+            if is_valid_executable(&next_to_exe) {
+                return Ok(next_to_exe);
+            }
+            let candidate1 = parent.join("target").join("debug").join("focus-native-host.exe");
+            if is_valid_executable(&candidate1) {
+                return Ok(candidate1);
+            }
+        }
+    }
+
+    // 2. Check current working directory and walk up
+    if let Ok(cwd) = std::env::current_dir() {
+        let mut cur = Some(cwd.as_path());
+        while let Some(dir) = cur {
+            let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
+            if is_valid_executable(&debug_candidate) {
+                return Ok(debug_candidate);
+            }
+            let rel_candidate = dir.join("target").join("release").join("focus-native-host.exe");
+            if is_valid_executable(&rel_candidate) {
+                return Ok(rel_candidate);
+            }
+            cur = dir.parent();
+        }
+    }
+
+    // 3. Check AppData and Program Files
+    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+        let candidate = PathBuf::from(local_app_data)
+            .join("FocusBlock")
+            .join("focus-native-host.exe");
+        if is_valid_executable(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    if let Ok(program_files) = std::env::var("ProgramFiles") {
+        let candidate = PathBuf::from(program_files)
+            .join("FocusBlock")
+            .join("focus-native-host.exe");
+        if is_valid_executable(&candidate) {
+            return Ok(candidate);
+        }
+    }
+
+    // 4. Try building with cargo only during development / debug builds
+    #[cfg(debug_assertions)]
+    {
+        let build_attempt = std::process::Command::new("cargo")
+            .args(["build", "--bin", "focus-native-host"])
+            .output();
+        if let Ok(output) = build_attempt {
+            if output.status.success() {
+                if let Ok(cwd) = std::env::current_dir() {
+                    let mut cur = Some(cwd.as_path());
+                    while let Some(dir) = cur {
+                        let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
+                        if is_valid_executable(&debug_candidate) {
+                            return Ok(debug_candidate);
+                        }
+                        cur = dir.parent();
+                    }
+                }
+            }
+        }
+    }
+
+    Err("Could not find focus-native-host.exe. Ensure it is built or installed.".into())
+}
+
+#[cfg(target_os = "windows")]
+fn repair_bridge_internal() -> Result<ExtensionBridgeStatus, String> {
+    let host_exe = find_native_host_binary()?;
+    let host_exe_str = host_exe.to_str().ok_or("Invalid host path characters")?;
+
+    let local_app_data = std::env::var("LOCALAPPDATA")
+        .unwrap_or_else(|_| "C:\\Users\\Default\\AppData\\Local".into());
+    let manifest_dir = PathBuf::from(local_app_data).join("FocusBlock");
+    let _ = std::fs::create_dir_all(&manifest_dir);
+    let manifest_path = manifest_dir.join("com.focusblock.bridge.json");
+
+    let mut allowed_origins = vec![format!("chrome-extension://{}/", DEV_EXTENSION_ID)];
+    if let Some(rel) = configured_release_extension_origin() {
+        if !allowed_origins.contains(&rel) {
+            allowed_origins.push(rel);
+        }
+    }
+    if let Ok(existing_text) = std::fs::read_to_string(&manifest_path) {
+        if let Ok(val) = serde_json::from_str::<serde_json::Value>(&existing_text) {
+            if let Some(arr) = val.get("allowed_origins").and_then(|v| v.as_array()) {
+                for item in arr {
+                    if let Some(s) = item.as_str() {
+                        let norm = normalize_origin(s);
+                        if norm != "chrome-extension:///" && !allowed_origins.contains(&norm) {
+                            allowed_origins.push(norm);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let manifest_json = serde_json::json!({
+        "name": "com.focusblock.bridge",
+        "description": "FocusBlock Chrome policy bridge",
+        "path": host_exe_str,
+        "type": "stdio",
+        "allowed_origins": allowed_origins
+    });
+
+    let manifest_str = serde_json::to_string_pretty(&manifest_json)
+        .map_err(|e| format!("Could not serialize manifest: {e}"))?;
+    std::fs::write(&manifest_path, manifest_str)
+        .map_err(|e| format!("Could not write manifest to {}: {e}", manifest_path.display()))?;
+
+    let manifest_path_str = manifest_path.to_str().ok_or("Invalid manifest path characters")?;
+    let mut reg_cmd = std::process::Command::new("reg");
+    reg_cmd.args([
+        "add",
+        r"HKCU\Software\Google\Chrome\NativeMessagingHosts\com.focusblock.bridge",
+        "/ve",
+        "/t",
+        "REG_SZ",
+        "/d",
+        manifest_path_str,
+        "/f",
+    ]);
+    {
+        use std::os::windows::process::CommandExt;
+        reg_cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+    }
+    let reg_output = reg_cmd
+        .output()
+        .map_err(|e| format!("Could not execute reg.exe: {e}"))?;
+    if !reg_output.status.success() {
+        let err = String::from_utf8_lossy(&reg_output.stderr);
+        return Err(format!("Registry update failed: {err}"));
+    }
+
+    Ok(check_bridge_status_internal())
+}
+
+#[cfg(not(target_os = "windows"))]
+fn repair_bridge_internal() -> Result<ExtensionBridgeStatus, String> {
+    Ok(check_bridge_status_internal())
+}
+
+#[tauri::command]
+fn check_extension_bridge_status() -> Result<ExtensionBridgeStatus, String> {
+    Ok(check_bridge_status_internal())
+}
+
+#[tauri::command]
+fn repair_extension_bridge() -> Result<ExtensionBridgeStatus, String> {
+    repair_bridge_internal()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -414,7 +813,9 @@ pub fn run() {
             ipc_request,
             list_installed_apps,
             list_store_apps,
-            get_app_icon
+            get_app_icon,
+            check_extension_bridge_status,
+            repair_extension_bridge
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -591,5 +992,62 @@ mod tests {
             assert_eq!(candidate.matches('.').count(), 1, "{candidate}");
             assert!(candidate.len() < 120, "{candidate}");
         }
+    }
+
+    #[test]
+    fn validates_native_messaging_manifest_content() {
+        use super::{validate_manifest_content, DEV_EXTENSION_ID};
+
+        let valid = format!(
+            r#"{{
+                "name": "com.focusblock.bridge",
+                "description": "FocusBlock Chrome policy bridge",
+                "path": "C:\\path\\to\\focus-native-host.exe",
+                "type": "stdio",
+                "allowed_origins": ["chrome-extension://{}/"]
+            }}"#,
+            DEV_EXTENSION_ID
+        );
+        let path = validate_manifest_content(&valid).expect("valid manifest should pass");
+        assert_eq!(path, "C:\\path\\to\\focus-native-host.exe");
+
+        // Wrong name rejected
+        let wrong_name = r#"{"name":"other.name","type":"stdio","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(wrong_name).is_err());
+
+        // Missing type rejected
+        let missing_type = r#"{"name":"com.focusblock.bridge","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(missing_type).is_err());
+
+        // Non-stdio type rejected
+        let wrong_type = r#"{"name":"com.focusblock.bridge","type":"socket","path":"C:\\x.exe","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(wrong_type).is_err());
+
+        // Missing path rejected
+        let missing_path = r#"{"name":"com.focusblock.bridge","type":"stdio","allowed_origins":["chrome-extension://gmlbmoeejgjgmeffemfelecnmbiglfld/"]}"#;
+        assert!(validate_manifest_content(missing_path).is_err());
+
+        // Non-extension origin rejected
+        let invalid_origin = r#"{"name":"com.focusblock.bridge","type":"stdio","path":"C:\\x.exe","allowed_origins":["https://google.com"]}"#;
+        assert!(validate_manifest_content(invalid_origin).is_err());
+
+        // Unrecognized extension origin rejected
+        let unrecognized_origin = r#"{"name":"com.focusblock.bridge","type":"stdio","path":"C:\\x.exe","allowed_origins":["chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/"]}"#;
+        assert!(validate_manifest_content(unrecognized_origin).is_err());
+    }
+
+    #[test]
+    fn extracts_manifest_path_from_reg_query_output() {
+        use super::extract_manifest_path_from_reg_output;
+
+        let sample = "\r\nHKEY_CURRENT_USER\\Software\\Google\\Chrome\\NativeMessagingHosts\\com.focusblock.bridge\r\n    (Default)    REG_SZ    C:\\Users\\test\\AppData\\Local\\FocusBlock\\com.focusblock.bridge.json\r\n";
+        let extracted = extract_manifest_path_from_reg_output(sample);
+        assert_eq!(
+            extracted.as_deref(),
+            Some("C:\\Users\\test\\AppData\\Local\\FocusBlock\\com.focusblock.bridge.json")
+        );
+
+        assert_eq!(extract_manifest_path_from_reg_output(""), None);
+        assert_eq!(extract_manifest_path_from_reg_output("ERROR: Key not found"), None);
     }
 }
