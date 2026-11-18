@@ -1,4 +1,4 @@
-# FocusBlock Launcher
+﻿# FocusBlock Launcher
 #
 # Design rules (learned the hard way):
 #   1. Never run focus-service.exe / focus-native-host.exe out of `target\`.
@@ -11,9 +11,13 @@
 #   3. Never treat external tool output on stderr as a fatal PowerShell error.
 [CmdletBinding()]
 param(
-    [switch]$DesktopOnly,
-    [switch]$ExtensionOnly,
-    [switch]$ServiceOnly
+    # Explicit aliases are required: with [CmdletBinding()] the documented
+    # shortcuts would otherwise be ambiguous against the common parameters
+    # (-d vs -Debug, -e vs -ErrorAction/-ErrorVariable) and fail before the
+    # script starts.
+    [Alias("d")][switch]$DesktopOnly,
+    [Alias("e")][switch]$ExtensionOnly,
+    [Alias("s")][switch]$ServiceOnly
 )
 
 $ErrorActionPreference = "Continue"
@@ -266,6 +270,8 @@ try {
         $targetBinaries = "$root\target\*"
         Stop-FocusProcess -Name "focus-native-host" -OnlyFromPathLike $targetBinaries
 
+        Assert-BuildArtifactsUnlocked -Paths @("$root\target\debug\focus-native-host.exe")
+
         $code = Invoke-Logged -Command "cargo build --bin focus-native-host" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-native-host failed (exit $code)." }
 
@@ -286,7 +292,7 @@ try {
         # the old one open while it runs, so stop it and retry briefly.
         Stop-FocusProcess -Name "focus-native-host"
         $hostCopied = $false
-        for ($attempt = 0; $attempt -lt 10 -and -not $hostCopied; $attempt++) {
+        for ($attempt = 0; $attempt -lt 40 -and -not $hostCopied; $attempt++) {
             try {
                 Copy-Item -Path $builtHost -Destination $stableHost -Force -ErrorAction Stop
                 $hostCopied = $true
@@ -351,6 +357,10 @@ try {
         $targetBinaries = "$root\target\*"
         Stop-FocusProcess -Name "focus-service" -OnlyFromPathLike $targetBinaries
 
+        # Enforce the invariant: if anything still holds the repo binary, fail
+        # with the holder's name instead of a raw cargo "os error 32".
+        Assert-BuildArtifactsUnlocked -Paths @("$root\target\debug\focus-service.exe")
+
         $code = Invoke-Logged -Command "cargo build --bin focus-service" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-service failed (exit $code)." }
 
@@ -367,7 +377,7 @@ try {
         New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
         $stableService = "$runtimeDir\focus-service.exe"
         $copied = $false
-        for ($attempt = 0; $attempt -lt 10 -and -not $copied; $attempt++) {
+        for ($attempt = 0; $attempt -lt 40 -and -not $copied; $attempt++) {
             try {
                 Copy-Item -Path $builtService -Destination $stableService -Force -ErrorAction Stop
                 $copied = $true
@@ -447,3 +457,4 @@ try {
 }
 
 exit $exitCode
+
