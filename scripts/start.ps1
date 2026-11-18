@@ -244,6 +244,10 @@ try {
     # by both the extension flow and the desktop flow)
     Write-Log "`nConfiguring Chrome Native Messaging Bridge..." "Yellow"
     if (Get-Command "cargo" -ErrorAction SilentlyContinue) {
+        # Chrome may still be running a native host built from `target\debug`.
+        # It would lock the file cargo is about to replace.
+        Stop-FocusProcess -Name "focus-native-host"
+
         $code = Invoke-Logged -Command "cargo build --bin focus-native-host" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-native-host failed (exit $code)." }
 
@@ -316,6 +320,11 @@ try {
     if ($RunAll -or $DesktopOnly -or $ServiceOnly) {
         Write-Log "`n[4/4] Starting FocusBlock Service..." "Yellow"
 
+        # Stop any running copy *before* building: a service started from
+        # `target\debug` (older launcher versions, or an installed service that
+        # points there) would block cargo from replacing its own exe.
+        Stop-FocusProcess -Name "focus-service"
+
         $code = Invoke-Logged -Command "cargo build --bin focus-service" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-service failed (exit $code)." }
 
@@ -323,8 +332,6 @@ try {
         if (-not (Test-Path $builtService)) {
             throw "focus-service.exe was not produced at $builtService."
         }
-
-        Stop-FocusProcess -Name "focus-service"
 
         # Run from a stable location so the desktop build never fights a lock.
         $runtimeDir = "$env:LOCALAPPDATA\FocusBlock"
