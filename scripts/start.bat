@@ -113,11 +113,15 @@ if ($RunAll -or $DesktopOnly -or $ServiceOnly) {
     $serviceProcess = Start-Process -FilePath "cargo" -ArgumentList "run --bin focus-service -- --console" -WorkingDirectory $root -WindowStyle Minimized -PassThru
 
     $retries = 0
-    while (-not (Test-Path '\\.\pipe\focusblock') -and $retries -lt 30) {
-        Start-Sleep -Milliseconds 500
-        $retries++
+    $pipeFound = $false
+    while (-not $pipeFound -and $retries -lt 30) {
+        $pipeFound = [System.IO.Directory]::GetFiles('\\.\pipe\') -contains '\\.\pipe\focusblock'
+        if (-not $pipeFound) {
+            Start-Sleep -Milliseconds 500
+            $retries++
+        }
     }
-    if (Test-Path '\\.\pipe\focusblock') {
+    if ($pipeFound) {
         Write-Host "FocusBlock Service ready." -ForegroundColor Green
     } else {
         Write-Host "FocusBlock Service starting (compiling in background)..." -ForegroundColor Yellow
@@ -143,6 +147,8 @@ if ($RunAll -or $DesktopOnly -or $ServiceOnly) {
 if ($RunAll -or $DesktopOnly) {
     Write-Host "`nStarting FocusBlock Desktop App..." -ForegroundColor Yellow
     Write-Host "App window will open shortly. Press Ctrl+C in this terminal to stop.`n" -ForegroundColor Gray
+
+    Stop-Process -Name desktop -Force -ErrorAction SilentlyContinue
 
     Push-Location "$root\apps\desktop"
     try {

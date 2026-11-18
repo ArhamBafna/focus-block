@@ -117,6 +117,7 @@ function Topbar() {
 
 function AppContent() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [blockedEvent, setBlockedEvent] = useState<BlockedAppEvent | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const dismissedTimestampRef = useRef<string | null>(null);
