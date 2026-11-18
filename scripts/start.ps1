@@ -88,8 +88,24 @@ function Invoke-Logged {
 }
 
 function Stop-FocusProcess {
-    param([Parameter(Mandatory = $true)][string]$Name)
+    param(
+        [Parameter(Mandatory = $true)][string]$Name,
+        # Optional wildcard. When set, only processes running from a matching
+        # path are stopped - e.g. only the copies inside this repo's target\.
+        [string]$OnlyFromPathLike = $null
+    )
     $procs = @(Get-Process -Name $Name -ErrorAction SilentlyContinue)
+
+    if ($OnlyFromPathLike) {
+        $matching = @()
+        foreach ($p in $procs) {
+            $exe = $null
+            try { $exe = $p.Path } catch { $exe = $null }
+            if ($exe -and ($exe -like $OnlyFromPathLike)) { $matching += $p }
+        }
+        $procs = $matching
+    }
+
     if ($procs.Count -eq 0) { return }
     Write-Log "Stopping running $Name process(es)..." "Gray"
     foreach ($p in $procs) {
@@ -244,9 +260,11 @@ try {
     # by both the extension flow and the desktop flow)
     Write-Log "`nConfiguring Chrome Native Messaging Bridge..." "Yellow"
     if (Get-Command "cargo" -ErrorAction SilentlyContinue) {
-        # Chrome may still be running a native host built from `target\debug`.
-        # It would lock the file cargo is about to replace.
-        Stop-FocusProcess -Name "focus-native-host"
+        # Only a host started from `target\debug` locks the file cargo replaces.
+        # Hosts running from %LOCALAPPDATA% are healthy: leave them (and the
+        # bridge) alone until the build has actually succeeded.
+        $targetBinaries = "$root\target\*"
+        Stop-FocusProcess -Name "focus-native-host" -OnlyFromPathLike $targetBinaries
 
         $code = Invoke-Logged -Command "cargo build --bin focus-native-host" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-native-host failed (exit $code)." }
@@ -264,13 +282,19 @@ try {
         $runtimeDir = "$env:LOCALAPPDATA\FocusBlock"
         New-Item -ItemType Directory -Force -Path $runtimeDir | Out-Null
         $stableHost = "$runtimeDir\focus-native-host.exe"
-        try {
-            Copy-Item -Path $builtHost -Destination $stableHost -Force -ErrorAction Stop
-        } catch {
-            # A running native host (spawned by Chrome) can hold the old copy.
-            Stop-FocusProcess -Name "focus-native-host"
-            Copy-Item -Path $builtHost -Destination $stableHost -Force -ErrorAction Stop
+        # The build succeeded, so now replace the stable copy. Chrome may keep
+        # the old one open while it runs, so stop it and retry briefly.
+        Stop-FocusProcess -Name "focus-native-host"
+        $hostCopied = $false
+        for ($attempt = 0; $attempt -lt 10 -and -not $hostCopied; $attempt++) {
+            try {
+                Copy-Item -Path $builtHost -Destination $stableHost -Force -ErrorAction Stop
+                $hostCopied = $true
+            } catch {
+                Start-Sleep -Milliseconds 300
+            }
         }
+        if (-not $hostCopied) { throw "Could not copy focus-native-host.exe to $stableHost (file still in use)." }
 
         $manifestPath = "$runtimeDir\com.focusblock.bridge.json"
         $devId = "gmlbmoeejgjgmeffemfelecnmbiglfld"
@@ -320,10 +344,12 @@ try {
     if ($RunAll -or $DesktopOnly -or $ServiceOnly) {
         Write-Log "`n[4/4] Starting FocusBlock Service..." "Yellow"
 
-        # Stop any running copy *before* building: a service started from
-        # `target\debug` (older launcher versions, or an installed service that
-        # points there) would block cargo from replacing its own exe.
-        Stop-FocusProcess -Name "focus-service"
+        # Only a service started from `target\debug` (older launcher versions, or
+        # an installed service pointing there) locks the exe cargo replaces.
+        # Healthy copies running from %LOCALAPPDATA% keep enforcing while we
+        # build, so a failed build never leaves blocking switched off.
+        $targetBinaries = "$root\target\*"
+        Stop-FocusProcess -Name "focus-service" -OnlyFromPathLike $targetBinaries
 
         $code = Invoke-Logged -Command "cargo build --bin focus-service" -WorkingDirectory $root
         if ($code -ne 0) { throw "Building focus-service failed (exit $code)." }
@@ -332,6 +358,9 @@ try {
         if (-not (Test-Path $builtService)) {
             throw "focus-service.exe was not produced at $builtService."
         }
+
+        # Build succeeded: replace the running service with the fresh binary.
+        Stop-FocusProcess -Name "focus-service"
 
         # Run from a stable location so the desktop build never fights a lock.
         $runtimeDir = "$env:LOCALAPPDATA\FocusBlock"
@@ -385,7 +414,9 @@ try {
         Write-Log "`nStarting FocusBlock Desktop App..." "Yellow"
 
         Stop-FocusProcess -Name "desktop"
-        Stop-FocusProcess -Name "focus-native-host"
+        # Tauri copies over target\debug\focus-native-host.exe; only hosts
+        # running from target\ hold that file.
+        Stop-FocusProcess -Name "focus-native-host" -OnlyFromPathLike "$root\target\*"
 
         # Last line of defence: these are exactly the files Tauri overwrites.
         Assert-BuildArtifactsUnlocked -Paths @(
