@@ -118,7 +118,7 @@ function Configure-NativeBridge {
             if (-not (Test-Path $regKey)) {
                 New-Item -ItemType Directory -Force -Path $regKey | Out-Null
             }
-            Set-ItemProperty -Path $regKey -Name "(Default)" -Value $manifestPath -PropertyType String -Force | Out-Null
+            Set-ItemProperty -Path $regKey -Name "(Default)" -Value $manifestPath -Force | Out-Null
             Write-Host "Chrome Native Messaging host registered at:" -ForegroundColor Green
             Write-Host "  $manifestPath" -ForegroundColor Cyan
         } else {
