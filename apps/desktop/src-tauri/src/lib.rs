@@ -692,20 +692,23 @@ fn find_native_host_binary() -> Result<PathBuf, String> {
         }
     }
 
-    // 4. Try building with cargo if in development
-    let build_attempt = std::process::Command::new("cargo")
-        .args(["build", "--bin", "focus-native-host"])
-        .output();
-    if let Ok(output) = build_attempt {
-        if output.status.success() {
-            if let Ok(cwd) = std::env::current_dir() {
-                let mut cur = Some(cwd.as_path());
-                while let Some(dir) = cur {
-                    let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
-                    if is_valid_executable(&debug_candidate) {
-                        return Ok(debug_candidate);
+    // 4. Try building with cargo only during development / debug builds
+    #[cfg(debug_assertions)]
+    {
+        let build_attempt = std::process::Command::new("cargo")
+            .args(["build", "--bin", "focus-native-host"])
+            .output();
+        if let Ok(output) = build_attempt {
+            if output.status.success() {
+                if let Ok(cwd) = std::env::current_dir() {
+                    let mut cur = Some(cwd.as_path());
+                    while let Some(dir) = cur {
+                        let debug_candidate = dir.join("target").join("debug").join("focus-native-host.exe");
+                        if is_valid_executable(&debug_candidate) {
+                            return Ok(debug_candidate);
+                        }
+                        cur = dir.parent();
                     }
-                    cur = dir.parent();
                 }
             }
         }

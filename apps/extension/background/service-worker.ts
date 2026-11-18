@@ -907,7 +907,13 @@ async function handleBackgroundMessage(message: unknown): Promise<unknown> {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  // Disallow messages from external extensions or untrusted web contexts
+  if (sender.id && sender.id !== chrome.runtime.id) {
+    sendResponse({ ok: false, error: "Unauthorized sender" });
+    return false;
+  }
+
   handleBackgroundMessage(message)
     .then((result) => {
       const response: BackgroundResponse = { ok: true, result };

@@ -79,15 +79,50 @@ export default function Settings() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [bridgeStatus, setBridgeStatus] = useState<ExtensionBridgeStatus | null>(null);
+  const [bridgeLoading, setBridgeLoading] = useState(true);
   const [repairing, setRepairing] = useState(false);
   const [repairError, setRepairError] = useState<string | null>(null);
 
   useEffect(() => {
-    ipc.getSettings().then(setSettings).catch((err) => {
-      console.error(err);
-      setLoadError(err instanceof Error ? err.message : "Service not running or unreachable");
-    });
-    ipc.checkExtensionBridge().then(setBridgeStatus).catch(console.error);
+    let mounted = true;
+    ipc
+      .getSettings()
+      .then((s) => {
+        if (mounted) setSettings(s);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (mounted) {
+          setLoadError(
+            err instanceof Error ? err.message : "Service not running or unreachable"
+          );
+        }
+      });
+
+    ipc
+      .checkExtensionBridge()
+      .then((status) => {
+        if (mounted) {
+          setBridgeStatus(status);
+          setBridgeLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error(err);
+        if (mounted) {
+          setBridgeStatus({
+            linked: false,
+            manifest_path: null,
+            host_path: null,
+            message: err instanceof Error ? err.message : "Bridge check failed",
+          });
+          setBridgeLoading(false);
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const toggleOsAllowlist = async () => {
@@ -112,6 +147,7 @@ export default function Settings() {
       const status = await ipc.repairExtensionBridge();
       setBridgeStatus(status);
     } catch (e) {
+      console.error("[settings] repairExtensionBridge failed:", e);
       setRepairError(e instanceof Error ? e.message : "Repair failed.");
     } finally {
       setRepairing(false);
@@ -136,15 +172,15 @@ export default function Settings() {
             role="alert"
             style={{
               padding: "10px 12px",
-              background: "#fff0f0",
-              border: "1px solid #f8d0d0",
+              background: "var(--color-pulse-soft)",
+              border: "1px solid var(--color-pulse)",
               borderRadius: "8px",
               fontSize: "12px",
               color: "var(--color-pulse)",
               marginBottom: "12px",
             }}
           >
-            Service is not responding. Start the FocusBlock service to change settings.
+            {loadError}
           </div>
         ) : (
           <div style={{ color: "var(--color-neutral-400)", fontSize: "13px", marginBottom: "12px" }}>Loading…</div>
@@ -162,7 +198,7 @@ export default function Settings() {
             }
           />
           {saveError && (
-            <div role="alert" style={{ padding: "8px 12px", background: "#fff0f0", border: "1px solid #f8d0d0", borderRadius: "8px", fontSize: "12px", color: "var(--color-pulse)" }}>
+            <div role="alert" style={{ padding: "8px 12px", background: "var(--color-pulse-soft)", border: "1px solid var(--color-pulse)", borderRadius: "8px", fontSize: "12px", color: "var(--color-pulse)" }}>
               {saveError}
             </div>
           )}
@@ -186,23 +222,23 @@ export default function Settings() {
         <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px" }}>
           <span
             style={{
-              color: bridgeStatus?.linked ? "var(--color-fathom)" : "var(--color-glow)",
+              color: bridgeLoading ? "var(--color-neutral-400)" : bridgeStatus?.linked ? "var(--color-fathom)" : "var(--color-glow)",
               fontSize: "13px",
               lineHeight: 1,
             }}
           >
-            {bridgeStatus?.linked ? "●" : "○"}
+            {bridgeLoading ? "◌" : bridgeStatus?.linked ? "●" : "○"}
           </span>
           <span
             style={{
               fontWeight: 500,
-              color: bridgeStatus?.linked ? "var(--color-neutral-700)" : "var(--color-neutral-600)",
+              color: bridgeLoading ? "var(--color-neutral-500)" : bridgeStatus?.linked ? "var(--color-neutral-700)" : "var(--color-neutral-600)",
             }}
           >
-            {bridgeStatus?.linked ? "Extension linked" : "Extension not linked"}
+            {bridgeLoading ? "Checking extension link…" : bridgeStatus?.linked ? "Extension linked" : "Extension not linked"}
           </span>
         </div>
-        {!bridgeStatus?.linked && (
+        {!bridgeLoading && !bridgeStatus?.linked && (
           <button
             type="button"
             onClick={handleRepair}

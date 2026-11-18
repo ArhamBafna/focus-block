@@ -13,8 +13,14 @@ fn main() {
             // If real release binary exists, sync it to bundle_bins
             if let Ok(meta) = release_file.metadata() {
                 if meta.is_file() && meta.len() > 1024 {
-                    let _ = std::fs::copy(&release_file, &bundle_file);
-                    continue;
+                    if let Ok(mut file) = std::fs::File::open(&release_file) {
+                        use std::io::Read;
+                        let mut header = [0u8; 2];
+                        if file.read_exact(&mut header).is_ok() && header == [0x4d, 0x5a] {
+                            let _ = std::fs::copy(&release_file, &bundle_file);
+                            continue;
+                        }
+                    }
                 }
             }
 

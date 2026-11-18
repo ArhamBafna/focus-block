@@ -19,7 +19,18 @@ if (process.platform === 'win32') {
       try {
         const stat = fs.statSync(src);
         if (stat.isFile() && stat.size > 1024) {
-          fs.copyFileSync(src, dest);
+          const buffer = Buffer.alloc(2);
+          const fd = fs.openSync(src, 'r');
+          try {
+            fs.readSync(fd, buffer, 0, 2, 0);
+            if (buffer[0] === 0x4d && buffer[1] === 0x5a) { // 'MZ'
+              fs.copyFileSync(src, dest);
+            } else {
+              console.warn(`[prepare-bundle] ${src} does not appear to be a valid PE executable`);
+            }
+          } finally {
+            fs.closeSync(fd);
+          }
         }
       } catch (err) {
         console.warn(`[prepare-bundle] Failed to copy ${src} to ${dest}:`, err);

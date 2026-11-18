@@ -105,7 +105,7 @@ describe("Desktop Settings page", () => {
     render(<Settings />);
 
     await waitFor(() => {
-      expect(screen.getByText("Service is not responding. Start the FocusBlock service to change settings.")).toBeTruthy();
+      expect(screen.getByText("Connection refused")).toBeTruthy();
       expect(screen.getByText("Extension not linked")).toBeTruthy();
       expect(screen.getByText("Repair")).toBeTruthy();
     });

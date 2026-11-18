@@ -97,9 +97,7 @@ mod windows_host {
     fn configured_extension_origins() -> Vec<String> {
         let mut origins = Vec::new();
         let dev_origin = normalize_origin(DEV_EXTENSION_ID);
-        if !origins.contains(&dev_origin) {
-            origins.push(dev_origin);
-        }
+        origins.push(dev_origin);
 
         if let Ok(id) = std::env::var("FOCUSBLOCK_EXTENSION_ID") {
             let normalized = normalize_origin(&id);
@@ -129,17 +127,45 @@ mod windows_host {
                 dir.join("FocusBlock").join("com.focusblock.bridge.json"),
                 dir.join("com.focusblock.bridge.json"),
             ];
+            let mut found_manifest = false;
             for manifest in manifest_paths {
-                if let Ok(text) = std::fs::read_to_string(manifest) {
-                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
-                        if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
-                            for item in arr {
-                                if let Some(s) = item.as_str() {
-                                    let normalized = normalize_origin(s);
-                                    if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
-                                        origins.push(normalized);
-                                    }
-                                }
+                let text = match std::fs::read_to_string(&manifest) {
+                    Ok(t) => t,
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+                    Err(e) => {
+                        eprintln!(
+                            "focus-native-host: failed to read manifest {}: {e}",
+                            manifest.display()
+                        );
+                        continue;
+                    }
+                };
+
+                let value = match serde_json::from_str::<serde_json::Value>(&text) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!(
+                            "focus-native-host: failed to parse manifest {}: {e}",
+                            manifest.display()
+                        );
+                        continue;
+                    }
+                };
+
+                if found_manifest {
+                    eprintln!(
+                        "focus-native-host: warning: multiple manifests found in directory, merging origins: {}",
+                        manifest.display()
+                    );
+                }
+                found_manifest = true;
+
+                if let Some(arr) = value.get("allowed_origins").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        if let Some(s) = item.as_str() {
+                            let normalized = normalize_origin(s);
+                            if normalized != "chrome-extension:///" && !origins.contains(&normalized) {
+                                origins.push(normalized);
                             }
                         }
                     }
@@ -151,13 +177,18 @@ mod windows_host {
                 dir.join("focusblock-web-store-extension-id.txt"),
             ];
             for release_path in release_id_paths {
-                if let Ok(text) = std::fs::read_to_string(release_path) {
+                if let Ok(text) = std::fs::read_to_string(&release_path) {
                     let trimmed = text.trim();
                     if trimmed.len() == 32 && trimmed.chars().all(|c| c.is_ascii_lowercase() && c <= 'p') {
                         let normalized = normalize_origin(trimmed);
                         if !origins.contains(&normalized) {
                             origins.push(normalized);
                         }
+                    } else if !trimmed.is_empty() {
+                        eprintln!(
+                            "focus-native-host: invalid release extension id in {}",
+                            release_path.display()
+                        );
                     }
                 }
             }

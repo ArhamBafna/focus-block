@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cargo build --release --bin focus-service --bin focus-native-host && npm run prepare-bundle",
+    "beforeBuildCommand": "npm run build && cargo build --release --bin focus-service --bin focus-native-host --manifest-path ../../Cargo.toml && npm run prepare-bundle",
     "frontendDist": "../dist"
   },
   "app": {

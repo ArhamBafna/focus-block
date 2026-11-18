@@ -26,6 +26,8 @@ export { isMirrorSession, NATIVE_MIRROR_ID_PREFIX } from "./storage";
 // Stored-entity shapes are owned by ./storage and re-exported here under the
 // names components already import. No second hand-written declaration.
 
+export const APP_VERSION = "0.2.0";
+
 export type SessionMode = "blocklist" | "lockdown";
 export type SessionStatus = "active" | "completed" | "stopped";
 
@@ -564,7 +566,8 @@ export const ipc = {
         return envelope.data;
       }
       return false;
-    } catch {
+    } catch (error) {
+      console.error("[ipc] checkNativePolicy failed:", error);
       return false;
     }
   },
