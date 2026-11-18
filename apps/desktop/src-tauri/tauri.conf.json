@@ -6,7 +6,7 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build && cargo build --release --bin focus-service --bin focus-native-host && powershell -NoProfile -Command \"New-Item -ItemType Directory -Force src-tauri/bundle_bins | Out-Null; Copy-Item ../../target/release/focus-service.exe, ../../target/release/focus-native-host.exe -Destination src-tauri/bundle_bins/ -Force\"",
+    "beforeBuildCommand": "npm run build && cargo build --release --bin focus-service --bin focus-native-host && npm run prepare-bundle",
     "frontendDist": "../dist"
   },
   "app": {
