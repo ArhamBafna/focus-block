@@ -32,7 +32,14 @@ All runnable scripts live in `scripts/`:
   - `-E2EOnly` (or `-e2e`): Runs Chrome Extension Playwright E2E suite
   - `-Headed` (or `-v`): Runs E2E Playwright tests visibly in a live browser window (can be combined with `-E2EOnly`, e.g. `.\scripts\test.bat -E2EOnly -Headed`)
 
+### Script Architecture Standards
+- All shell automation logic resides in dedicated, pure `.ps1` files (e.g. `start.ps1`, `test.ps1`).
+- `.bat` files are thin shims that invoke their `.ps1` counterpart with `-ExecutionPolicy Bypass`.
+- Never embed multi-line PowerShell logic in `.bat` via `Invoke-Expression`.
+- Validate script syntax via `.\scripts\lint-scripts.ps1` (enforced in CI).
+
 ## Agent skills
+
 
 ### Issue tracker
 

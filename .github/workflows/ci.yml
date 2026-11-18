@@ -79,3 +79,13 @@ jobs:
         run: npm test
       - name: Build extension
         run: npm run build
+
+  script-lint:
+    name: Script syntax check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PowerShell scripts syntax
+        shell: pwsh
+        run: ./scripts/lint-scripts.ps1
+
