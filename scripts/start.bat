@@ -1,11 +1,11 @@
 @echo off
 title FocusBlock Launcher
 cd /d "%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$cliArgs = '%*'; Invoke-Expression (Get-Content -Path '%~f0' | Select-Object -Skip 6 | Out-String)"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$cliArgs = '%*'; try { Invoke-Expression (Get-Content -Path '%~f0' | Select-Object -Skip 6 | Out-String) } catch { Write-Host $_ -ForegroundColor Red; Write-Host $_.ScriptStackTrace -ForegroundColor Red; Read-Host 'Press Enter to exit'; exit 1 }"
 exit /b %ERRORLEVEL%
 rem --- PURE POWERSHELL CODE STARTS BELOW ---
 
-$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Continue"
 
 $ScriptDir = (Get-Location).Path
 $root = (Get-Item -Path "$ScriptDir\..").FullName
@@ -80,7 +80,7 @@ function Configure-NativeBridge {
     if (Get-Command "cargo" -ErrorAction SilentlyContinue) {
         Write-Host "`nConfiguring Chrome Native Messaging Bridge..." -ForegroundColor Yellow
         Push-Location "$rootDir"
-        $nativeBuild = & cargo build --bin focus-native-host 2>&1
+        $nativeBuild = & cmd.exe /c "cargo build --bin focus-native-host 2>&1"
         Pop-Location
         $nativeHostExe = "$rootDir\target\debug\focus-native-host.exe"
         if (Test-Path $nativeHostExe) {
@@ -134,7 +134,7 @@ function Configure-NativeBridge {
 if ($RunAll -or $ExtensionOnly) {
     Write-Host "`n[3/4] Building Chrome extension..." -ForegroundColor Yellow
     Push-Location "$root\apps\extension"
-    $buildOutput = & npm --silent run build 2>&1
+    $buildOutput = & cmd.exe /c "npm run build 2>&1"
     Pop-Location
 
     $extensionDist = "$root\apps\extension\dist"
